@@ -240,6 +240,11 @@ async function exportWhenReachable({ start, sleep, note, clock, deadline, waits 
     }
     note(`${said}: trying again in ${wait / MS_PER_SECOND} s`);
     await sleep(wait);
+    // A machine that slept through the wait wakes past the deadline: a start then would have no limit worth the name.
+    if (deadline - clock() < MIN_START_MS) {
+      note("the run's time was up after the wait: no further try");
+      return answer;
+    }
   }
 }
 
