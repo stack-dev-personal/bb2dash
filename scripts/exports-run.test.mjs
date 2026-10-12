@@ -414,3 +414,18 @@ test('exit 3 is tried again only when the result line says 3 too: a bare status 
   assert.deepEqual(waits, []);
   assert.equal(w.state().reason, 'error');
 });
+
+test('a wait the machine slept through: the deadline has passed on waking, so no start is made and the run ends no_network with its state written', async (t) => {
+  const w = world(t);
+  const { waits, deps } = timedDeps(w, { answers: [unreachable()] });
+  let clockMs = 5_000_000;
+  // The laptop sleeps during the first wait and wakes an hour later.
+  const slept = { ...deps, clock: () => clockMs, sleep: async (ms) => { waits.push(ms); clockMs += 60 * 60 * 1000; } };
+  assert.equal(await main(w.argv, slept), 1);
+  assert.equal(w.runs.length, 1);
+  assert.deepEqual(waits, [15_000]);
+  const state = w.state();
+  assertShape(state);
+  assert.equal(state.reason, 'no_network');
+  assert.match(w.logText(), /the run's time was up after the wait: no further try/);
+});
