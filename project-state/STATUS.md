@@ -1475,7 +1475,7 @@ branch and none is on `main`.
 | PR | What | State at the pause |
 |---|---|---|
 | bb2dash [#88](https://github.com/stack-dev-personal/bb2dash/pull/88) | This record: the cut-over, the embed of file 2851, the GEO.103 check, the pause | Docs only. `main` (with #89) is merged in. Ready |
-| bb2dash [#91](https://github.com/stack-dev-personal/bb2dash/pull/91) | Three fixes to pack 23 and the Apply answers toast, which opened below the window | **Visual: Stack looks at the preview first.** A read-only review was running at the pause; its findings are to be added here. Stages `back` and `file` are unproven |
+| bb2dash [#91](https://github.com/stack-dev-personal/bb2dash/pull/91) | Three fixes to pack 23 and the Apply answers toast, which opened below the window | **Visual: Stack looks at the preview first.** **Not reviewed:** the read-only review started before the pause stalled and reported nothing. Stages `back` and `file` are unproven |
 | bb2dash [#90](https://github.com/stack-dev-personal/bb2dash/pull/90) | The scheduled export tries again when there is no network yet (Stack's ask of 2026-10-09) | Tests green. **Reviewed, one MEDIUM open** (below). Not ready |
 | bb2dash-stack #7 | The doctor prints the reason word `no_network` | 346 tests green. Goes with #90 |
 
@@ -1517,7 +1517,7 @@ None of the passes above counts: they came from a branch, and only a run from `m
   before it. Fix when work resumes: give each start what is left of one deadline, and stop trying when too
   little is left. Three LOW: every fetch rejection counts as "unreachable" (a certificate error too); the
   runner trusts a bare exit 3 without the result line; one test's name promises more than it checks.
-* **#91:** its review had not reported at the pause.
+* **#91 is not reviewed.** The review started before the pause stalled after ten minutes and gave no findings. It is to be run again when work resumes, before anything else on that branch.
 * **A fourth trial run** (`20261009T182502Z`) was stopped at the pause while it was still cloning: nothing
   on the live site was touched, and its container and volume were removed.
 * **Two things the product does that Stack has not been asked about:** an open Inbox shows no `done` and
@@ -1526,7 +1526,7 @@ None of the passes above counts: they came from a branch, and only a run from `m
 * **The machine:** the second trial ended when the laptop slept and the session's low-memory guard stopped
   it. A counting run needs the laptop awake for about 40 minutes and memory to spare.
 
-**To resume, in order:** (1) the #91 review's findings, fixed test-first; (2) #90's MEDIUM; (3) one more
+**To resume, in order:** (1) #91's review, run again, and its findings fixed test-first; (2) #90's MEDIUM; (3) one more
 trial from `fix/accept23-step1` to reach stages `back` and `file`, with no Phase 22 walk box running;
 (4) Stack's look at the toast on #91's preview and his "merge" for #88, #91, #90 and bb2dash-stack #7;
 (5) the shared checkouts fast-forwarded, production deployed; (6) a counting `just accept 23` from `main`;
