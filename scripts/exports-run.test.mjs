@@ -12,6 +12,7 @@ import {
   EXPORTER_KEY,
   LOG_FILE,
   NETWORK_RETRY_WAITS_MS,
+  RUN_BUDGET_MS,
   STATE_FILE,
   STATE_SCHEMA,
   checkoutIsOnMain,
@@ -296,7 +297,7 @@ function retryDeps(w, answers) {
   return { waits, deps: { ...deps, sleep: async (ms) => { waits.push(ms); } } };
 }
 
-test('the waits between tries grow, and all of them fit inside the task with room for the exporter', () => {
+test('the waits between tries grow, and their sum is under eight minutes', () => {
   assert.deepEqual(NETWORK_RETRY_WAITS_MS, [15_000, 30_000, 60_000, 120_000, 240_000]);
   assert.ok(NETWORK_RETRY_WAITS_MS.reduce((sum, ms) => sum + ms, 0) <= 8 * 60 * 1000);
 });
@@ -352,5 +353,64 @@ test('a run that got through after a wait and then failed is a failed run, not a
   const { waits, deps } = retryDeps(w, [unreachable(), exporterOk(1, { exit_code: 1, filed: 1, skipped: 0, not_filed: 1 })]);
   assert.equal(await main(w.argv, deps), 1);
   assert.deepEqual(waits, [15_000]);
+  assert.equal(w.state().reason, 'error');
+});
+
+// ---------------------------------------------------------------------------------------------
+// One deadline for the whole run (review of 2026-10-09, MEDIUM): the task is killed at 15 minutes,
+// and a run that is killed writes no state. So every start gets what is left of one deadline, and
+// no try is started with too little left.
+// ---------------------------------------------------------------------------------------------
+
+/** Deps on a clock of their own: a wait moves it by its length, a start by `startTakesMs`. */
+function timedDeps(w, { answers, startTakesMs = 0 }) {
+  const waits = [];
+  let clockMs = 1_000_000;
+  let started = 0;
+  const deps = w.deps(() => {
+    clockMs += startTakesMs;
+    return answers[Math.min(started++, answers.length - 1)];
+  });
+  return { waits, deps: { ...deps, clock: () => clockMs, sleep: async (ms) => { waits.push(ms); clockMs += ms; } } };
+}
+
+test('the run has one deadline, under the 15 minutes of the task, and a first start still has the exporter its full limit', () => {
+  assert.equal(RUN_BUDGET_MS, 14.5 * 60 * 1000);
+  assert.ok(RUN_BUDGET_MS < 15 * 60 * 1000);
+});
+
+test('each start is given what is left of the deadline: a start after the waits cannot run past it', async (t) => {
+  const w = world(t);
+  const ok = exporterOk(0, { exit_code: 0, filed: 1, skipped: 0, not_filed: 0 });
+  const { waits, deps } = timedDeps(w, { answers: [unreachable(), unreachable(), unreachable(), unreachable(), ok] });
+  assert.equal(await main(w.argv, deps), 0);
+  assert.deepEqual(waits, [15_000, 30_000, 60_000, 120_000]);
+  const limits = w.runs.map((r) => r.options.timeout);
+  // The first four fit the exporter's own 14 minutes; the fifth starts 3 min 45 s in and gets the rest.
+  assert.deepEqual(limits, [840_000, 840_000, 825_000, 765_000, RUN_BUDGET_MS - 225_000]);
+  assert.equal(limits.at(-1), 645_000);
+});
+
+test('no try is started with too little of the deadline left: slow unreachable tries end the run as no_network, with its state written', async (t) => {
+  const w = world(t);
+  // A network that accepts the connection and never answers: each try ends "unreachable" after five minutes.
+  const { waits, deps } = timedDeps(w, { answers: [unreachable()], startTakesMs: 5 * 60 * 1000 });
+  assert.equal(await main(w.argv, deps), 1);
+  // 5:00, wait 0:15, 10:15, wait 0:30 (10:45, 3:45 left), third try to 15:45: nothing is left for a fourth.
+  assert.equal(w.runs.length, 3);
+  assert.deepEqual(waits, [15_000, 30_000]);
+  assert.deepEqual(w.runs.map((r) => r.options.timeout), [840_000, 555_000, 225_000]);
+  const state = w.state();
+  assertShape(state);
+  assert.equal(state.reason, 'no_network');
+  assert.match(w.logText(), /did not reach Supabase \(try 3 of 6\): giving up, too little of the run's time is left/);
+});
+
+test('exit 3 is tried again only when the result line says 3 too: a bare status 3 is a failed run, started once', async (t) => {
+  const w = world(t);
+  const { waits, deps } = timedDeps(w, { answers: [{ status: 3, stdout: 'crashed with no result line\n', stderr: '' }] });
+  assert.equal(await main(w.argv, deps), 1);
+  assert.equal(w.runs.length, 1);
+  assert.deepEqual(waits, []);
   assert.equal(w.state().reason, 'error');
 });
