@@ -1514,7 +1514,7 @@ None of the passes above counts: they came from a branch, and only a run from `m
 
 **Open findings, not acted on because of the pause**
 
-* **#90, MEDIUM (review, confirmed by reading):** the retry has no overall deadline. Each start of the
+* **#90, MEDIUM, CLOSED 2026-10-12 in #90 itself (one deadline for the whole run; the bare exit 3 too).** As found (review, confirmed by reading): the retry has no overall deadline. Each start of the
   exporter keeps its full 14-minute limit, so waits followed by one slow start can pass the task's
   15-minute limit; the task is then killed before `state.json` is written, and the doctor shows the run
   before it. Fix when work resumes: give each start what is left of one deadline, and stop trying when too
@@ -1766,7 +1766,9 @@ Remaining advisor items: ~~7 pre-existing mutable `search_path` functions (`set_
   failed" (11:56Z and 17:24Z); `just doctor` showed a problem until someone started the task by hand.
   Now the exporter exits **3** when no request of its run was answered (nothing read, nothing written),
   and `scripts/exports-run.mjs` waits and starts it again: after 15 s, 30 s, 1, 2 and 4 minutes, six
-  tries in under eight minutes, inside the task's 15-minute limit. A run that never gets through is
+  tries at the most. One deadline holds the whole run, 14 minutes 30 seconds from its start (the task is
+  killed at 15, and a killed run writes no state): each start gets what is left of it, and no try is made
+  with less than 30 seconds left. An exit 3 without the result line that says 3 is not tried again. A run that never gets through is
   exit 1 with the reason `no_network` in `state.json` (a new value of `reason`; the keys are unchanged).
   Every other failure is still one start. **Live only once the shared checkout on `main` holds it**: the
   task runs `scripts/exports-run.mjs` from there, so nothing is re-registered. bb2dash-stack's doctor
