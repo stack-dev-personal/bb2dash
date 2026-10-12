@@ -261,7 +261,7 @@ Learned in the Phase 23 follow-ups (2026-10-09; each from `verification/110a_PHA
 
 * **Phase 23 follow-ups (merged and cut over 2026-10-09 on your word; 187 and 188 on prod; NOT ACCEPTED;
   paused on your word at 18:30Z).** STATUS, "Phase 23 follow-ups", opens with where it stands. Yours, in order:
-  1. **Your word to resume.** Nothing is being built. What waits: the findings of #91's review, one MEDIUM
+  1. ~~Your word to resume.~~ **Given 2026-10-12 ("continue, merge").** What was waiting: the findings of #91's review, one MEDIUM
      on #90 (the export's retry has no overall deadline), and one more trial run to reach the two stages of
      pack 23 that no run has reached.
   1a. **Your look at the Apply answers toast on #91's preview.** It opened below the window, so the fallback
