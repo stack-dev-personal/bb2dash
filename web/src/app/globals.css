@@ -148,6 +148,9 @@
   /* the smallest pointer target (WCAG 2.2, task 36) */
   --size-target: 24px;
 
+  /* The width Windows' three window buttons take on the desktop bar: 0 in a browser, where env() falls back. It lives here, not in a CSS module, because the build renames the name inside env() there. */
+  --size-window-controls: calc(100vw - env(titlebar-area-width, 100vw));
+
   /* — layout ———————————————————————————————————————————————————————— */
   --nav-height: 52px;
   --content-max: 1240px;
