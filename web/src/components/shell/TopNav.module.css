@@ -11,10 +11,12 @@
   align-items: center;
   gap: var(--space-8);
   /* In the desktop app the bar is the window's title bar: a drag region, its right padding clearing
-     Windows' three buttons (env() falls back in a browser, where the padding is the 28px). */
+     Windows' three buttons. The width they take, calc(100vw - env(titlebar-area-width, 100vw)), is the
+     token --size-window-controls in globals.css: an env() name written in a CSS module is renamed by the
+     build as a local identifier, so no browser defines it and the fallback is always taken. In a browser
+     the token is 0 and the padding is the 28px. */
   app-region: drag;
-  padding: var(--size-10) max(var(--size-28), calc(100vw - env(titlebar-area-width, 100vw))) var(--size-10)
-    var(--size-28);
+  padding: var(--size-10) max(var(--size-28), var(--size-window-controls)) var(--size-10) var(--size-28);
   min-height: var(--nav-height);
   background: var(--color-surface);
   box-shadow: inset 0 calc(var(--size-underline) * -1) 0 var(--color-divider);
