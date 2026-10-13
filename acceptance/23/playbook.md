@@ -94,7 +94,8 @@ saw open. So the test has three ways to pass.
 
 Pass, way one (the test saw the request run), when all of this is true:
 
-- In `3.json`: `closed_before_the_page_opened` is false, `label_at_start` is `Apply answers`,
+- In `3.json`: `closed_before_the_page_opened` is false, `label_at_start` is `Apply answers`
+  (or `queued` or `running`, when the page opened while the request was already open),
   `ended_as` is `done`, `status_line` is a line of text and not null, and `labels_seen` does not
   hold `waiting on the worker…` and ends with `done`.
 - `3-watching.png` shows the Inbox with the button in the footer, labelled as `label_at_start`
