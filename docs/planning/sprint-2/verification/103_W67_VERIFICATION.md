@@ -1101,3 +1101,8 @@ Ten runs of `npx playwright test test/e2e/chrome.spec.ts -g "cannot reach the ap
 against that exact string). `npm run typecheck` 0; `npm test` 0 (892); `npm run test:e2e` 0, 33 passed, 0 failed; `git diff --diff-filter=MD --name-only origin/main...HEAD -- desktop/test` prints nothing.
 
 A deep link that arrives while the app is unreachable can be superseded by the loader's own retry and is then recorded as benign, as on `main`; S-2 fixed the failed-load page's part, not that.
+
+### V-16: the sidebar toggle's label under the drawer's step (`fix(22-V-16)`)
+
+Shots 26 showed the top 5 px of the toggle's drawn label under the Courses sidebar icon at 800 px: S-3's exception is right from 1024 px up (the rail sits beside the page) but under 1024 px the rail is a drawer that opens over that very spot.
+`@media (max-width: 1023.98px) { .tip[data-tip][aria-expanded='true']::after { display: none; } }` follows the wide rule with no `:not(`; `foundation-round2.test.ts` pins both (100 passed with the audit; `foundation.json` still `{}`; web `npm test` 3437 passed, typecheck and eslint exit 0).

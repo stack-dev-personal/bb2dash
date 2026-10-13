@@ -65,6 +65,7 @@ describe('R2-notice: the compose line is not quoted in the tokens module', () =>
 
 describe('V-14 and S-3: no drawn label behind its own open panel, but the sidebar toggle keeps its label', () => {
   const SELECTOR = ".tip[data-tip][aria-expanded='true']:not([aria-controls='course-sidebar'])::after";
+  const DRAWER_SELECTOR = ".tip[data-tip][aria-expanded='true']::after";
   const hover = tokens.indexOf('.tip[data-tip]:hover::after');
   const focus = tokens.indexOf('.tip[data-tip]:focus-visible::after');
   const open = tokens.indexOf(SELECTOR);
@@ -95,6 +96,14 @@ describe('V-14 and S-3: no drawn label behind its own open panel, but the sideba
     const hiding = [...tokens.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*display:\s*none[^{}]*)\}/g)]
       .map((match) => match[1]?.trim() ?? '')
       .filter((selector) => selector.includes('.tip'));
-    expect(hiding).toEqual([SELECTOR]);
+    expect(hiding).toEqual([SELECTOR, DRAWER_SELECTOR]);
+  });
+
+  it("under the drawer's step the toggle's label is hidden while it is open, like every other trigger's: no :not() there (V-16)", () => {
+    const block = new RegExp('@media [(]max-width: 1023[.]98px[)] [{]([^@]*?)' + String.fromCharCode(10) + '[}]').exec(tokens)?.[1] ?? '';
+    expect(block.replace(/\s+/g, ' ').trim()).toBe(`${DRAWER_SELECTOR} { display: none; }`);
+    expect(block).not.toContain(':not(');
+    // The wide rule above the block still leaves the toggle out.
+    expect(tokens.indexOf(SELECTOR)).toBeLessThan(tokens.indexOf('@media (max-width: 1023.98px)'));
   });
 });
