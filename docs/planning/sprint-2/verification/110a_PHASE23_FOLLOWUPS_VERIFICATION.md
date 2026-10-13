@@ -664,3 +664,21 @@ overall deadline across the tries.
 **Not done:** a green counting run; stages `back` and `file` in any run; the accepted record. The list of
 what is owed, requirement by requirement, is in STATUS, "Phase 23 follow-ups", "Where it stands at the
 pause".
+
+## Task 21, closed: accepted by run `20261013T003231Z` (2026-10-13)
+
+Resumed 2026-10-12 on Stack's word ("continue, merge"). Merged in this order: bb2dash #88 `bfbe7f7`, #90
+`856d87b`, bb2dash-stack #7 `f1e9178`, bb2dash #91 `08138bb`. Both main checkouts fast-forwarded; production
+deployed at `08138bb`; the export task run once on the merged code, exit 0.
+
+| Run | Commit | Counts | Verdict | What it showed |
+|---|---|---|---|---|
+| `20261013T001039Z` | `08138bb` (`main`) | yes | red | Stage `prepare`: exit 78, "the firewall could not be raised". `docker compose --profile accept run --rm -T accept-prepare true` a minute later raised it and passed its own two checks |
+| `20261013T001423Z` | `08138bb` (`main`) | yes | red | `prepare`, `ready`, `walk` (1, 2, 3 by the third way, 4, 6), `walk-proofs`, `stop`, `offline` (7a, the toast above the button, the command readable) and `start` passed. Stage `back`: "the host sign-in failed: page.goto: Timeout 30000ms exceeded". The cleanup had `apply` running; request 5082 closed done |
+| `20261013T003231Z` | `08138bb` (`main`) | yes | **green** | All nine stages. Requests 5083 (sync), 5084 (filed by the sync, no Claude run), 5085 (the press, one Claude run), 5086 (filed with `apply` stopped, taken after 86 s). `transform-answers`: 14 with the pick on the file, 0 unstamped, 0 stamped since the start, 0 supersede items. `decisions-filed`: 0 unfiled, 16 with a note path, 15 skipped, 3782 skipped. `verdict.json` sha256 `f71111f127ceb198e6d5426b318e5b4b974fd40bc00d6a38b613f5e734ee1e88` |
+
+Read after the run: no request open, no test row left open or answered, no hold on prod, `apply` healthy,
+the sync container the same one as before the run.
+
+The definition of done of brief 110 is met: its last two boxes were the cut-over (2026-10-09) and this
+run. What the run does not prove is named in STATUS, "Phase 23 follow-ups", "Accepted".
