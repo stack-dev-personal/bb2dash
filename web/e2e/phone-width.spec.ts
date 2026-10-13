@@ -24,7 +24,7 @@
 
 import { type BrowserContext, type Locator, type Page } from '@playwright/test';
 import { A1_POPOUT, fulfillView, openSignedIn } from './walk';
-import { LONGEST_SYNC_PHASE_22, SYNC_LABEL_22, expect, quietSync, test } from './walk22.lib';
+import { LONGEST_SYNC_PHASE_22, SYNC_LABEL_22, expect, quietSync, shotPath22, shotsAsked22, test } from './walk22.lib';
 
 test.use({ reducedMotion: 'reduce' });
 
@@ -195,6 +195,36 @@ async function openAt(page: Page, viewport: { width: number; height: number }, a
   await bodyFontLoaded(page);
 }
 
+/** The six phone shots of the walk (brief 103, inventory: numbered 40 to 45), by the case that has the surface on screen. */
+const PHONE_SHOT_OF_ROUTE: Readonly<Record<string, string>> = {
+  '/': '40-phone-home',
+  '/course/IST.466/grades': '42-phone-course-grades',
+  '/planner': '43-phone-planner',
+};
+const PHONE_SHOT_OF_STATE: Readonly<Record<number, string>> = {
+  4: '41-phone-nav-menu',
+  1: '44-phone-bell',
+  2: '45-phone-activity',
+};
+
+/** A shot is never taken while a loading line is the surface's content (as theme-walk.spec.ts's `contentIsThere`). */
+const LOADING_LINE = /^(Loading|Searching)\b[^\n]*…\s*$/;
+const CONTENT_WAIT_MS = 30_000;
+
+/**
+ * Takes one phone shot, only when shots are asked for (`WALK_SHOTS=1`) and only in the dark theme (the
+ * default), after the case's assertions and once no visible element still reads "Loading…". The window is
+ * the 390 px one as it stands: the frame does not scroll the document, so nothing is resized.
+ */
+async function takePhoneShot(page: Page, name: string | undefined, theme: Theme): Promise<void> {
+  if (name === undefined || theme !== 'dark' || !shotsAsked22()) return;
+  await expect(
+    page.getByText(LOADING_LINE).filter({ visible: true }),
+    `${name}: a loading line is still the surface's content`,
+  ).toHaveCount(0, { timeout: CONTENT_WAIT_MS });
+  await page.screenshot({ path: shotPath22(`${name}.png`) });
+}
+
 function pageScrollWidth(page: Page): Promise<number> {
   return page.evaluate(() => document.documentElement.scrollWidth);
 }
@@ -288,6 +318,8 @@ for (const path of ROUTES) {
         console.log(`route ${path} [${theme}]: box scrollWidth=${scroll} clientWidth=${client}`);
         expect(scroll, `route ${path} [${theme}]: box scrollWidth above its clientWidth`).toBeGreaterThan(client);
       }
+
+      await takePhoneShot(page, PHONE_SHOT_OF_ROUTE[path], theme);
     });
   }
 }
@@ -444,6 +476,8 @@ for (const state of OPEN_STATES) {
         console.log(`open state ${state.n} ${state.name} [${theme}]: nav scrollWidth=${scrollWidth}`);
         expect(scrollWidth, `open state ${state.n}: nav scrollWidth with search open`).toBeLessThanOrEqual(PHONE.width);
       }
+
+      await takePhoneShot(page, PHONE_SHOT_OF_STATE[state.n], theme);
     });
   }
 }
