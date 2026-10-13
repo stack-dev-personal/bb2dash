@@ -578,3 +578,10 @@ Each finding was written test first, in the new files of mine (`pane-scroll.test
 
 Gates: the seven files of the row plus the new one: 8 files, 100 passed. `cd web && npm test` 188 files, 3433 passed; typecheck 0; eslint 0; audit 89 passed.
 Full run on the committed and pushed tree, `node scripts/walk-box.mjs web/e2e/phone-width.spec.ts`: run **20261009T064052Z**, commit 8dd7965, `"dirty": false`, exit 0, `54 passed`.
+
+## The six phone shots
+
+`phone-width.spec.ts` never called `shotPath22`; it now does (88f6083). Each of the six is taken once, at 390 px, in the dark theme, inside the case that has the surface on screen (`40` in `route / [dark]`, `41` in `open state 4 nav-menu [dark]`,
+`42` in `route /course/IST.466/grades [dark]`, `43` in `route /planner [dark]`, `44` in `open state 1 bell [dark]`, `45` in `open state 2 activity [dark]`), after the case's assertions and once no visible line reads "Loading…" (the same pattern as `theme-walk.spec.ts`'s `contentIsThere`), only through `shotPath22` and only when `WALK_SHOTS=1`. The window is not resized. A run without the variable takes none; the 54 titles are unchanged (`Total: 54 tests in 1 file`).
+Run **20261013T002021Z**, `WALK_SHOTS=1 node scripts/walk-box.mjs web/e2e/phone-width.spec.ts -- -g "route / |route /planner |route /course/IST.466/grades |open state 1 bell|open state 2 activity|open state 4 nav-menu"`, commit 88f6083, `"dirty": false`, exit 0, `12 passed`. Shot count over that run's `shots` folder: `0 0 6`.
+Opened with the Read tool, none copied: 40 the Home page with the mark, Menu, Sync as an icon and the five icons in one row; 41 the six pages listed under the bar and nothing else (Home marked); 42 the course grades table held at its box edge; 43 the week cut at the board edge; 44 and 45 the Announcements and Activity panels with both edges inside the screen.
