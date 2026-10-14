@@ -599,6 +599,21 @@ describe('uploadFile', () => {
     ]);
   });
 
+  it('reaches register for a name whose 200th character is a space (R2-2)', async () => {
+    const { ports, log, seen } = fakePorts({ register: registerUpload });
+    stub.answers.workspace_upload_register = { data: { id: 31, state: 'stored', existing: false }, error: null };
+    const name = `${'A'.repeat(199)} B.pdf`;
+    await expect(uploadFile(new File(['abc'], name), null, ports)).resolves.toEqual({
+      kind: 'registered',
+      id: 31,
+      state: 'stored',
+    });
+    expect(log).toEqual(['digest', 'findBySha256', 'putObject', 'signUrl']);
+    expect(seen.putObject?.[0]).toBe(`u/${HASH}`);
+    const [call] = stub.calls.filter((entry) => entry.target === 'workspace_upload_register');
+    expect((call.args[0] as Record<string, unknown>).p_title).toBe('A'.repeat(199));
+  });
+
   it('uploads nothing when an upload row already holds the hash, and uses that row', async () => {
     const existing = document({ state: 'failed', error_code: 'link_expired' });
     const { ports, log } = fakePorts({ findBySha256: async () => existing });

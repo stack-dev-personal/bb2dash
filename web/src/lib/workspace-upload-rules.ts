@@ -83,11 +83,14 @@ export function checkUploadRules(file: { name: string; size: number }): UploadRu
   return { ok: true, mime, extension, title: uploadTitleOf(file.name) };
 }
 
-/** The name kept as the upload's title: trimmed, cut to 200 characters, "Untitled" when empty. */
+/**
+ * The name kept as the upload's title: trimmed, cut to 200 characters, and
+ * trimmed again, since a cut can end on a space (R2-2: the register call takes
+ * only a trimmed title); "Untitled" when nothing is left.
+ */
 export function uploadTitleOf(fileName: string): string {
-  const characters = Array.from(fileName.trim());
-  if (characters.length === 0) return UNTITLED;
-  return characters.slice(0, WORKSPACE_UPLOAD_TITLE_MAX).join('');
+  const cut = Array.from(fileName.trim()).slice(0, WORKSPACE_UPLOAD_TITLE_MAX).join('').trim();
+  return cut === '' ? UNTITLED : cut;
 }
 
 /** The object key of a content hash: `u/` and the hash. Throws for anything that is not one. */

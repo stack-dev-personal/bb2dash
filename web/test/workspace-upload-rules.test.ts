@@ -99,6 +99,13 @@ describe('uploadTitleOf: the name kept as the title', () => {
     expect(title.length).toBe(400); // 200 code points, 400 UTF-16 units
   });
 
+  it('trims again after the cut, so a title never ends in a space (R2-2)', () => {
+    const title = uploadTitleOf(`${'A'.repeat(199)} B.pdf`);
+    expect(title).toBe('A'.repeat(199));
+    expect(title).toHaveLength(199);
+    expect(title).toBe(title.trim());
+  });
+
   it('is "Untitled" for a name with nothing in it', () => {
     expect(uploadTitleOf('   ')).toBe('Untitled');
   });
