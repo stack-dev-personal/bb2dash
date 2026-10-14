@@ -3,7 +3,8 @@
 -- The corpus is whole and search never passes speaker notes off as slide text (S2-rag-1, R-61,
 -- R-62, P-24, P-89). Every assertion is scoped to CURRENT files (`superseded_by is null`).
 --
---   (a) every current file with text_status <> 'na' has at least one bb_file_text unit
+--   (a) every current file with text_status <> 'na' has at least one bb_file_text unit, except a file
+--       saved as an outside link (164: bb_files.outside_url), which has no bytes and so no text
 --   (b) every current 'na' file shares its sha256 with a current 'extracted' file (17 <-> 15),
 --       or its id is in NA_EXCEPTIONS below, which is empty on purpose
 --   (c) every unit of a current file has gte-small parts numbered 1..n with no gap; part 1 starts
@@ -52,6 +53,8 @@ begin
    where f.superseded_by is null
      and f.text_status is distinct from 'na'
      and not (f.id = any (TEXT_REMOVED))
+     -- 164: a Blackboard file whose link redirects to another site is a link, with no text to hold.
+     and f.outside_url is null
      and t.file_id is null;
   if v_ids is not null then
     v_fail := v_fail || format('(a) no text unit: %s', v_ids);
