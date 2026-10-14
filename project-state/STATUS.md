@@ -2004,9 +2004,14 @@ Remaining advisor items: ~~7 pre-existing mutable `search_path` functions (`set_
   list, raises no storage_path gap (an open one closes), and Materials shows "Outside link" opening it. The
   report line reads "Files: N pulled, M saved as links, K not pulled". `sync_runner` executes fifteen
   functions now. `v_bb_files_current` is re-created so it carries `outside_url` (and `attempt_id`). What is
-  still unknown: where the five redirect. After the merge, 164 on prod and the `sync` rebuild, the next
-  sync either saves each as a link or flags it naming the host; 3713 answers 404 and stays flagged. If the
-  host is a Blackboard one, the next step is an allow-list change, planned on its own.
+  still unknown at the build: where the five redirect. **Live 2026-10-14** (#98 `926e8e6`, 164 on prod
+  21:53 version `20261014205334` byte-identical, test fix #99, classifier fix #100 `a5a1c73`; `sync` rebuilt
+  alone twice, login kept). **Sync 5371 answered it: all five, and the new IST.323 file 3736, redirect to
+  `prod02-use1-prod02-xythos.prod.files.blackboard.com`, Blackboard's own file store.** So they are not
+  outside links and stay flagged, now with that host named; 3713 answers 404. Pulling their bytes needs
+  the download allow-list to take Blackboard's file-store hosts (`*.prod.files.blackboard.com`), a change
+  to the guard on what the logged-in walk may request: planned on its own, on Stack's word.
+  `phase18_post_embed_checks` fails on these six until they are pulled.
 
 * **The scheduled export tries again when there is no network yet (2026-10-09, on Stack's word; branch
   `fix/exports-network-retry`).** Twice on 2026-10-09 the task `Bb2dash-Exports` ran right after a logon
