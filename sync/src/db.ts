@@ -1,5 +1,5 @@
 /**
- * The runner's database side: the `sync_runner` functions of migrations 091, 093 and 180, and
+ * The runner's database side: the `sync_runner` functions of migrations 091, 093, 164 and 180, and
  * nothing else. The role holds no table, view or sequence grant, so every call below is one of them.
  *
  * `createRpc` takes a bare query function, so the loop and the integration test run on a fake;
@@ -69,6 +69,11 @@ export interface SyncRpc {
   runOutcome(runId: string): Promise<RunOutcome | null>;
   fileWorklist(): Promise<WorklistRow[]>;
   fileStored(args: FileStoredArgs): Promise<boolean>;
+  /**
+   * Migration 164: save a file whose Blackboard link redirects to another site as that link. True when
+   * the row took it; false when the row is stored, superseded or gone. The database re-checks the URL.
+   */
+  fileOutsideLink(id: string, url: string): Promise<boolean>;
   close(id: string, state: 'done' | 'failed', report: Report): Promise<void>;
   enqueue(trigger: 'just' | 'login'): Promise<string | null>;
   loginOk(): Promise<number>;
@@ -174,6 +179,10 @@ export function createRpc(query: QueryFn): SyncRpc {
         a.mime,
         a.textStatus,
       ]);
+      return ok === true;
+    },
+    async fileOutsideLink(id, url) {
+      const ok = await scalar('select public.sync_file_outside_link($1::bigint, $2) as ok', [asId(id, 'sync_file_outside_link'), url]);
       return ok === true;
     },
     async close(id, state, report) {

@@ -21,6 +21,24 @@ describe('the files line (task 28 quotes it beside walk-14/03)', () => {
     );
   });
 
+  it('164: says how many files were saved as links, and keeps the old wording when there are none', () => {
+    expect(filesLine({ pulled: 3, not_pulled: [], linked: 2 })).toBe('Files: 3 pulled, 2 saved as links, 0 not pulled');
+    expect(filesLine({ pulled: 0, not_pulled: [], linked: 1 })).toBe('Files: 0 pulled, 1 saved as a link, 0 not pulled');
+    expect(filesLine({ pulled: 1, not_pulled: [{ id: '9', reason: 'gone: status 404' }], linked: 2 })).toBe(
+      'Files: 1 pulled, 2 saved as links, 1 not pulled',
+    );
+    // linked absent or zero: exactly the wording above.
+    expect(filesLine({ pulled: 3, not_pulled: [], linked: 0 })).toBe('Files: 3 pulled');
+    expect(filesLine({ pulled: 0, not_pulled: [], linked: 0 })).toBe('Files: nothing new to pull');
+  });
+
+  it('164: a pass that only saved links still closes done, and carries the count', () => {
+    const { state, report } = buildReport({ foldStatus: 'ok', files: { pulled: 0, not_pulled: [], linked: 2 }, claimAttempts: 1 });
+    expect(state).toBe('done');
+    expect(report.lines).toEqual(['Files: 0 pulled, 2 saved as links, 0 not pulled']);
+    expect(report.files).toEqual({ pulled: 0, not_pulled: [], linked: 2 });
+  });
+
   it('names each not-pulled file, up to the cap, then counts the rest', () => {
     const many = Array.from({ length: NOT_PULLED_LINES_MAX + 2 }, (_, i) => ({ id: String(i + 1), reason: 'refused: x' }));
     const lines = notPulledLines({ pulled: 0, not_pulled: many });
