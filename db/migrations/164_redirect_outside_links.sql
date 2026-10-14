@@ -125,9 +125,9 @@ begin
   -- does not already have an outside source_url (the worklist's own conditions, plus the last two).
   update bb_files f
      set outside_url = p_url,
-         notes       = coalesce(f.notes, '') || ' | outside link to ' || v_host || ' saved '
+         notes       = btrim(coalesce(f.notes || ' | ', '') || 'outside link to ' || v_host || ' saved '
                        || to_char(now() at time zone 'America/New_York', 'YYYY-MM-DD')
-                       || ' by sync-runner'
+                       || ' by sync-runner')
    where f.id = p_id
      and f.storage_path is null and f.superseded_by is null
      and f.outside_url is null
