@@ -57,7 +57,7 @@ gitignored `.env` at registration (2026-09-29: `dist` built, 88 unit tests, `npm
 | 14 | Containers (R-28) | `briefs/100_PHASE14_containers.md` (supersedes `82_`'s Contract) | R-81..R-96; S2-containers-1 | 091, 093, 094 live; 092 struck | **merged 2026-10-04** on Stack's word before acceptance (#62, #67, harness #39, bb2dash-stack #1); the `sync` container runs live since 2026-10-03 22:52Z; Stack's acceptance sitting A1–A9 is owed (§4) |
 | 20 | Harness closure: V-2 on record, note quality, checkpoint redaction | `briefs/101_PHASE20_harness_closure.md` | R-97..R-104, R-106 | none here | **PR-A (#39, 2904b20) and PR-B (harness #36, ea0e199; + harness #37, 00539be) and PR-C (#48, cb1d7e7) merged 2026-09-30**; live steps done; V-2 walked in `verification/101a_V2_VERIFICATION.md`, closed on Stack's word 2026-09-30; tasks 2 (request 458, 2026-10-01) and 29 done; two harness follow-ups still unfiled (108 §2) |
 | 21 | Workspace: chat routed by complexity, on the subscription | `briefs/102_PHASE21_workspace.md` (frozen 2026-10-05) | S2-workspace-1; P-83..P-88 | 140–143 live (144–149 its slack) | **merged 2026-10-07 on Stack's word (bb2dash #78, then bb2dash-stack #3), walked by the PM, accepted 2026-10-08 by the acceptance run `20261008T041753Z`** (green from `main`; step 1 stays Stack's): the Workspace runs from bb2dash-stack as `bb2dash-workspace-1` since that run's go-live; the old test project `bb2dash-wt21` is stopped and its removal is owed (§4, §6 D2; record `verification/102a_PHASE21_VERIFICATION.md`, last section) |
-| 22 | Styling | `briefs/103_PHASE22_styling.md` | R-53, R-46; S2-styling-1 | none | planned; last |
+| 22 | Styling: direction D (Charcoal) on every screen, dark and light, the theme control, the Menu at 720 px, the frame with scrolling panes, the desktop shell with the app's bar as its title bar, the app icon, the token audit's ratchet | `briefs/103_PHASE22_styling.md` (frozen 2026-10-08, three amendments the same day) | R-53, R-46; P-76, P-79; S2-styling-1 | none | **built, reviewed and walked by the PM on 2026-10-14: in the walk box (runs `20261014T182418Z` 54 passed, `20261014T183839Z` 64 passed, 62 shots judged by two checkers) and on the packed desktop build; PR #93 open with its preview; the merge on Stack's standing word of 2026-10-12 ("go. merge as well."), repeated 2026-10-14**; record `walks/walk-22/WALK.md` (77 ticked lines, taste calls T-1 to T-18) and `verification/103_PHASE22_REVIEW.md`; **after the merge, each on his word:** both specs once against production with the counts into STATUS, the worktrees `bb2dash-wt-22*` and the five worker branches removed, T-6 to T-18 his to overturn (§4) |
 | 23 | Inbox auto-apply: a sync files the request, the `apply` container runs `/inbox-apply` | none for the phase (Stack's ask and three choices, 2026-10-07; STATUS "Phase 23", DECISIONS six rows); the follow-ups: `briefs/110_PHASE23_followups.md` (frozen 2026-10-08) | amends B-44; builds R-96's release | 180–186 live (183 at the cut-over, 185 and 186 the session-answer fix, 187 the follow-ups' apply side on 2026-10-09; 188 is written and reviewed and goes on at the follow-ups' cut-over; 189 is free; block 180–189) | **merged 2026-10-07 on Stack's word (PR #79 `d454f6f`; bb2dash-stack #4 `ec0e304`) and cut over: `sync` rebuilt, `apply` running**; first live run archived 13 of 16 answers; the session-answer fix merged 2026-10-07 (PR #81 `b8d3b13`) and has run live since; **the follow-ups are built, reviewed and in two PRs on Stack's merge word of 2026-10-09** (a skipped answer is held, the transform reads archived answers and stamps session links, the exporter is scheduled for notes only, `just up` knows `apply`, pack 23 is written; 187 on prod); the cut-over done 2026-10-09 (188 on prod; 180–188 frozen, 189 free); **ACCEPTED 2026-10-13 by acceptance run `20261013T003231Z`, green from `main`** (STATUS "Phase 23 follow-ups") |
 
 Outside the phases: R-109 and the state-doc refresh landed on the planning branch (Stage D); R-105 and
@@ -445,6 +445,8 @@ brief's B-table. Before cutting workers, the phase's PM reads that brief's resid
 §3 and fixes or strikes each one in the phase's own PR. The used sprint 1 prompts are history in
 `docs/planning/sprint-1-hub/104_SPRINT1_SESSION_PROMPTS.md`.
 
+**Position on 2026-10-14 (Phase 22 walked, PR #93 open):** the last phase of sprint 2 is built, reviewed and walked, and its PR is open on Stack's standing merge word of 2026-10-12 ("go. merge as well."), repeated on 2026-10-14 ("continue merging phase 22 to main"). The close-out ran as the brief's acceptance script in the walk box on the final tree: `main` merged a fourth time (e820b29; one stylesheet conflict, the Inbox's Apply answers toast, resolved by keeping both phases' intent), the web and desktop gates and every named check of task 20 green, the phone-width walk (`20261014T182418Z`, 54 passed, 24 pane measures, six phone shots) and the theme walk (`20261014T183839Z`, 64 passed, 62 shots judged by two checkers) with the fingerprint unchanged around each counted run, the two layout specs (`20261014T183637Z`, 9 passed), and the desktop look on the packed build (the window dark at open, the bar clearing the three buttons at the 960 px minimum, real clicks on the five icons and the popout's close button, Light by the real mouse, the menus, the failed-load page, the update prompt, the icon, the scrollbars and motion). The record is `walks/walk-22/WALK.md`. After the merge, each on his word: the two specs once against production with the counts into STATUS; the removal of `bb2dash-wt-22*` and the five worker branches; taste calls T-6 to T-18, closed at the brief's defaults and his to overturn. With it every phase of sprint 2 has a PR merged or open; what is left of the sprint is §4's items and the acceptance follow-ups the phases' own sections name.
+
 **Position on 2026-10-08 (Phase 21 accepted):** the acceptance run (`just accept <phase>`, §3 step 9) merged on Stack's word (bb2dash #82 `8269fac`, bb2dash-stack #5 `c4a54f8`) and its first run from `main`, `20261008T041753Z`, was green and counts: Phase 21 is accepted, the Workspace runs from bb2dash-stack, and the record is 102a's last section. Open from it: Stack's step 1 (Usage credits, `/usage`), the removal of the stopped test project `bb2dash-wt21`, and the phase's worktrees, branches and raw recordings. A later phase with a pack under `acceptance/<NN>/` is accepted the same way.
 
 **Position on 2026-10-07 (Phase 21):** D2 has run since 2026-10-05, and Phase 21 is built on `feat/workspace-21` in bb2dash and in bb2dash-stack and walked by the PM; both PRs (bb2dash #78, bb2dash-stack #3) merged on Stack's word on 2026-10-07, before his acceptance walk. Done: the freeze with Stack's answers, four worker streams each with an independent check, migrations 140–143 on prod (frozen), the image built from harness `main` 57ee51f and proven as test project `bb2dash-wt21` (tasks 12 and 13), both reviews on the branch and both on the delta (the `/code-review` run on the range `d4b1b8d..ac41858` is in 102a: eleven findings, R2-1 to R2-11, none CRITICAL or HIGH), runner fix round Z for its three MEDIUM findings (ruling Z1: R2-1, R2-2 and R2-5, and a secret file holding a NUL refused; merged as `134ee64`, runner 810 tests; the eight LOW ones recorded under ruling Z2), `/code-review main high` on bb2dash-stack with its fix round (fifteen findings; S-1, the one HIGH, fixed: the Workspace is started alone, never through a whole-project `just up` while a sync is open; 70 of 70 tests at `190fa43`), and the PM's walk in two sittings on the preview and in a second desktop window (tasks 19 second half, 20, 21 and 22: twelve live turns on Stack's plan, nine shots; W-1 and W-2 found on the real screen, fixed by W-66, merged as `25979bb` and shown fixed in the second sitting; W-3 put to Stack; task 21 (d) and the plan's usage percentages not shown live). Next, the PM's: both PRs (task 25), then "ready when you say so". Then Stack's: the 15-step acceptance, after Phase 14's own, and the six things put to him (§4). F (Phase 22) waits for this merge. The worktrees, the test project and the cleanup owed are under D2 below.
@@ -668,18 +670,32 @@ E — Open items
 > so and leave it. Stop at "ready when you say so".
 
 (Session E never opens a phase branch or a migration; a finding that needs code goes to the phase that owns the file, named in the PR body.)
-**Session F — Phase 22** (last, after every screen exists)
+**Done — Phase 22** (walked and in PR #93 on 2026-10-14, the merge on Stack's word of 2026-10-12; the prompt is kept for the record, rewritten to brief 103 as frozen on 2026-10-08; it was Session F)
 
-> `/bb2dash-pm` Start Phase 22: `docs/planning/sprint-2/briefs/103_PHASE22_styling.md`, R-53, R-46; S2-styling-1.
-> PROVISIONAL until I answer 93 §5 (B-6, B-23, B-24) and approve 94. Gate: Phases 16, 17, 18, 19, 14 and 21 merged,
-> so every screen exists (task 4), `web/src/app/(app)/workspace/page.tsx` included; check whether tasks 1–2 already
-> rode Phase 17's PR (if not, they are this branch's first commits). Put open items 1–5 to me and wait. Worktree
-> `bb2dash-wt-22` on `feat/styling-22`; W-67..W-70 (Opus); migrations: none. One PR; its one exception is tasks 1–2
-> riding Phase 17's PR, whose DECISIONS row is written the day I answer B-6. W-67's task 3 and W-68's task 5 (RED on
-> its first preview) first; publish the three style tiles (task 6) and wait for my pick (task 7) while W-68..W-70 do
-> tasks 12–15; task 8 gates the sweeps. Run `login.mjs` against each preview before its first harness run (the
-> task-list preamble); walk both specs on the phase preview with `WALK_SHOTS=1`, run the gates and open the PR with
-> the preview and `WALK.md`; I walk the acceptance script: the theme control, 58 surface lines, 390 px, the Menu, the
-> desktop build with Windows in light mode. Stop at "ready when you say so".
+Phase 22 (done)
+
+> `/bb2dash-pm` Start Phase 22: `docs/planning/sprint-2/briefs/103_PHASE22_styling.md` (frozen 2026-10-08 with
+> Stack's answer to its nine open items; amendments 2 and 3 the same day), R-53, R-46; P-76, P-79; S2-styling-1.
+> Gate: every screen exists (Phases 16, 17, 18, 19, 14, 21 and 23 merged). Worktree `bb2dash-wt-22` on
+> `feat/styling-22`; task 0 first (the walk box, `scripts/walk-box.mjs`, run by W-75 with the checker's findings);
+> tasks 1–2 (the token audit, its baselines and the frozen allowlist) are this branch's first code commits, no
+> exception; migrations: none. Workers W-67 (foundation), W-68 (shell and phone width), W-69 (screens A) and W-70
+> (screens B) on Sonnet 5.5 (Stack's word), each in its own worktree, each with a verification file; the PM keeps
+> the reviews, the checkers and the walks. Publish the three style tiles (task 6) and take his pick (task 7, tile D
+> "Charcoal", from B plus C's bar and Upcoming block, his accent rule grey / white / #ff0000, dark by default);
+> run the `/ui-ux-pro-max` refinement pass on the tile (amendment 3; `103b_PHASE22_REFINEMENT.md`, the design
+> system under `design-system/bb2dash/`) and put rows 17 to 35 to him (D-1 to D-5); task 8 writes direction D
+> into `globals.css` and gates the four sweeps (tasks 16–19) and tasks 26 to 38 (the frame, the desktop shell,
+> type, panels leaving, marks, keyboard polish, the icon, captions, the week strip, targets, busy, the tracker's
+> scrollbar). `/code-review main high` twice (the sweeps on a scratch merge, then the integrated branch) and
+> `/security-review`, every CRITICAL and HIGH fixed, in `103_PHASE22_REVIEW.md`. Then the PM's close-out, no
+> check-in: merge `main`, the task-20 gates and named checks, the two counted walks in the walk box with shots and
+> the fingerprint (`WALK_SHOTS=1 node scripts/walk-box.mjs web/e2e/phone-width.spec.ts` → 54 passed and 24 pane
+> lines; `… web/e2e/theme-walk.spec.ts` → 64 passed, 62 shots opened and judged), the desktop look on the packed
+> build (`npm run pack`; a second instance under its own profile at a local `next start`; his running app never
+> touched), `walks/walk-22/WALK.md` with 77 ticked lines and "Taste calls for Stack", STATUS / DECISIONS /
+> ORCHESTRATOR, the PR with its Vercel preview. Merge on his word only (given 2026-10-12: "go. merge as well.").
+> After the merge: both specs once with `--url` against production, the counts into STATUS; the worktrees and
+> worker branches removed on his word.
 
 
