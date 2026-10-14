@@ -139,6 +139,7 @@
 
 .toastDismiss {
   all: unset;
+  app-region: no-drag;
   cursor: pointer;
   font-size: var(--text-sm);
   color: var(--color-neutral-500);
