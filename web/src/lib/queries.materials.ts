@@ -257,6 +257,12 @@ export interface FileRoutes {
   storage_path: RouteValue;
   local_path: RouteValue;
   source_url: RouteValue;
+  /**
+   * Migration 164: where a Blackboard file's link redirects when that is another
+   * site. Optional because most callers never select it; an absent column is not
+   * an unknown route, it just adds nothing.
+   */
+  outside_url?: RouteValue;
 }
 
 /** A route we can actually use: a non-empty recorded path. */
@@ -279,6 +285,35 @@ export function sourceUrl(row: FileRoutes): string | null {
   return routePath(row.source_url);
 }
 
+/** The longest link the database stores for a file (migration 164's check says the same). */
+const MAX_LINK_LENGTH = 2048;
+
+/**
+ * A plain http(s) link or null. This is the only gate between a stored URL and an `href`: it refuses
+ * every other scheme (javascript:, data:, file:, ...), whitespace and control characters, and anything
+ * over 2048 characters, the same limits migration 164 holds the column to.
+ */
+export function safeHttpUrl(value: unknown): string | null {
+  if (typeof value !== 'string' || value === '' || value.length > MAX_LINK_LENGTH) return null;
+  if (/[\s\u0000-\u001f\u007f]/.test(value)) return null;
+  try {
+    const { protocol } = new URL(value);
+    return protocol === 'http:' || protocol === 'https:' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Migration 164: the other site a Blackboard file redirects to, when it is a safe link; else null. */
+export function outsideUrl(row: Pick<FileRoutes, 'outside_url'>): string | null {
+  return safeHttpUrl(row.outside_url);
+}
+
+/** What a file's Open link goes to: the outside link when it has one, else the source URL. */
+export function linkUrl(row: FileRoutes): string | null {
+  return outsideUrl(row) ?? sourceUrl(row);
+}
+
 /** Blackboard's own host, any subdomain; the same rule as SQL `bb_file_is_outside_link` (161). */
 const BLACKBOARD_URL_RE = /^https?:\/\/([a-z0-9-]+\.)*blackboard\.syracuse\.edu(:[0-9]+)?(\/|$)/i;
 
@@ -293,6 +328,8 @@ export function isOutsideLink(url: string | null | undefined): boolean {
 
 export function fileLocation(row: FileRoutes): FileLocation {
   if (routePath(row.storage_path)) return 'library';
+  // 164: a Blackboard link that redirects to another site has no bytes to wait for; it is a link.
+  if (outsideUrl(row)) return 'source';
   if (routePath(row.local_path)) return 'disk';
   if (routePath(row.source_url)) return 'source';
   // Nothing usable was found — but "nothing found" is only "no route" when
@@ -328,7 +365,7 @@ export function fileHonesty(row: FileRoutes): {
     case 'source':
       return {
         location,
-        label: isOutsideLink(sourceUrl(row)) ? 'Outside link' : 'Source link',
+        label: outsideUrl(row) || isOutsideLink(sourceUrl(row)) ? 'Outside link' : 'Source link',
         openable: true,
       };
     case 'disk':
@@ -520,6 +557,17 @@ export function resolveReadingRoute(
       tag: READING_TAG.library,
       reason: 'Stored in the library — opens a signed link.',
       file,
+    };
+  }
+  // (b) 164: a linked file whose Blackboard link redirects to another site opens that site.
+  const outside = file ? safeHttpUrl(file.outside_url) : null;
+  if (outside) {
+    return {
+      kind: 'external',
+      action: 'Open ↗',
+      tag: READING_TAG.external,
+      reason: 'Outside link — not stored in the library.',
+      href: outside,
     };
   }
   // (b) Linked file that only carries a source URL (no stored bytes).
