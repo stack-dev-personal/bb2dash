@@ -160,4 +160,6 @@ begin
   end if;
 end $$;
 
+select 'phase17_165_strip_ai_policy: PASS' as result;
+
 rollback;
