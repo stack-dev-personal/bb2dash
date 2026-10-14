@@ -13,8 +13,8 @@
  * A 401/403 at the first hop stops the step only when the login check then finds users/me dead
  * (R2 item 3); otherwise that file is `refused`; `gone`, `refused` and a refused
  * Storage 409 go to the report's `not_pulled`. A redirect to another SITE (`offsite`, 164) is not an
- * error: the link is saved on the row through `sync_file_outside_link(…)` and counted as `linked`; the
- * target is never requested. A redirect to a Blackboard host off the allow-list stays `refused`. Keys and checks are `ingest/pull_files.mjs`'s
+ * error: once the login check finds the session alive, the link is saved on the row through
+ * `sync_file_outside_link(…)` and counted as `linked`; the target is never requested. A redirect to a Blackboard host off the allow-list stays `refused`. Keys and checks are `ingest/pull_files.mjs`'s
  * exported pure helpers; its `main`, whose update SQL is the owner's, is never run.
  *
  * Once at least one unit was posted, `ingest/embed_corpus.mjs`'s loop runs once, in-process; never on none.
@@ -151,6 +151,15 @@ function hostOnly(url: string): string {
 /** 164: a Blackboard file whose link goes to another site. Saved as that link, or left flagged. */
 async function saveOutsideLink(row: WorklistRow, target: string, p: FilesPorts): Promise<RowResult> {
   const host = hostOnly(target);
+  // A dead Blackboard session can redirect a file URL anywhere, a sign-in page included. The walk keeps
+  // the obvious ones out; this is the backstop: nothing is saved while the login is not known to be alive.
+  const verdict = await p.loginCheck();
+  if (verdict === 'dead') {
+    return { pulled: false, reason: `session_expired: the login check found the session dead before saving a link to ${host}`, stop: true };
+  }
+  if (verdict !== 'alive') {
+    return { pulled: false, reason: `offsite: ${host}, but the login check did not answer, so the link was not saved` };
+  }
   let saved = false;
   try {
     saved = await p.rpc.fileOutsideLink(row.id, target);

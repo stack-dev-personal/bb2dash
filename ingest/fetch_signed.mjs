@@ -70,7 +70,29 @@ export const MAX_LINK_LENGTH = 2048;
  * Blackboard's file with its bytes still owed, never "another site": it stays flagged so the
  * allow-list can be widened on purpose (a separate, security-reviewed change).
  */
-const BLACKBOARD_FAMILY = [BLACKBOARD_ORIGIN, 'blackboardcdn.com', 'blackboard.com'];
+const BLACKBOARD_FAMILY = [BLACKBOARD_ORIGIN, 'blackboardcdn.com', 'blackboard.com', 'anthology.com'];
+
+/**
+ * Hosts that sign Stack in. A redirect there is a dead session, not a link: saving it would take the
+ * file off the pull list for good. One list, shared with the login watch (sync/src/login.ts).
+ */
+export const LOGIN_HOSTS = Object.freeze(['login.microsoftonline.com']);
+
+/** The university's own domains (any subdomain): its single sign-in and its pages are not another site. */
+export const UNIVERSITY_DOMAINS = Object.freeze(['syracuse.edu', 'syr.edu']);
+
+/** Query parameter names (lowercase) that mark a URL as a signed, expiring one: not a link to keep. */
+const SIGNATURE_PARAMS = new Set([
+  'x-amz-signature', 'x-amz-credential', 'x-goog-signature', 'signature', 'sig',
+  'key-pair-id', 'policy', 'token', 'access_token',
+]);
+
+/** True when the query carries a signature (`se` counts only together with `sp`, a SAS token's pair). */
+function carriesSignature(u) {
+  const names = new Set([...u.searchParams.keys()].map((k) => k.toLowerCase()));
+  if ([...names].some((n) => SIGNATURE_PARAMS.has(n))) return true;
+  return names.has('se') && names.has('sp');
+}
 
 const onDomain = (host, domain) => host === domain || host.endsWith(`.${domain}`);
 
@@ -83,7 +105,12 @@ function hostOf(url) {
  * What is a redirect target the walk will not follow?
  *
  *   'outside'    · a real site off Blackboard: an http(s) link to save, never to request
- *   'blackboard' · a Blackboard host (its own family, CDN included) that is not on the allow-list
+ *   'blackboard' · a Blackboard host (its own family, CDN and parent company included) that is not on
+ *                  the allow-list
+ *   'login'      · a sign-in host (LOGIN_HOSTS) or one of the university's own domains: a dead session
+ *                  or an institutional page, never "another site"
+ *   'signed'     · the query carries a signature (X-Amz-Signature, sig, token, ...): a signed URL expires
+ *                  and is not a link to keep
  *   'unusable'   · not a link worth storing: not http(s), an IP literal, localhost, a single-label
  *                  host, credentials in the URL, longer than MAX_LINK_LENGTH, or whitespace or a
  *                  control character anywhere in it
@@ -102,6 +129,8 @@ export function classifyRedirectTarget(url) {
   if (host === 'localhost' || host.endsWith('.localhost')) return 'unusable';
   if (BLACKBOARD_FAMILY.some((domain) => onDomain(host, domain))) return 'blackboard';
   if (!host.includes('.')) return 'unusable';
+  if (LOGIN_HOSTS.some((h) => onDomain(host, h)) || UNIVERSITY_DOMAINS.some((d) => onDomain(host, d))) return 'login';
+  if (carriesSignature(u)) return 'signed';
   return 'outside';
 }
 
@@ -220,6 +249,14 @@ export async function resolveSignedUrl(get, durableUrl) {
         // Blackboard's own file on a host the allow-list does not name: its bytes are owed. Host only
         // in the reason; a CDN URL carries a signature.
         return { outcome: 'refused', reason: `redirect target is a Blackboard host not on the allow-list: ${hostOf(next)}`, hops };
+      }
+      if (kind === 'login') {
+        // A sign-in page or a university host: the session is probably dead. Never saved as a link.
+        return { outcome: 'refused', reason: `redirect target is a sign-in or university host, not another site: ${hostOf(next)}`, hops };
+      }
+      if (kind === 'signed') {
+        // A signed URL expires; keeping it as a link would keep a dead one. Host only: it carries the signature.
+        return { outcome: 'refused', reason: `redirect target at ${hostOf(next)} is a signed URL, not a link to keep`, hops };
       }
       return { outcome: 'refused', reason: 'redirect target is not followable (origin or scheme) and not a usable link', hops };
     }

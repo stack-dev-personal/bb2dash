@@ -23,7 +23,9 @@
 --      pinned, for sync_runner and db_test_runner only. It re-checks the URL itself, because the
 --      caller is a container that holds Blackboard's login: http(s); a host; no credentials; not an IP
 --      literal in any spelling; not localhost or a single-label host; not a Blackboard host (the
---      institution's, its CDN family, blackboard.com). A bad URL raises 22023 and writes nothing.
+--      institution's, its CDN family, blackboard.com, anthology.com); not a sign-in host or one of the
+--      university's own domains (a dead session redirects there, and is not another site); not a signed
+--      URL (a signature in the query). A bad URL raises 22023 and writes nothing.
 --      It writes only a catalogued, unsuperseded, never-stored row that is not yet linked, is not a
 --      submission and does not already have an outside source_url: any other row answers false and is
 --      left alone. It sets outside_url, appends a note that names the HOST only (a CDN URL carries a
@@ -36,7 +38,9 @@
 --      list at creation ("a later migration that adds a bb_files column must recreate this view") and
 --      the Materials page reads that view; the options (security_invoker) are restated because
 --      CREATE OR REPLACE VIEW replaces them. It also now carries the columns 049 and later added.
---   6. a guard block
+--   6. a BEFORE UPDATE OF source_url row trigger on bb_files: a changed source_url clears outside_url
+--      (stage_files rewrites source_url in place on a re-upload; the old link must not outlive it)
+--   7. a guard block
 --
 -- WHERE EACH BODY CAME FROM (prod is byte-identical to the repo, so the live body is the body of the
 -- last migration that created the function; found by searching db/migrations for each name):
@@ -81,6 +85,7 @@ create or replace function public.sync_file_outside_link(p_id bigint, p_url text
 declare
   v_authority text;
   v_host      text;
+  v_query     text;
 begin
   -- The same rule as ingest/fetch_signed.mjs's classifyRedirectTarget, which decides 'outside' before
   -- the runner calls this; the database does not trust the caller to have applied it.
@@ -116,9 +121,21 @@ begin
   if v_host ~ '(^|\.)localhost$' then
     raise exception 'sync_file_outside_link: the url names localhost' using errcode = '22023';
   end if;
-  if v_host ~ '(^|\.)(blackboard\.syracuse\.edu|blackboardcdn\.com|blackboard\.com)$' then
+  if v_host ~ '(^|\.)(blackboard\.syracuse\.edu|blackboardcdn\.com|blackboard\.com|anthology\.com)$' then
     raise exception 'sync_file_outside_link: % is a Blackboard host, not another site', v_host
       using errcode = '22023';
+  end if;
+  -- A sign-in host or one of the university's own domains: a dead session, not another site. (The
+  -- Blackboard check above comes first, so blackboard.syracuse.edu keeps its own message.)
+  if v_host ~ '(^|\.)(login\.microsoftonline\.com|syracuse\.edu|syr\.edu)$' then
+    raise exception 'sync_file_outside_link: % is a sign-in or university host, not another site', v_host
+      using errcode = '22023';
+  end if;
+  -- A signed URL is not a link: it expires, and carries its own authorisation.
+  v_query := lower(coalesce(substring(split_part(p_url, '#', 1) from '\?(.*)$'), ''));
+  if v_query ~ '(^|&)(x-amz-signature|x-amz-credential|x-goog-signature|signature|sig|key-pair-id|policy|token|access_token)(=|&|$)'
+     or (v_query ~ '(^|&)se(=|&|$)' and v_query ~ '(^|&)sp(=|&|$)') then
+    raise exception 'sync_file_outside_link: the url at % carries a signature', v_host using errcode = '22023';
   end if;
 
   -- Only a catalogued, unsuperseded, never-stored row that is not yet linked, is not a submission, and
@@ -393,6 +410,33 @@ create or replace view public.v_bb_files_current with (security_invoker = true) 
   select * from public.bb_files where superseded_by is null;
 
 -- =============================================================================================
+-- 6b. outside_url follows source_url
+-- =============================================================================================
+-- stage_files (124, rule 2) rewrites source_url IN PLACE when a file is re-uploaded. A link saved for
+-- the old URL must not outlive it, or the new upload would stay off the worklist. A row trigger, not a
+-- rule in stage_files, so every writer of source_url is covered and 124 stays frozen.
+create or replace function public.bb_files_outside_url_follows_source()
+  returns trigger
+  language plpgsql set search_path = public, pg_temp as $$
+begin
+  if new.source_url is distinct from old.source_url then
+    new.outside_url := null;
+  end if;
+  return new;
+end $$;
+
+comment on function public.bb_files_outside_url_follows_source() is
+  'Trigger function (164): a bb_files row whose source_url changes loses its outside_url, so a re-uploaded '
+  'file is pulled again instead of staying a link to the old upload''s redirect.';
+
+revoke all on function public.bb_files_outside_url_follows_source() from public, anon, authenticated;
+
+drop trigger if exists bb_files_outside_url_follows_source on public.bb_files;
+create trigger bb_files_outside_url_follows_source
+  before update of source_url on public.bb_files
+  for each row execute function public.bb_files_outside_url_follows_source();
+
+-- =============================================================================================
 -- 7. Privileges
 -- =============================================================================================
 revoke all on function public.sync_file_outside_link(bigint, text) from public, anon, authenticated, service_role;
@@ -461,6 +505,19 @@ begin
   end if;
   if has_table_privilege('anon', 'public.v_bb_files_current', 'select') then
     raise exception 'FAIL 164: anon can select v_bb_files_current';
+  end if;
+  -- outside_url follows source_url: a BEFORE UPDATE OF row trigger with a pinned path.
+  if not exists (select 1 from pg_trigger t join pg_proc p on p.oid = t.tgfoid
+                  where t.tgrelid = 'public.bb_files'::regclass
+                    and t.tgname = 'bb_files_outside_url_follows_source' and not t.tgisinternal
+                    and (t.tgtype & 1) = 1 and (t.tgtype & 2) = 2 and (t.tgtype & 16) = 16
+                    and t.tgattr::text <> ''
+                    and coalesce(p.proconfig, '{}') @> array['search_path=public, pg_temp']) then
+    raise exception 'FAIL 164: bb_files_outside_url_follows_source is missing or is not a BEFORE UPDATE OF row trigger';
+  end if;
+  if has_function_privilege('anon', 'public.bb_files_outside_url_follows_source()', 'execute')
+     or has_function_privilege('authenticated', 'public.bb_files_outside_url_follows_source()', 'execute') then
+    raise exception 'FAIL 164: the outside_url trigger function is executable by anon or authenticated';
   end if;
   -- sync_runner executes the fifteen: 187 and 188 pinned fourteen, and this is the one that adds to them.
   if (select string_agg(p.proname, ',' order by p.proname)
