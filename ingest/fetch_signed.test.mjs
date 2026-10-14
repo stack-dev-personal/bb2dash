@@ -619,3 +619,12 @@ test('validateHops: a chain ending at the file store is accepted', () => {
   assert.equal(got.outcome, 'ok');
   assert.equal(got.signedUrl, FILE_STORE);
 });
+
+test('resolveSignedUrl: the logged-in walk starts only on Blackboard, never on a signed host (CDN or file store)', async () => {
+  for (const start of [SIGNED, FILE_STORE]) {
+    const calls = [];
+    const got = await resolveSignedUrl(fakeGet({}, calls), start);
+    assert.equal(got.outcome, 'refused', start);
+    assert.deepEqual(calls, [], start);
+  }
+});
