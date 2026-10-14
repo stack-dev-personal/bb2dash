@@ -12,7 +12,9 @@
  *   * record the row through `sync_file_stored(…)`, which writes the prefixes itself.
  * A 401/403 at the first hop stops the step only when the login check then finds users/me dead
  * (R2 item 3); otherwise that file is `refused`; `gone`, `refused` and a refused
- * Storage 409 go to the report's `not_pulled`. Keys and checks are `ingest/pull_files.mjs`'s
+ * Storage 409 go to the report's `not_pulled`. A redirect to another SITE (`offsite`, 164) is not an
+ * error: the link is saved on the row through `sync_file_outside_link(…)` and counted as `linked`; the
+ * target is never requested. A redirect to a Blackboard host off the allow-list stays `refused`. Keys and checks are `ingest/pull_files.mjs`'s
  * exported pure helpers; its `main`, whose update SQL is the owner's, is never run.
  *
  * Once at least one unit was posted, `ingest/embed_corpus.mjs`'s loop runs once, in-process; never on none.
@@ -79,7 +81,7 @@ export interface FileOps extends MoveOps {
 }
 
 export interface FilesPorts {
-  rpc: Pick<SyncRpc, 'fileWorklist' | 'fileStored'>;
+  rpc: Pick<SyncRpc, 'fileWorklist' | 'fileStored' | 'fileOutsideLink'>;
   /** One hop, redirects not followed, in the logged-in context (Playwright's request.get). */
   hop(url: string): Promise<{ status: number; headers: Record<string, string> }>;
   /** The signed-URL download; a signed URL carries its own authorisation. */
@@ -132,7 +134,35 @@ async function removeQuietly(ops: FileOps, file: string): Promise<void> {
   }
 }
 
-type RowResult = { pulled: true; unitsPosted: number } | { pulled: false; reason: string; stop?: true };
+type RowResult =
+  | { pulled: true; unitsPosted: number }
+  | { pulled: false; linked: true }
+  | { pulled: false; linked?: undefined; reason: string; stop?: true };
+
+/** The host of a link, for a log line or a reason: never the path or query, which may carry a signature. */
+function hostOnly(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return 'unknown host';
+  }
+}
+
+/** 164: a Blackboard file whose link goes to another site. Saved as that link, or left flagged. */
+async function saveOutsideLink(row: WorklistRow, target: string, p: FilesPorts): Promise<RowResult> {
+  const host = hostOnly(target);
+  let saved = false;
+  try {
+    saved = await p.rpc.fileOutsideLink(row.id, target);
+  } catch (error) {
+    return { pulled: false, reason: `offsite: ${host}, sync_file_outside_link refused: ${message(error)}` };
+  }
+  if (!saved) {
+    return { pulled: false, reason: `offsite: ${host}, but the database kept the row as it was (stored, superseded or gone)` };
+  }
+  p.log(`files: ${row.id} is a link to ${host}; saved as an outside link`);
+  return { pulled: false, linked: true };
+}
 
 async function pullOne(row: WorklistRow, p: FilesPorts): Promise<RowResult> {
   const dest = safeJoin(p.courseFilesDir, row.relpath);
@@ -146,6 +176,9 @@ async function pullOne(row: WorklistRow, p: FilesPorts): Promise<RowResult> {
     if (verdict === 'dead') return { pulled: false, reason: `session_expired: ${chain.reason}`, stop: true };
     const why = verdict === 'alive' ? 'but the login check passed' : 'and the login check did not answer';
     return { pulled: false, reason: `refused: ${chain.reason} at the first hop, ${why}` };
+  }
+  if (chain.outcome === 'offsite' && 'target' in chain && typeof chain.target === 'string') {
+    return saveOutsideLink(row, chain.target, p);
   }
   if (chain.outcome !== 'ok' || !('signedUrl' in chain) || typeof chain.signedUrl !== 'string') {
     return { pulled: false, reason: `${chain.outcome}: ${chain.reason ?? 'no signed URL'}` };
@@ -220,6 +253,7 @@ export async function runFilesStep(p: FilesPorts): Promise<FilesStepResult> {
   const rows = await p.rpc.fileWorklist();
   const notPulled: NotPulled[] = [];
   let pulled = 0;
+  let linked = 0;
   let unitsPosted = 0;
   let stopped: FilesStepResult['stopped'] = null;
 
@@ -236,14 +270,18 @@ export async function runFilesStep(p: FilesPorts): Promise<FilesStepResult> {
       unitsPosted += result.unitsPosted;
       continue;
     }
+    if (result.linked) {
+      linked += 1;
+      continue;
+    }
     notPulled.push({ id: row.id, reason: result.reason });
     if (result.stop) {
       stopped = 'session_expired';
-      p.log(`files: the Blackboard session expired at file ${row.id}; ${rows.length - pulled - notPulled.length} left for the next sync`);
+      p.log(`files: the Blackboard session expired at file ${row.id}; ${rows.length - pulled - linked - notPulled.length} left for the next sync`);
       break;
     }
   }
-  p.log(`files: ${pulled} pulled, ${notPulled.length} not pulled, ${unitsPosted} units posted`);
+  p.log(`files: ${pulled} pulled, ${linked} saved as links, ${notPulled.length} not pulled, ${unitsPosted} units posted`);
 
   let embedError: string | null = null;
   if (unitsPosted > 0) {
@@ -251,7 +289,7 @@ export async function runFilesStep(p: FilesPorts): Promise<FilesStepResult> {
     if (run.code !== 0) embedError = `embed_corpus.mjs's loop ended ${run.code}: ${run.tail}`;
   }
 
-  return { files: { pulled, not_pulled: notPulled }, stopped, embedError };
+  return { files: { pulled, not_pulled: notPulled, ...(linked > 0 ? { linked } : {}) }, stopped, embedError };
 }
 
 /** Storage and `bb_file_text` POSTs with the publishable key (`SB_ANON_KEY`), as pull_files.mjs does. */

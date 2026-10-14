@@ -219,7 +219,7 @@ describe('the files step', () => {
 
   it('164: pulled, linked and flagged files are counted apart in one pass', async () => {
     const target = 'https://www.sec.gov/a.pdf';
-    const hop = vi.fn(async (url: string) => {
+    const hop = vi.fn(async (url: string): Promise<{ status: number; headers: Record<string, string> }> => {
       if (url.endsWith('xid-35_1')) return { status: 302, headers: { location: target } };
       if (url.endsWith('xid-36_1')) return { status: 404, headers: {} };
       return { status: 302, headers: { location: CDN } };
