@@ -562,3 +562,76 @@ of the walk's synthetic upload, through its firewall, is that probe: its line is
 worker's log and the row's state (`reading` to `text_ready` means the link was fetched with no
 redirect and the bytes hashed to the row's hash). If it fails, the upload half of the walk stops
 there and the Workspace half still stands.
+
+## Phase 24ab (2026-10-14): where it stands, the merge, the list after it, the test images
+
+Brief `118_PHASE24AB_walk_and_handover.md` is the plan; its tasks are numbered as there. The session
+started about 19:25Z on Stack's start prompt, which carries his word for the walk window.
+
+**Task 1, where it stands (read 19:27Z to 19:33Z).** `origin/main` is `fb3c2db`, past what brief 118
+and the branch's STATUS describe: Phase 22 merged (PR #93, `dff1e05`) and closed (PR #95) earlier the
+same day, Phase 23 and its follow-ups accepted on 2026-10-13 (run `20261013T003231Z`), migration 107,
+the SQL-units audit and the export retry all on `main`. `feat/workspace-24` (`d480844`) was 287 commits
+behind and 102 ahead, not 64 behind as the brief says; bb2dash-stack's branch (`feca81c`) 3 behind, 3
+ahead. Open PRs: bb2dash #84 and #59, neither this phase's; bb2dash-stack none. Phase 24b's branch
+`feat/workspace-page-24b` is not on origin yet. Docker: no `bb2dash-walk22-` box, no `bb2dash-accept-`
+container, no `accept.lock` under `C:/Users/stack/.bb2dash-accept/`; live `bb2dash-sync-1` up 34 h,
+`bb2dash-workspace-1` up 33 h, `bb2dash-apply-1` up 43 h; the three test images of 2026-10-09 still
+present. Phase 22 is closed, so no walk box of its own can open beside this session; the walk now runs
+against the restyled page, which pack 24 has never met. The untagged-session review is due (last
+2026-10-05) and is left, on Stack's instruction in the start prompt.
+
+**Task 2, the merge.** In bb2dash, `git merge --no-ff origin/main` stopped on four files, each resolved
+by keeping both sides: `project-state/STATUS.md` (the header, both the "Phase 22" and the "Phase 24a"
+sections, the What's next rows, the known issues), `project-state/DECISIONS.md` (both sets of rows),
+`project-state/ORCHESTRATOR.md` (the header, §1 rows 22 to 24b, §4), and `scripts/package.json`, whose
+test line keeps both names (`accept-proofs-db24.test.mjs` and Phase 22's `walk-box.test.mjs`). The
+merge brought `web/test/walk22-lib.test.ts`, which fails on any spec under `web/e2e/` it does not know:
+`accept24.spec.ts` and `accept24.lib.ts` were listed as older than Phase 22 in the same commit, as
+`accept23.spec.ts` was on 2026-10-09 (one DECISIONS row). No lock file changed. Merge commit `c8f39b7`.
+In bb2dash-stack the merge was clean: `b540dcb` (the doctor's exports row names `no_network`).
+
+**The list after a merge (brief 109), re-done in full on the merged head:**
+
+| check | result |
+|---|---|
+| `node docker/apply/fork-firewall.mjs --write`, then `--check`, then `git diff --exit-code docker/apply` | wrote `docker/apply/init-firewall.sh` unchanged; check exit 0; diff exit 0 |
+| `apply`: `npm ci`, typecheck, build, `vitest run` | clean; 136 tests, 2 files |
+| `workspace` (the runner): typecheck, `vitest run` | clean; 1,007 tests |
+| `workspace-ingest`: typecheck, build, `vitest run` | clean; 120 tests, 7 files |
+| `mcp-server` (the materials server): typecheck, build, `vitest run` | clean; 143 tests, 8 files |
+| `sync`: typecheck, build, `vitest run` | clean; 166 tests, 7 files |
+| `web`: typecheck, lint, `next build`, `vitest run` | all clean; 3,453 tests in 191 files (2,913 before the merge: Phase 22's tests came with `main`; the token audit's ratchet is among them and reads 0) |
+| the container test files (six: `docker/apply/gate-built`, `docker/apply/image`, `docker/grep-clean`, `docker/walk/entry`, `docker/workspace-ingest/image`, `docker/workspace/init-firewall`) | 83 tests, 83 pass |
+| `node --test acceptance/acceptance.test.mjs` | 55 tests, 55 pass |
+| the scripts suite (`cd scripts && npm test`, fourteen files) | 360 tests: 358 pass and 2 fail in the run the harness stopped (below), both in Phase 22's `walk-box-main.test.mjs` and both a child process Windows could not start (status 3221225794, 0xC0000142: `git init` in a temp folder, and `node scripts/walk-box.mjs`) at the moment the laptop ran short of memory; that file alone, run again in the foreground once memory was back: 37 tests, 37 pass. Read as green |
+| bb2dash-stack: `node --test doctor/*.test.mjs scripts/*.test.mjs` | NOT RUN TO A VERDICT: Claude Code stopped the background command while the laptop was short of memory (the web suite's 191 jsdom environments, the container tests and the three builds had run side by side), and its rule is that a stopped command is started again only on Stack's word. 27 files; the merge changed three of the doctor's files (the exports row). Owed before the PR is called ready |
+| the types file, regenerated from prod (`generate_typescript_types`) | one object differs from the branch's file: `v_workspace_store_proof` (24a's view of 199, which the branch's file predated) is added; `PostgrestVersion` reads `14.17` where the file said `14.5` (prod's own, not a phase's). Nothing of another phase: everything else on prod is on `main` |
+| `docker compose config`, the `sync` and `apply` services, worktree against `main` | identical but for the build context path (`bb2dash-wt-24` for `bb2dash`) |
+
+**Task 3, the test images, rebuilt from the merged head** (19:49Z to 19:50Z, through
+`C:/Users/stack/.bb2dash-wt24/test-tags.compose.yaml`, no walk box, no acceptance run and no
+`bb2dash-wt24-` container beside them):
+
+| image | id on 2026-10-09 | id now | build |
+|---|---|---|---|
+| `bb2dash-workspace:wt24` | `e7db1854eaf7` | `519d0472efbb` | exit 0, 13 s |
+| `bb2dash-workspace-ingest:wt24` | `c2b6156562be` | `cb42974e6481` | exit 0, 6 s |
+| `bb2dash-apply:wt24` | `ca8661b78909` | `b6a858fa81a7` | exit 0, 6 s |
+
+The four live tags before and after, the same at both readings: `bb2dash-sync:local` `084b9ede6aad`,
+`bb2dash-mcp:local` `bf212746abf1`, `bb2dash-apply:local` `535b7075cb79`, `bb2dash-workspace:local`
+`42c552c05ad6`.
+
+**Before the window.** `.env.testing` copied from the shared checkout into the worktree root, unopened
+(gitignored, read `!!` by git). The test login signed in at the live site with `web/e2e/login.mjs`; the
+session file and the output folders live in the session's scratch folder, outside every repository.
+Pack 24's first step, `2 open workspace`, which asks nothing and writes nothing, was run once against
+the live page with the live Workspace still running, as a read of the restyled page: passed in 6.3 s
+(`path` `/workspace`, `channel` `joined`, `offline_line_shown` false, one conversation listed); the
+picture shows Phase 22's dark page with the `Workspace` link underlined in the bar, the `Conversations`
+heading, the one line `Ask a question to start a conversation.`, the question box and `Ask`. Read on
+prod at 19:49Z: `workspace_documents` 0, `workspace_document_text` 0, `workspace_text_embeddings` 0,
+objects in `workspace-uploads` 0, `workspace_ingest_heartbeat` 0 rows (the worker has never started),
+`workspace_conversations` not archived 1 (Stack's own, six days old), no sync or `inbox_feedback` request
+queued or claimed; `v_workspace_status` runner `workspace@9a02c3ccd37b`, polled 8 s ago.

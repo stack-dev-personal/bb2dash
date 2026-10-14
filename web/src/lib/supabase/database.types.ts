@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
@@ -4769,6 +4769,23 @@ export type Database = {
           polled_age_seconds: number | null
           polled_at: string | null
           runner: string | null
+        }
+        Relationships: []
+      }
+      v_workspace_store_proof: {
+        Row: {
+          extension_ok: boolean | null
+          extension_schema: string | null
+          extension_version: string | null
+          foreign_servers: number | null
+          foreign_tables: number | null
+          link_extensions: number | null
+          no_links_ok: boolean | null
+          store_functions_that_call_out: number | null
+          vector_columns: string | null
+          vector_columns_ok: boolean | null
+          vector_indexes: string | null
+          vector_indexes_ok: boolean | null
         }
         Relationships: []
       }
