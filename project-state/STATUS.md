@@ -1676,7 +1676,7 @@ date hold all 59 answers (departures from the defaults: item 10, item 45) and ap
 | 22 | Styling | `103_PHASE22_styling.md` | none | last |
 | 24a | Workspace assistant, behind the page | `109_PHASE24_workspace_assistant.md` | 190–199 live, the block used up | **built and reviewed 2026-10-09; its migrations and two edge functions are live; the walk, the PRs' merge and the cut-over are not done** (section "Phase 24a" above) |
 | 24ab | Finish 24a and make 24b ready | `118_PHASE24AB_walk_and_handover.md` | none | **next** (named by Stack 2026-10-14): the walk, the two PRs, the cut-over and `just accept 24`, brief 111 brought up to date |
-| 24b | Workspace assistant, the page | `111_PHASE24B_workspace_page.md` | none | not cut; after Phase 22 and 24a are on `main` |
+| 24b | Workspace assistant, the page | `111_PHASE24B_workspace_page.md` | none | data layer starts now beside 24ab (Stack, 2026-10-14), on `feat/workspace-page-24b` cut from `origin/feat/workspace-24`; the page after Phase 22 and 24a/24ab are on `main`; merges after 24a is accepted |
 
 How to run them: `106_SPRINT2_EXECUTION_PLAN.md` (dependency order, no calendar). Stack's standing items are ORCHESTRATOR §4. The sessions that run these phases are ORCHESTRATOR §6.
 

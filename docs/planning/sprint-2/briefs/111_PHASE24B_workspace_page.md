@@ -2,7 +2,7 @@
 
 Date 2026-10-08 · PM: the Fable session · Product manager: Stack · Requirements: Stack's ask of
 2026-10-08 (the tag the PM assigns to brief 109) · Answers on record:
-`109a_PHASE24_open_questions.md` · **Gate: Phase 22 and Phase 24a are both on `main`, and 24a is accepted (`just accept 24` green)** · Branch
+`109a_PHASE24_open_questions.md` · **Gate, since Stack's answers of 2026-10-14: the data layer (W-86) starts now, beside Phase 24ab; the page (W-87, W-88) starts when Phase 22 and 24a/24ab are on `main`; the PR merges after 24a is accepted (`just accept 24` green)** · Branch
 `feat/workspace-page-24b` · Worktree `bb2dash-wt-24b` · Neither is cut yet · Workers W-86 to W-88
 (24a uses W-76 to W-79 and W-85; W-80 to W-84 are the Phase 23 follow-ups', brief 110 at d558994,
 line 13; the PM confirms the one numbering at the freeze) · No migration: the page uses 24a's
@@ -94,13 +94,19 @@ this section is current.** The reference for every shape is
   forbids it: pack 24's first test is `2 open workspace` for that reason). The pack's steps 3 to 9 use
   today's page; where 24b changes what they read (the attributes `data-used` and
   `data-column-empty="start"`), task 14 moves them to the new page with the rest.
-* **Workers.** The Workers section says Opus. 24a's ran on Sonnet 5.5 by Stack's word of 2026-10-08;
-  which model 24b's run on is his to say (question 1 below). Until he says, the default is Sonnet.
+* **Workers.** Opus, as the Workers section says (his answer 1 below). 24a's ran on Sonnet by his
+  word of 2026-10-08; from 2026-10-14 Phase 24 uses Opus and every other phase keeps Sonnet.
 * **What the walk of 24a shows** (brief 118, task 4) is added here when it is done.
-* **Questions put to Stack in Phase 24ab** (brief 118, "24b: what is still his to say"), each with the
-  PM's default: (1) workers Sonnet or Opus, default Sonnet; (2) memory on at 24b's cut-over, default on;
-  (3) start the data stream (W-86) before Phase 22 merges, default no; (4) remove the old transcript
-  volume after 24a's acceptance, default leave it. His answers are written here when he gives them.
+* **Stack's answers of 2026-10-14** to the four questions Phase 24ab put to him (his words in quotes):
+  1. **Workers: Opus.** "Workers on opus for phase 24 only (keep sonnet on for the default workflow)."
+     So W-86 to W-88, and any extra worker of 24b, are Opus; other phases keep Sonnet.
+  2. **Memory on at 24b's cut-over: "Yes."** Tasks 13 and 16 stand as written.
+  3. **The data layer starts now, beside Phase 24ab.** "I can start the data layer in parallel while
+     waiting on ab to finish. ab's completion should essentially be a and ab getting merged to main."
+     The section "The data layer, started early" below is how. The page's two streams (W-87, W-88)
+     keep the gate: Phase 22 and 24a/24ab on `main`.
+  4. **The old transcript volume** (`workspace-claude-home`): "wait until its accepted to delete old
+     transcripts." It is removed after `just accept 24` is green, which is Phase 24ab's task 11.
 
 ## Why
 
@@ -498,7 +504,7 @@ to 16.
 
 ## Workers
 
-Workers are Opus (but see the amendments: Sonnet unless Stack says otherwise), commit and push per task, never touch `project-state/`, and hand the PM a
+Workers are Opus (Stack, 2026-10-14: Phase 24 only), commit and push per task, never touch `project-state/`, and hand the PM a
 verification section with each task's red run and green run (`111_W86_VERIFICATION.md` to
 `111_W88_VERIFICATION.md`, beside 111a). A worker with an unclear point states its default and takes
 it. Nobody answers a running worker by message (ruling W-S).
@@ -565,6 +571,48 @@ Three things the pictures show and this phase leaves out, each with its reason:
   already written. The line under the button says so.
 * **Not checked:** whether an opened PDF can land on a page (Q-2); the upload and the file dialog in
   the desktop window (Q-1, Q-3); the renderer's cost while streaming (Q-4).
+
+## The data layer, started early (Stack, 2026-10-14)
+
+His answer 3 moves W-86's stream ahead of the gate. It can, because nothing it writes is a file Phase 22
+sweeps or a file Phase 24ab changes: Phase 22's branches touch `fonts-href.ts`, `queries.grades.ts` and
+`theme-preference.ts` under `web/src/lib/` and nothing else there (read 2026-10-14), and 24a's only file
+under `web/src/` is the generated types file.
+
+* **Where it runs.** Its own session (the start prompt is the next-to-last section). Phase branch
+  `feat/workspace-page-24b` and worktree `C:/Users/stack/projects/bb2dash-wt-24b` are cut now **from
+  `origin/feat/workspace-24`**, not from `main`, because the data layer types against 24a's objects
+  (the regenerated `database.types.ts`) and its fixtures (`workspace/test/fixtures/contract24/`). W-86's
+  branch `feat/workspace-page-24b-data` and worktree `bb2dash-wt-24b-data` are cut from that phase
+  branch after task 3. When 24a/24ab merges, the phase branch merges `origin/main` (a merge, never a
+  rebase) and goes on from there; until then it merges `origin/feat/workspace-24` whenever 24ab pushes.
+* **What it builds now:** task 3 (the wording in `workspace-labels.ts`, PM) and W-86's tasks 4 to 6,
+  narrowed: the nine new files under `web/src/lib/` and their tests (`answer-format.ts` is the parser
+  only), `use-workspace-stream.ts` and its three tests. Probe Q-4 (the parser's cost on each flush) is
+  W-86's and runs here. **Not now:** `AnswerBody.tsx` and its module, which live in
+  `web/src/components/workspace/` and take Phase 22's tokens; they move to W-88's stream at the gate,
+  built on W-86's parser. Q-1 to Q-3 and Q-5 wait for the gate too (they need the page, the desktop
+  window or Phase 22 as merged).
+* **What it freezes for the page's streams**, in the same session, before W-86 is spawned: the exported
+  names and signatures of the nine modules and of the stream's `sources` handling, written into a
+  short section of this brief ("The data layer's frozen exports"), so W-87 and W-88 type against them
+  at the gate as the Workers section says.
+* **What it may not do.** No file under `web/src/app/(app)/workspace/` or `web/src/components/workspace/`,
+  no CSS module, neither layout check (Phase 22 is sweeping them); no file outside `web/`; no database
+  change; nothing live (no walk, no preview for Stack yet: there is no page to show). Phase 24ab's
+  walk stops the live Workspace for a while: the data stream runs no live question, so it never needs
+  the queue.
+* **Its gates:** `cd web && npm run typecheck && npx eslint . --max-warnings 0 && npx vitest run`, the
+  new tests' coverage at least 80 %, and `git diff --name-only origin/feat/workspace-24...HEAD` lists
+  only W-86's files, the labels file and its test, this brief and `111a`. It opens no PR: 24b is one PR,
+  opened at the end of the whole phase. It stops at "the data layer is on the phase branch" and says
+  what the page's streams can start from.
+
+## Session prompt for the data layer, started early
+
+Paste into a new Claude Code window started in `C:/Users/stack/projects/bb2dash`:
+
+> /bb2dash-pm Start Phase 24b's data layer, early, beside Phase 24ab. Read `docs/planning/sprint-2/briefs/111_PHASE24B_workspace_page.md` in full on the branch `origin/feat/workspace-24` (24a's branch: `git show origin/feat/workspace-24:<path>` or the worktree `C:/Users/stack/projects/bb2dash-wt-24`, read-only; that worktree belongs to the Phase 24ab session and you write nothing there), its "Amendments after 24a, as built" and "The data layer, started early" first, and `118_PHASE24AB_walk_and_handover.md`'s "The end goal, and the road to it". Then the fixture folder `workspace/test/fixtures/contract24/` and its README, and the web app's `web/src/lib/queries.workspace.ts`, `use-workspace-stream.ts` and `workspace-labels.ts`. The brief is approved: give me the triage line and a short report, do not enter plan mode. Cut the phase branch `feat/workspace-page-24b` as the worktree `C:/Users/stack/projects/bb2dash-wt-24b` from `origin/feat/workspace-24`, and work there by full paths. Do task 3 (the wording), write "The data layer's frozen exports" into the brief, then cut W-86's worktree and spawn W-86 on Opus for tasks 4 to 6 as that section narrows them, with probe Q-4. Touch no file under `web/src/app/(app)/workspace/` or `web/src/components/workspace/`, no CSS module and neither layout check: Phase 22 is sweeping them. Nothing live, no PR. When 24ab pushes, merge `origin/feat/workspace-24` into the phase branch; once 24a/24ab is on `main`, merge `origin/main` instead. Stop when the data layer is on the phase branch and its gates are green, and tell me what the page's streams can start from.
 
 ## Session prompt (a draft; Phase 24ab's task 12 finalises it)
 
