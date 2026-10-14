@@ -1745,7 +1745,7 @@ expect. The fix is his: install the app on the organization and reconnect projec
 **Still Stack's, outside this work:** the two grading components the writer set (30 and 33, on items
 3433, 3434, 3668, 3669); the question written into archived item 3425's record; the note on item 3435.
 
-## Phase 22: Styling, 2026-10-08 to 2026-10-14, built, reviewed, walked by the PM, **MERGED 2026-10-14 on Stack's word (PR #93, `dff1e05`; production deployed the same hour)**
+## Phase 22: Styling, 2026-10-08 to 2026-10-14, built, reviewed, walked by the PM, **MERGED 2026-10-14 on Stack's word (PR #93, `dff1e05`; production deployed the same hour), CLOSED the same day**
 
 Brief `docs/planning/sprint-2/briefs/103_PHASE22_styling.md` (R-53, R-46; P-76, P-79; S2-styling-1), frozen 2026-10-08
 with Stack's answer to its nine open items and amended three times the same day (the direction, the scope with the
@@ -1817,7 +1817,7 @@ of 17 ms and left with `data-leaving`. The eight `Desktop …` lines are in `WAL
 defaults on his word of 2026-10-09, and T-13 to T-18 were added by the walk (hairline greys, the light drawer scrim,
 the four "where you are" marks, the badge's digits and the assignment card's width, the planner's stretched hour
 rows, the window buttons' block on a page without a bar); all are in `WALK.md` under "Taste calls for Stack" with
-the surface, the shot and the default, so he can overturn any one after the merge (DECISIONS 2026-10-14).
+the surface, the shot and the default, and on 2026-10-14, after the merge, Stack ruled on all of them at once, "call everything good" (DECISIONS 2026-10-14): T-1 to T-18 stand as built and no follow-up is opened for any of them.
 
 **Known, and said plainly.** A browser window between 721 px and the bar's idle width (815 px) scrolls sideways to
 the bar's end, as on `main`, and at 800 px the Account icon is cut (freeze row item 3; T-12). The planner's hour
@@ -1825,11 +1825,7 @@ labels at phone width are clipped by the same 48 px gutter as on `main`, and the
 hour. A person who picked Light sees one dark frame at each open of the desktop window (accepted by the brief, step
 5). The drawer's left edge under 1024 px measures 2 px (a rule beside a ring pixel), left as built.
 
-**Open, each on Stack's word.** Both
-specs once against production
-(`node scripts/walk-box.mjs --url https://web-xi-ten-uy9xk6c6p0.vercel.app web/e2e/phone-width.spec.ts web/e2e/theme-walk.spec.ts`)
-with the two counts written here; the removal of the worktrees `bb2dash-wt-22*` and the branches
-`feat/styling-22-foundation`, `-shell`, `-screens-a`, `-screens-b` and `-walkbox`; his look at T-6 to T-18. The desktop
+**Closed 2026-10-14 on Stack's word** ("call everything good. merge everything to main and close out this phase."). Both specs ran once against production from the `main` checkout (run 20261014T191444Z: 118 passed, 0 failed, 8.1 minutes: the 54 phone-width cases with their 24 pane measures and the 64 theme cases, against production at dff1e05; fingerprint ea740eb824c71dcccc17d58294fb5134 before and the same after). The worktrees `bb2dash-wt-22*` and the branches `feat/styling-22`, `-foundation`, `-shell`, `-screens-a`, `-screens-b` and `-walkbox` are removed, local and remote. Nothing of Phase 22 is open. The desktop
 app takes the new shell at its next "Update desktop app" or logon build (the `desktop/` tree hash on `main` changes
 with the merge), and the web app at Vercel's production deployment of the merge.
 
@@ -1853,7 +1849,7 @@ date hold all 59 answers (departures from the defaults: item 10, item 45) and ap
 | 14 | Containers (R-28) | `100_PHASE14_containers.md` | 091, 093, 094 live; 092 struck | **merged 2026-10-04** on Stack's word, before his acceptance sitting (#62, #67, harness #39, bb2dash-stack #1; section "Phase 14" above); A1–A9 owed |
 | 20 | Harness closure (V-2 on record, note quality, checkpoint redaction) | `101_PHASE20_harness_closure.md` | none here | **PR-A (#39), PR-B (harness #36, + #37) and PR-C (#48) merged 2026-09-30**; V-2 closed on Stack's word (2026-09-30); tasks 2 and 29 done (row 20 above) |
 | 21 | Workspace chat on the subscription | `102_PHASE21_workspace.md` | 140–143 live (144–149 its slack) | **merged 2026-10-07 on Stack's word (bb2dash #78, then bb2dash-stack #3), walked by the PM, accepted 2026-10-08 by the acceptance run `20261008T041753Z`** (sections "Phase 21" and "Acceptance run" above): green from `main` against production; step 1 (Usage credits off, `/usage`) stays Stack's; the stopped test project's removal and the worktree cleanup are owed |
-| 22 | Styling | `103_PHASE22_styling.md` | none | **merged 2026-10-14** on Stack's word ([PR #93](https://github.com/stack-dev-personal/bb2dash/pull/93), `dff1e05`; section "Phase 22" above); owed on his word: both specs once against production with the counts here, the worktrees `bb2dash-wt-22*` and the worker branches removed; taste calls T-6 to T-18 his to overturn (`walks/walk-22/WALK.md`) |
+| 22 | Styling | `103_PHASE22_styling.md` | none | **merged 2026-10-14** on Stack's word ([PR #93](https://github.com/stack-dev-personal/bb2dash/pull/93), `dff1e05`; section "Phase 22" above); **closed 2026-10-14** on his word ("call everything good. merge everything to main and close out this phase."): both specs once against production (run 20261014T191444Z: 118 passed, 0 failed, 8.1 minutes: the 54 phone-width cases with their 24 pane measures and the 64 theme cases, against production at dff1e05), the worktrees and worker branches removed, taste calls T-1 to T-18 ruled good (`walks/walk-22/WALK.md`) |
 
 How to run them: `106_SPRINT2_EXECUTION_PLAN.md` (dependency order, no calendar). Stack's standing items are ORCHESTRATOR §4. The sessions that run these phases are ORCHESTRATOR §6.
 
