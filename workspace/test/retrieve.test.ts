@@ -6,6 +6,7 @@ import {
   FAILURES_BEFORE_PAUSE,
   PAUSE_MS,
   RETRIEVE_TIMEOUT_MS,
+  SIMILARITY_FLOOR,
   createRetriever,
   mergeHits,
   runBatchChild,
@@ -77,7 +78,7 @@ describe('the request the child gets', () => {
     expect(Object.keys(sent).sort()).toEqual(Object.keys(frozen).sort());
     expect(sent.version).toBe(1);
     expect(sent.limit).toBe(10);
-    expect(sent.min_similarity).toBe(0.78);
+    expect(sent.min_similarity).toBe(0.81);
     expect(sent.queries).toEqual([
       { q: 'membrane transport', kinds: ['material', 'upload', 'memory'], courses: ['BIO.110'] },
       { q: 'lab report 2 rubric', kinds: ['material'], courses: ['BIO.110', 'BIO.110.lab'] },
@@ -263,6 +264,15 @@ describe('the real child', () => {
   });
 });
 
+describe('the floor', () => {
+  // Measured 2026-10-14 (workspace/scripts/eval-floor.mjs): invented words reached 0.804, the golden set's
+  // weakest best hit was 0.837; 0.81 is the lowest of 0.80, 0.81, 0.82 that returns nothing for every
+  // invented-word and unrelated question while the golden set keeps 9 of 9.
+  it('is 0.81', () => {
+    expect(SIMILARITY_FLOOR).toBe(0.81);
+  });
+});
+
 describe('the merge', () => {
   const hit = (kind: Hit['kind'], id: number, similarity: number | null): Hit => hitFixture({ kind, unitId: id, similarity, documentId: kind === 'material' ? null : id, fileId: kind === 'material' ? id : null });
   const query = (...hits: Hit[]): QueryAnswer => ({ state: 'ok', hits });
@@ -272,9 +282,9 @@ describe('the merge', () => {
     expect(merged.map((h) => h.unitId)).toEqual([1, 3, 2, 4]);
   });
 
-  it('drops nothing by similarity: hits at or above 0.78 first, then the others by rank, nulls last', () => {
-    const merged = mergeHits([query(hit('material', 1, null), hit('material', 2, 0.9), hit('material', 3, 0.74), hit('material', 4, 0.8))]);
-    expect(merged.map((h) => h.unitId)).toEqual([2, 4, 3, 1]);
+  it('drops nothing by similarity: hits at or above 0.81 first, then the others by rank, nulls last', () => {
+    const merged = mergeHits([query(hit('material', 1, null), hit('material', 2, 0.9), hit('material', 3, 0.74), hit('material', 4, 0.81), hit('material', 5, 0.805))]);
+    expect(merged.map((h) => h.unitId)).toEqual([2, 4, 3, 5, 1]);
   });
 
   it('keeps a keyword hit under the floor that follows a hit of 0.80, and stores it as found', () => {
