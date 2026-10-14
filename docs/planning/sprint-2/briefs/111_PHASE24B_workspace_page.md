@@ -96,7 +96,25 @@ this section is current.** The reference for every shape is
   `data-column-empty="start"`), task 14 moves them to the new page with the rest.
 * **Workers.** Opus, as the Workers section says (his answer 1 below). 24a's ran on Sonnet by his
   word of 2026-10-08; from 2026-10-14 Phase 24 uses Opus and every other phase keeps Sonnet.
-* **What the walk of 24a shows** (brief 118, task 4) is added here when it is done.
+* **What the walk of 24a showed** (2026-10-14; 109c, "Phase 24ab, the walk"). Fifteen of the sixteen
+  steps and every host proof passed on the restyled page, and P-7 passed (an upload indexed in 2.4 s
+  through the worker's firewall). One defect, D-1: a question of invented words scored 0.781 to 0.789
+  against seven course units, above the runner's floor of 0.78, so the turn stored `found` and the fixed
+  "no passage matched" line was not written. The runner's floor is now 0.81 (W-96, test first, with a
+  measurement kept as `workspace/scripts/eval-floor.mjs`: the golden set reads 9 of 9 at every floor from
+  0.78 to 0.82, its weakest best hit 0.837; four invented-word strings and three unrelated English
+  questions all return nothing at 0.81 and one invented string still returned a hit at 0.80); the
+  materials server's own default stays 0.78, and the contract fixtures keep 0.78 as the example value of
+  the request's `min_similarity`. For the page: (a) a lookup's answer may open with a narration line ("I'll search for …") before
+  the answer; the renderer shows the answer as written, and a prompt line against narration is 24b's to
+  add only if Stack asks for it; (b) the `Used:` line names the model's own tool calls
+  (`search_materials · IST.323`, `get_material_text · 733`) beside the runner's `search` and
+  `planner_feed`; on the new page the Sources panel holds them and nothing is printed under the answer;
+  (c) the feed is 98 rows on every turn and the prompt 13 to 15 KB; a lookup is answered in 7 to 20 s,
+  the Standard question in 15 s after a 1.8 s planning turn, so the page's waiting state must read well
+  at those lengths; (d) Phase 22's page needed no change to pack 24's spec, and task 14 moves the steps
+  to the new page as written; (e) a hand walk of the pack reads the go-live stage's `planner-fingerprint`
+  before the first question.
 * **Stack's answers of 2026-10-14** to the four questions Phase 24ab put to him (his words in quotes):
   1. **Workers: Opus.** "Workers on opus for phase 24 only (keep sonnet on for the default workflow)."
      So W-86 to W-88, and any extra worker of 24b, are Opus; other phases keep Sonnet.
