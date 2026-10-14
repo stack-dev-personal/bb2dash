@@ -22,7 +22,9 @@ import path from 'node:path';
 import {
   BLACKBOARD_ORIGIN,
   MAX_HOPS,
+  LOGIN_HOSTS,
   SIGNED_HOST_SUFFIX,
+  UNIVERSITY_DOMAINS,
   classifyRedirectTarget,
   downloadTo,
   isFollowable,
@@ -318,6 +320,91 @@ test('classifyRedirectTarget: a Blackboard host not on the allow-list is blackbo
   }
 });
 
+test('classifyRedirectTarget: a sign-in or university host is login, never outside (a dead session is not a link)', () => {
+  for (const u of [
+    'https://login.microsoftonline.com/common/oauth2/authorize?client_id=x',
+    'https://login.microsoftonline.com/tenant/saml2?SAMLRequest=abc',
+    'https://x.login.microsoftonline.com/y',
+    'https://syracuse.edu/x',
+    'https://shib.syracuse.edu/idp/x',
+    'https://www.syr.edu/x',
+    'http://sso.syr.edu/x',
+  ]) {
+    assert.equal(classifyRedirectTarget(u), 'login', u);
+  }
+  assert.deepEqual([...LOGIN_HOSTS], ['login.microsoftonline.com']);
+  assert.deepEqual([...UNIVERSITY_DOMAINS], ['syracuse.edu', 'syr.edu']);
+  // Look-alikes are other sites.
+  assert.equal(classifyRedirectTarget('https://notsyracuse.edu/x'), 'outside');
+  assert.equal(classifyRedirectTarget('https://syracuse.edu.evil.example/x'), 'outside');
+  assert.equal(classifyRedirectTarget('https://login.microsoftonline.com.evil.example/x'), 'outside');
+  // Blackboard's own host stays 'blackboard', ahead of the university rule.
+  assert.equal(classifyRedirectTarget('https://other.blackboard.syracuse.edu/x'), 'blackboard');
+});
+
+test("classifyRedirectTarget: anthology.com is Blackboard's parent company, so it is blackboard", () => {
+  for (const u of ['https://anthology.com/x', 'https://help.anthology.com/x', 'https://ANTHOLOGY.com/x']) {
+    assert.equal(classifyRedirectTarget(u), 'blackboard', u);
+  }
+  assert.equal(classifyRedirectTarget('https://notanthology.com/x'), 'outside');
+});
+
+test('classifyRedirectTarget: a signed URL is not a link', () => {
+  for (const q of [
+    'X-Amz-Signature=beef&X-Amz-Expires=60',
+    'x-amz-credential=abc',
+    'X-Goog-Signature=beef',
+    'SIGNATURE=beef',
+    'a=1&sig=beef',
+    'sv=1&se=2026-10-14&sp=r',
+    'sp=r&x=1&se=2026',
+    'Key-Pair-Id=K1',
+    'Policy=abc',
+    'token=abc',
+    'Access_Token=abc',
+    'Expires=1&Signature=beef',
+  ]) {
+    assert.equal(classifyRedirectTarget('https://example.org/f.pdf?' + q), 'signed', q);
+  }
+  for (const q of ['se=1', 'sp=r', 'Expires=1', 'page=sig', 'x=1&y=2', 'tokens=1', 'design=1']) {
+    assert.equal(classifyRedirectTarget('https://example.org/f.pdf?' + q), 'outside', q);
+  }
+  assert.equal(classifyRedirectTarget('https://example.org/f.pdf'), 'outside');
+});
+
+test('resolveSignedUrl: a redirect to a sign-in page is refused with the host named, never offsite', async () => {
+  const cases = [
+    ['https://login.microsoftonline.com/common/oauth2/authorize?client_id=x&state=secret', 'login.microsoftonline.com'],
+    ['https://shib.syracuse.edu/idp/profile/SAML2/Redirect/SSO?SAMLRequest=abc', 'shib.syracuse.edu'],
+  ];
+  for (const [to, host] of cases) {
+    const calls = [];
+    const get = fakeGet({ [DURABLE]: redirect(to) }, calls);
+    const got = await resolveSignedUrl(get, DURABLE);
+    assert.equal(got.outcome, 'refused', host);
+    assert.ok(got.reason.includes(host), got.reason);
+    assert.doesNotMatch(got.reason, /secret|SAMLRequest|client_id/);
+    assert.deepEqual(calls, [DURABLE]);
+  }
+});
+
+test("resolveSignedUrl: Blackboard's own login page redirecting to Microsoft is refused, not saved", async () => {
+  const login = 'https://blackboard.syracuse.edu/webapps/login/';
+  const saml = 'https://login.microsoftonline.com/tenant/saml2?SAMLRequest=abc';
+  const get = fakeGet({ [DURABLE]: redirect(login), [login]: redirect(saml) });
+  const got = await resolveSignedUrl(get, DURABLE);
+  assert.equal(got.outcome, 'refused');
+  assert.ok(got.reason.includes('login.microsoftonline.com'), got.reason);
+});
+
+test('resolveSignedUrl: a redirect to a signed URL elsewhere is refused with the host named', async () => {
+  const get = fakeGet({ [DURABLE]: redirect('https://files.example.org/f.pdf?X-Amz-Signature=beef') });
+  const got = await resolveSignedUrl(get, DURABLE);
+  assert.equal(got.outcome, 'refused');
+  assert.ok(got.reason.includes('files.example.org'), got.reason);
+  assert.doesNotMatch(got.reason, /beef|X-Amz/);
+});
+
 test('classifyRedirectTarget: an unusable target is unusable', () => {
   for (const u of [
     'ftp://example.com/x',
@@ -357,7 +444,7 @@ test('classifyRedirectTarget: 2048 characters is the longest it accepts', () => 
 
 test('resolveSignedUrl: a redirect to another site is offsite, carries the target, and is never requested', async () => {
   const calls = [];
-  const target = 'https://www.cbo.gov/system/files/report.pdf?token=abc';
+  const target = 'https://www.cbo.gov/system/files/report.pdf?page=2';
   const get = fakeGet({ [DURABLE]: redirect(target) }, calls);
   const got = await resolveSignedUrl(get, DURABLE);
   assert.equal(got.outcome, 'offsite');

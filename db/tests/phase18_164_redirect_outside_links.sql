@@ -145,6 +145,18 @@ begin
     v_fail := v_fail || 'sync_runner does not execute exactly the fifteen'::text;
   end if;
 
+  -- 164's trigger: outside_url follows source_url (BEFORE UPDATE OF source_url, per row, path pinned).
+  if not exists (select 1 from pg_trigger t join pg_proc p on p.oid = t.tgfoid
+                  where t.tgrelid = 'public.bb_files'::regclass
+                    and t.tgname = 'bb_files_outside_url_follows_source' and not t.tgisinternal
+                    and (t.tgtype & 1) = 1          -- row-level
+                    and (t.tgtype & 2) = 2          -- BEFORE
+                    and (t.tgtype & 16) = 16        -- UPDATE
+                    and t.tgattr::text <> ''        -- UPDATE OF <columns>
+                    and coalesce(p.proconfig, '{}') @> array['search_path=public, pg_temp']) then
+    v_fail := v_fail || 'trigger bb_files_outside_url_follows_source is missing or is not a BEFORE UPDATE OF row trigger with a pinned path'::text;
+  end if;
+
   -- The column, and the current-files view the Materials page reads.
   if not exists (select 1 from pg_attribute a where a.attrelid = 'public.bb_files'::regclass
                     and a.attname = 'outside_url' and a.atttypid = 'text'::regtype and not a.attisdropped) then
@@ -262,6 +274,27 @@ begin
       ('blackboard.com',          'https://blackboard.com/x'),
       ('help.blackboard.com',     'https://help.blackboard.com/x'),
       ('blackboard, a port',      'https://blackboard.syracuse.edu:8443/x'),
+      ('anthology.com',           'https://anthology.com/x'),
+      ('an anthology subdomain',  'https://help.anthology.com/x'),
+      -- a sign-in page and the university's own hosts are not "another site"
+      ('microsoft sign-in',       'https://login.microsoftonline.com/common/oauth2/authorize?client_id=x'),
+      ('sign-in, a SAML request', 'https://login.microsoftonline.com/tenant/saml2?SAMLRequest=abc'),
+      ('a sign-in subdomain',     'https://x.login.microsoftonline.com/y'),
+      ('syracuse.edu',            'https://syracuse.edu/x'),
+      ('a syracuse.edu host',     'https://shib.syracuse.edu/idp/x'),
+      ('syr.edu',                 'https://www.syr.edu/x'),
+      -- a signed URL is not a link
+      ('X-Amz-Signature',         'https://example.org/f.pdf?X-Amz-Signature=beef&X-Amz-Expires=60'),
+      ('X-Amz-Credential',        'https://example.org/f.pdf?x-amz-credential=abc'),
+      ('X-Goog-Signature',        'https://example.org/f.pdf?X-Goog-Signature=beef'),
+      ('Signature, any case',     'https://example.org/f.pdf?SIGNATURE=beef'),
+      ('sig',                     'https://example.org/f.pdf?a=1&sig=beef'),
+      ('se with sp',              'https://example.org/f.pdf?sv=1&se=2026-10-14&sp=r'),
+      ('Key-Pair-Id',             'https://example.org/f.pdf?Key-Pair-Id=K1'),
+      ('Policy',                  'https://example.org/f.pdf?Policy=abc'),
+      ('token',                   'https://example.org/f.pdf?token=abc'),
+      ('access_token',            'https://example.org/f.pdf?access_token=abc'),
+      ('Expires with a signature','https://example.org/f.pdf?Expires=1&Signature=beef'),
       ('space',                   'https://example.com/a b'),
       ('space in the host',       'https://exa mple.com/x'),
       ('tab',                     E'https://example.com/a\tb'),
@@ -293,7 +326,7 @@ end $$;
 do $$
 declare
   v_fail   text[] := '{}';
-  v_url    constant text := 'https://www.cbo.gov/system/files/2024/report.pdf?token=abc#p2';
+  v_url    constant text := 'https://www.cbo.gov/system/files/2024/report.pdf?page=2#p2';
   v_good   bigint := pg_temp.t164_file('good');
   v_before bb_files;
   v_after  bb_files;
@@ -318,7 +351,7 @@ begin
   if v_after.notes not like 'phase18_164 synthetic | outside link to www.cbo.gov saved ____-__-__ by sync-runner' then
     v_fail := v_fail || format('c: the note reads %s', v_after.notes);
   end if;
-  if position('token' in v_after.notes) > 0 or position('report.pdf' in v_after.notes) > 0 then
+  if position('page=2' in v_after.notes) > 0 or position('report.pdf' in v_after.notes) > 0 then
     v_fail := v_fail || 'c: the note carries more than the host'::text;
   end if;
   -- Nothing else moved: the row with outside_url and notes blanked is the row it was.
@@ -327,6 +360,14 @@ begin
   end if;
   if v_after.storage_path is not null or v_after.sha256 is not null or v_after.downloaded_at is not null then
     v_fail := v_fail || 'c: the call wrote bytes columns'::text;
+  end if;
+
+  -- A row with no notes gets the note itself, with no leading separator (24664d1).
+  v_id := pg_temp.t164_file('no notes');
+  update bb_files set notes = null where id = v_id;
+  v_got := pg_temp.t164_call(v_id, v_url);
+  if v_got <> 'true' or (select notes from bb_files where id = v_id) not like 'outside link to www.cbo.gov saved ____-__-__ by sync-runner' then
+    v_fail := v_fail || format('c: a row with no notes got %s', (select notes from bb_files where id = v_id));
   end if;
 
   -- A second call on the same row writes nothing (it is linked already).
@@ -352,6 +393,11 @@ begin
       ('a lookalike',         'https://blackboard.syracuse.edu.evil.example/x'),
       ('not blackboard.com',  'https://notblackboard.com/x'),
       ('a hyphen and digits', 'https://my-site2.example.org/x'),
+      ('se alone',            'https://example.org/f.pdf?se=1'),
+      ('sp alone',            'https://example.org/f.pdf?sp=r'),
+      ('expires alone',       'https://example.org/f.pdf?Expires=1'),
+      ('a sig-like value',    'https://example.org/f.pdf?page=sig'),
+      ('syracuse.edu in a path', 'https://www.example.edu/syracuse.edu'),
       ('exactly 2048',        'https://example.com/' || repeat('a', 2048 - length('https://example.com/')))
     ) t(label, url)
   loop
@@ -464,6 +510,53 @@ begin
 
   if cardinality(v_fail) > 0 then
     raise exception 'FAIL phase18_164 (f): %', array_to_string(v_fail, '; ');
+  end if;
+end $$;
+
+-- =============================================================================================
+-- g. outside_url follows source_url (stage_files rewrites source_url in place on a re-upload)
+-- =============================================================================================
+do $$
+declare
+  v_fail  text[] := '{}';
+  v_f     bigint := pg_temp.t164_file('follows');
+  v_other bigint := pg_temp.t164_file('follows other');
+  v_new   constant text := 'https://blackboard.syracuse.edu/bbcswebdav/p164-reuploaded';
+  v_url   constant text := 'https://www.cbo.gov/x.pdf';
+  v_got   text;
+begin
+  v_got := pg_temp.t164_call(v_f, v_url) || pg_temp.t164_call(v_other, v_url);
+  if v_got <> 'truetrue' or pg_temp.t164_listed(v_f) then
+    v_fail := v_fail || 'g: setup, the rows are not linked and off the worklist'::text;
+  end if;
+
+  -- A change to another column keeps the link; so does a source_url "change" to the same value.
+  update bb_files set notes = coalesce(notes, '') || ' | touched' where id = v_f;
+  update bb_files set source_url = source_url where id = v_f;
+  if (select outside_url from bb_files where id = v_f) is distinct from v_url or pg_temp.t164_listed(v_f) then
+    v_fail := v_fail || 'g: an update that did not change source_url cleared the link'::text;
+  end if;
+
+  -- A new source_url clears the link, and the row is back on the worklist; the other row is untouched.
+  update bb_files set source_url = v_new where id = v_f;
+  if (select outside_url from bb_files where id = v_f) is not null then
+    v_fail := v_fail || 'g: a changed source_url left the old outside_url'::text;
+  end if;
+  if not pg_temp.t164_listed(v_f) then
+    v_fail := v_fail || 'g: the re-uploaded row is not back on the worklist'::text;
+  end if;
+  if (select outside_url from bb_files where id = v_other) is distinct from v_url then
+    v_fail := v_fail || 'g: the trigger touched another row'::text;
+  end if;
+
+  -- One statement that changes source_url and sets outside_url: a changed source_url means no link.
+  update bb_files set source_url = v_new || '-2', outside_url = v_url where id = v_f;
+  if (select outside_url from bb_files where id = v_f) is not null then
+    v_fail := v_fail || 'g: an update changing source_url kept an outside_url set in the same statement'::text;
+  end if;
+
+  if cardinality(v_fail) > 0 then
+    raise exception 'FAIL phase18_164 (g): %', array_to_string(v_fail, '; ');
   end if;
 end $$;
 

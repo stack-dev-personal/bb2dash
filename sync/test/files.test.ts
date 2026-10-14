@@ -242,6 +242,65 @@ describe('the files step', () => {
     }
   });
 
+  it('164: a redirect to a sign-in page or a university host is flagged with the host, never linked, and never asks the login check', async () => {
+    for (const location of [
+      'https://login.microsoftonline.com/tenant/saml2?SAMLRequest=abc',
+      'https://shib.syracuse.edu/idp/x',
+      'https://www.syr.edu/x',
+      'https://files.example.org/f.pdf?X-Amz-Signature=beef',
+    ]) {
+      const hop = vi.fn(async () => ({ status: 302, headers: { location } }));
+      const loginCheck = vi.fn(async () => 'alive' as const);
+      const { p, linked } = ports([row('50')], { hop, loginCheck });
+      const r = await runFilesStep(p);
+      expect(linked).toEqual([]);
+      expect(loginCheck).not.toHaveBeenCalled();
+      expect(r.files.not_pulled).toHaveLength(1);
+      expect(r.files.not_pulled[0]!.reason).toContain(new URL(location).hostname);
+      expect(r.files.not_pulled[0]!.reason).not.toMatch(/SAMLRequest|beef|X-Amz/);
+    }
+  });
+
+  it('164: before saving a link the login check is asked, and a dead session stops the step like a 401', async () => {
+    const target = 'https://www.cbo.gov/x.pdf';
+    const hop = vi.fn(async () => ({ status: 302, headers: { location: target } }));
+    const loginCheck = vi.fn(async () => 'dead' as const);
+    const { p, linked } = ports([row('51'), row('52')], { hop, loginCheck });
+    const r = await runFilesStep(p);
+    expect(loginCheck).toHaveBeenCalledTimes(1);
+    expect(linked).toEqual([]);
+    expect(r.stopped).toBe('session_expired');
+    expect(r.files.not_pulled).toHaveLength(1);
+    expect(r.files.not_pulled[0]!.id).toBe('51');
+    expect(r.files.not_pulled[0]!.reason).toMatch(/^session_expired: /);
+    expect(hop).toHaveBeenCalledTimes(1);
+  });
+
+  it('164: a login check that does not answer saves nothing and names the host', async () => {
+    const target = 'https://www.cbo.gov/x.pdf?page=1';
+    const hop = vi.fn(async () => ({ status: 302, headers: { location: target } }));
+    const loginCheck = vi.fn(async () => 'error' as const);
+    const { p, linked } = ports([row('53'), row('54')], { hop, loginCheck });
+    const r = await runFilesStep(p);
+    expect(linked).toEqual([]);
+    expect(r.stopped).toBeNull();
+    expect(r.files.not_pulled).toEqual([
+      { id: '53', reason: 'offsite: www.cbo.gov, but the login check did not answer, so the link was not saved' },
+      { id: '54', reason: 'offsite: www.cbo.gov, but the login check did not answer, so the link was not saved' },
+    ]);
+  });
+
+  it('164: an alive login check saves the link', async () => {
+    const target = 'https://www.cbo.gov/x.pdf';
+    const hop = vi.fn(async () => ({ status: 302, headers: { location: target } }));
+    const loginCheck = vi.fn(async () => 'alive' as const);
+    const { p, linked } = ports([row('55')], { hop, loginCheck });
+    const r = await runFilesStep(p);
+    expect(loginCheck).toHaveBeenCalledTimes(1);
+    expect(linked).toEqual([{ id: '55', url: target }]);
+    expect(r.files.linked).toBe(1);
+  });
+
   it('164: no redirect (404, a 200 page) is flagged as before, never linked', async () => {
     const { p, linked } = ports([row('38'), row('39')], {
       hop: hopFor({
@@ -255,7 +314,7 @@ describe('the files step', () => {
   });
 
   it('164: sync_file_outside_link answering false or refusing leaves the file flagged, with the host only', async () => {
-    const target = 'https://www.cbo.gov/x.pdf?sig=secret';
+    const target = 'https://www.cbo.gov/x.pdf?page=secret';
     const hop = vi.fn(async () => ({ status: 302, headers: { location: target } }));
     const answers: (boolean | Error)[] = [false, new Error('sync_file_outside_link: url is not a usable link')];
     const rows = [row('40'), row('47')];
