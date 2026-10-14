@@ -26,6 +26,11 @@
 //                     retrying every remaining file would just produce a list of identical errors.
 //   gone            · 404: the file is no longer on Blackboard. The row is left alone and reported.
 //   refused         · too many hops, or a final host that is not the CDN. Reported, never followed.
+//                     A redirect to a Blackboard host not on the allow-list is refused with the HOST
+//                     named; so is one to an IP, localhost, a non-http(s) scheme or a link that
+//                     cannot be stored.
+//   offsite         · (164) a redirect to another SITE: `target` is the link to save. The target is
+//                     never requested, since the walk carries the logged-in cookies.
 //
 // Importing this module runs nothing: every export is pure or takes its I/O by argument.
 
@@ -55,6 +60,49 @@ export function isSignedHost(url) {
 /** A bare IP literal, v4 or v6. Never a host we are willing to request. */
 function isIpLiteral(host) {
   return /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.startsWith('[') || host.includes(':');
+}
+
+/** The longest link the app will store for a file (the SQL check constraint says the same). */
+export const MAX_LINK_LENGTH = 2048;
+
+/**
+ * Blackboard's own domains. A redirect target on one of these that the walk does not follow is
+ * Blackboard's file with its bytes still owed, never "another site": it stays flagged so the
+ * allow-list can be widened on purpose (a separate, security-reviewed change).
+ */
+const BLACKBOARD_FAMILY = [BLACKBOARD_ORIGIN, 'blackboardcdn.com', 'blackboard.com'];
+
+const onDomain = (host, domain) => host === domain || host.endsWith(`.${domain}`);
+
+/** The bare, lowercase host of a URL string without a trailing dot, or '' when it has none. */
+function hostOf(url) {
+  try { return new URL(String(url)).hostname.toLowerCase().replace(/\.$/, ''); } catch { return ''; }
+}
+
+/**
+ * What is a redirect target the walk will not follow?
+ *
+ *   'outside'    · a real site off Blackboard: an http(s) link to save, never to request
+ *   'blackboard' · a Blackboard host (its own family, CDN included) that is not on the allow-list
+ *   'unusable'   · not a link worth storing: not http(s), an IP literal, localhost, a single-label
+ *                  host, credentials in the URL, longer than MAX_LINK_LENGTH, or whitespace or a
+ *                  control character anywhere in it
+ *
+ * The same rule lives in SQL as `sync_file_outside_link` (164); keep the two in step.
+ */
+export function classifyRedirectTarget(url) {
+  if (typeof url !== 'string' || url === '' || url.length > MAX_LINK_LENGTH) return 'unusable';
+  if (/[\s\u0000-\u001f\u007f]/.test(url)) return 'unusable';
+  let u;
+  try { u = new URL(url); } catch { return 'unusable'; }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return 'unusable';
+  if (u.username || u.password || u.href.length > MAX_LINK_LENGTH) return 'unusable';
+  const host = u.hostname.toLowerCase().replace(/\.$/, '');
+  if (host === '' || isIpLiteral(host)) return 'unusable';
+  if (host === 'localhost' || host.endsWith('.localhost')) return 'unusable';
+  if (BLACKBOARD_FAMILY.some((domain) => onDomain(host, domain))) return 'blackboard';
+  if (!host.includes('.')) return 'unusable';
+  return 'outside';
 }
 
 /**
@@ -95,7 +143,8 @@ export function validateHops(hops) {
   }
   const last = chain[chain.length - 1];
   if (!isSignedHost(last)) {
-    return { outcome: 'refused', reason: `final host is not ${SIGNED_HOST_SUFFIX}` };
+    const host = hostOf(last);
+    return { outcome: 'refused', reason: `final host${host ? ` ${host}` : ''} is not ${SIGNED_HOST_SUFFIX}` };
   }
   return { outcome: 'ok', signedUrl: last };
 }
@@ -161,7 +210,18 @@ export async function resolveSignedUrl(get, durableUrl) {
     if (!isFollowable(next)) {
       // The redirect target is whatever the remote server chose. Record it, never request it.
       hops.push(next);
-      return { outcome: 'refused', reason: 'redirect target is not followable (origin or scheme)', hops };
+      const kind = classifyRedirectTarget(next);
+      if (kind === 'outside') {
+        // 164: a Blackboard file that is really a link to another site. The caller stores the link;
+        // the logged-in session is never sent there.
+        return { outcome: 'offsite', target: next, reason: `redirect leads to another site (${hostOf(next)}); saved as a link, not requested`, hops };
+      }
+      if (kind === 'blackboard') {
+        // Blackboard's own file on a host the allow-list does not name: its bytes are owed. Host only
+        // in the reason; a CDN URL carries a signature.
+        return { outcome: 'refused', reason: `redirect target is a Blackboard host not on the allow-list: ${hostOf(next)}`, hops };
+      }
+      return { outcome: 'refused', reason: 'redirect target is not followable (origin or scheme) and not a usable link', hops };
     }
 
     hops.push(next);

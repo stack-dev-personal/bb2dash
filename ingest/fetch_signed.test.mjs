@@ -83,6 +83,13 @@ test('validateHops refuses a final host outside the CDN suffix', () => {
   assert.match(got.reason, /host/i);
 });
 
+test('validateHops names the refused final host, and only the host (164)', () => {
+  const got = validateHops([DURABLE, 'https://files.example.com/Report.pdf?X-Amz-Signature=deadbeef']);
+  assert.equal(got.outcome, 'refused');
+  assert.match(got.reason, /files\.example\.com/);
+  assert.doesNotMatch(got.reason, /deadbeef|Report\.pdf/);
+});
+
 test('validateHops refuses an empty or single-hop chain', () => {
   assert.equal(validateHops([]).outcome, 'refused');
   assert.equal(validateHops([DURABLE]).outcome, 'refused');
