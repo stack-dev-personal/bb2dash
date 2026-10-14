@@ -607,3 +607,78 @@ Read again by their words, with the diff of briefs 109 and 111 since the freeze:
   (`gh api repos/emstacho-su/bb2dash` answers `stack-dev-personal/bb2dash`, public;
   `bb2dash-stack` private). The old `emstacho-su` addresses still resolve for git, for raw files and
   for the pull requests, and no remote was changed by this session. Told to Stack.
+
+## Task 20: the cut-over (2026-10-09, 04:26Z to 04:35Z)
+
+On Stack's word of 2026-10-09 ("Once these are complete merge 87 and cut over"). Before each step that
+touches prod or a container: no request queued or claimed in `agent_requests`, the answered queue
+empty, no acceptance lock, no `bb2dash-walk22-...` box in `docker ps`.
+
+| Step | What was done | What was read back |
+|---|---|---|
+| The merges | bb2dash #85 `696d35e`, bb2dash-stack #6 `0fd659f`, then the units PR #87 `c19cd9a` | Both main checkouts fast-forwarded and clean. `main` had also moved by #86 (Phase 24a's test port): `git diff 696d35e c19cd9a` names nothing under `apply`, `workspace`, `mcp-server`, `docker`, `skills` or `compose.yaml` |
+| Skills | `node scripts/install-skills.mjs` from the shared checkout | `bb-sync/SKILL.md`, `inbox-apply/SKILL.md`, `inbox-apply/writer.md` updated; a second run reports them in sync |
+| His `.env` line | **Not done: his file.** | `docker compose config --services` from bb2dash-stack lists `harness-jobs`, `sync`, `workspace` |
+| `apply` | `docker compose --profile apply up -d --build --no-deps apply` from bb2dash-stack's `main` | Image `535b7075cb79`, healthy since 04:28:44Z, log line "db: connected as inbox_apply_runner". `sync` is the same container as before (started 2026-10-08 15:15:32Z) |
+| 188 | `apply_migration`, name `188_transform_archived_answers`, the file's text | Version `20261009043022`. SHA-256 of the recorded statement = the file's, `b4cbfaaabc36f4c997d6f8c4359bfa3c5838d5957082bd49ffe083607c4ac387`. 14 session answers carry `applied_at`, all 14 stamped by this apply. `phase23_188_archived_answers` PASS; the whole suite 81 of 82 (`phase18_post_embed_checks` fails on file 2851's nine units, which are not embedded) |
+| The task | `scripts/register-exports.ps1`, first with `-SecretsDir` naming a folder that does not exist, then with the real folders | First: exit 2, "is not an existing folder", no task. Then: `Bb2dash-Exports` registered, 2 triggers (logon; every 6 h), action is `powershell.exe` hidden running `node scripts/exports-run.mjs` from the shared checkout |
+| The first export | `Start-ScheduledTask` | `LastTaskResult` 0. `state.json`: started 04:34:34Z, ended 04:34:55Z, exit 0, `inbox-decisions` filed 16, skipped 0, not filed 0. On prod: 0 archived decisions unfiled, 16 with a note path, 16 listed by `inbox_decisions_unlogged` (no day file yet, which is `just file-decisions`), item 3782 skipped |
+| `just doctor` | from bb2dash-stack's `main` | `exports` "last run 13s ago, exit 0, 16 filed". `apply` is a problem: "off, but a container of apply is running", which is the missing `.env` line. The three other problems are the vaults' uncommitted entries and the harness doctor, not this phase's |
+| `just accept 23 --check` | from bb2dash-stack's `main` | Passes: bb2dash at `c19cd9a` (origin/main), "a green run would count as acceptance", nine stages listed, five rows not done by a run |
+| `just accept 23` | **Not started.** | Its `ready` stage reads `apply.doctorRow`, which is a problem until the `.env` line is in |
+
+Seen on the way: Vercel's production is still the build of `a58be34` (#83), because its GitHub App is not
+installed on `stack-dev-personal`. `git diff a58be34 c19cd9a -- web` outside the tests names two files:
+`queries.grade-model.ts` (four lines) and the generated types. The run's `base_url` therefore serves the
+Inbox the pack expects.
+
+## Task 21: the acceptance runs, and the pause (2026-10-09, 12:21Z to 18:30Z)
+
+Stack put in his `.env` line and signed in to Blackboard; the doctor read `apply` "running, healthy" and
+`users/me 200`. `just accept 23 --check` had passed at `c19cd9a`.
+
+| Run | Commit | Counts | Verdict | What it showed |
+|---|---|---|---|---|
+| `20261009T122103Z` | `c19cd9a` (`main`) | yes | blocked | Stage `ready`: request 5071 open, a sync the sign-in had started itself. It closed done at 12:22:01Z |
+| `20261009T122218Z` | `c19cd9a` (`main`) | yes | blocked | Step 1: `carry.json holds no 1.run_tag_id`. The test raised items 6297 to 6300 and then read its own tag from a facts file written only at the test's end |
+| `20261009T122929Z` | `2486c10` (branch) | no | red | Step 1's test passed (6301 to 6304); the operator was unsure: `1-raised.png` had the card's title under the top bar and no tab row, and `confirm` was second in the list |
+| `20261009T123422Z` | `e2aec6f` (branch) | no | killed | Steps 1 and 2 passed. Sync 5072 done 12:38:03Z; request 5073 filed 12:38:03Z, claimed 12:38:08Z, done 12:38:08Z, "2 recorded only", items 6305 and 6306 archived by it. Step 3's button never left `Apply answers` and its count went to `0 answered`. The laptop slept from about 12:39Z; the facts were written at 14:44Z; the session's low-memory guard stopped the run |
+| `20261009T180141Z` | `fa8d535` (branch) | no | red | Stages `prepare`, `ready`, `walk` (steps 1, 2, 3, 4, 6 and their five proofs), `walk-proofs` and `stop` passed. Stage `offline`: step 7a's test passed (request 5077, `queued`, then `waiting on the worker…`, the command shown and naming 5077); the operator was unsure, because `7a-command.png` has the toast cut by the bottom of the window. The cleanup started `apply`; 5077 then closed done |
+| `20261009T182502Z` | `a7b2216` (branch) | no | stopped | Stopped by the PM at the pause, in stage `prepare`. Its container and volume were removed by hand; `apply`, `sync` and `workspace` were not touched |
+
+What each run left on prod was cleaned by the next, as 187 has it: the first question of a run archives
+every test row of another run tag (`archived_by = inbox_accept_question`, `closed_itself`). Read at the pause
+(18:35Z): no request is open, no test row is left open or answered, and four test decisions of run
+`20261009T180141Z` are archived and not yet marked: the next scheduled export marks them skipped.
+
+**The fixes (branch `fix/accept23-step1`, PR #91), each red first where a unit can hold it:**
+`d91b797`/`2486c10` `stepId()`; `e2aec6f` `shootCard()` and the playbook's seven shots; `fa8d535` step 3's
+third way; `01c4ce3`/`4a7e4a0` the toast above the button (`web/test/InboxApplyButton.css.test.ts`);
+`f52728e` step 7a brings the command into the window. Checks at `f52728e`: `accept-env` 23 tests,
+the toast's 4 with the button's 28, `acceptance.test.mjs` 41, `tsc` and eslint clean.
+
+**Also built on Stack's word that day:** the scheduled export's retry (bb2dash #90, bb2dash-stack #7), after
+two scheduled runs failed on "fetch failed" at 11:56Z and 17:24Z. Its review found one MEDIUM, open: no
+overall deadline across the tries.
+
+**Not done:** a green counting run; stages `back` and `file` in any run; the accepted record. The list of
+what is owed, requirement by requirement, is in STATUS, "Phase 23 follow-ups", "Where it stands at the
+pause".
+
+## Task 21, closed: accepted by run `20261013T003231Z` (2026-10-13)
+
+Resumed 2026-10-12 on Stack's word ("continue, merge"). Merged in this order: bb2dash #88 `bfbe7f7`, #90
+`856d87b`, bb2dash-stack #7 `f1e9178`, bb2dash #91 `08138bb`. Both main checkouts fast-forwarded; production
+deployed at `08138bb`; the export task run once on the merged code, exit 0.
+
+| Run | Commit | Counts | Verdict | What it showed |
+|---|---|---|---|---|
+| `20261013T001039Z` | `08138bb` (`main`) | yes | red | Stage `prepare`: exit 78, "the firewall could not be raised". `docker compose --profile accept run --rm -T accept-prepare true` a minute later raised it and passed its own two checks |
+| `20261013T001423Z` | `08138bb` (`main`) | yes | red | `prepare`, `ready`, `walk` (1, 2, 3 by the third way, 4, 6), `walk-proofs`, `stop`, `offline` (7a, the toast above the button, the command readable) and `start` passed. Stage `back`: "the host sign-in failed: page.goto: Timeout 30000ms exceeded". The cleanup had `apply` running; request 5082 closed done |
+| `20261013T003231Z` | `08138bb` (`main`) | yes | **green** | All nine stages. Requests 5083 (sync), 5084 (filed by the sync, no Claude run), 5085 (the press, one Claude run), 5086 (filed with `apply` stopped, taken after 86 s). `transform-answers`: 14 with the pick on the file, 0 unstamped, 0 stamped since the start, 0 supersede items. `decisions-filed`: 0 unfiled, 16 with a note path, 15 skipped, 3782 skipped. `verdict.json` sha256 `f71111f127ceb198e6d5426b318e5b4b974fd40bc00d6a38b613f5e734ee1e88` |
+
+Read after the run: no request open, no test row left open or answered, no hold on prod, `apply` healthy,
+the sync container the same one as before the run.
+
+The definition of done of brief 110 is met: its last two boxes were the cut-over (2026-10-09) and this
+run. What the run does not prove is named in STATUS, "Phase 23 follow-ups", "Accepted".

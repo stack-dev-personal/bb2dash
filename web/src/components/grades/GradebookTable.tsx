@@ -235,7 +235,7 @@ export function GradebookRow({ row, extras = {} }: { row: GradebookLatestRow; ex
               {submission.text}
             </span>
             {submission.attemptStatus && (
-              <span className={styles.note}>last attempt: {submission.attemptStatus}</span>
+              <span className={styles.note}>last attempt: {submission.attemptText}</span>
             )}
           </div>
         </td>
@@ -246,7 +246,7 @@ export function GradebookRow({ row, extras = {} }: { row: GradebookLatestRow; ex
         </td>
 
         <td className={styles.seenCell}>
-          <span className={tokens.mono} title="When a Blackboard sync last saw this figure.">
+          <span title="When a Blackboard sync last saw this figure.">
             {formatSeenAt(row.seen_at)}
           </span>
         </td>
@@ -340,7 +340,7 @@ export function GradebookTable({
   }
 
   return (
-    <div className={styles.wrap}>
+    <div className={styles.wrap} data-scroll-box="gradebook">
       {items.length > 0 ? (
         <Table rows={items} caption={caption} extras={extras} />
       ) : (
