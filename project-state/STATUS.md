@@ -2101,6 +2101,17 @@ Remaining advisor items: ~~7 pre-existing mutable `search_path` functions (`set_
 
 ## Known issues / operational notes
 
+* **The AI-use policy is cut from every text unit on write (2026-10-14, on Stack's word; migration 165).**
+  On 2026-09-29 Stack had the course AI-use policies taken out of the app and the search corpus (119 cut
+  eight units by hand). The new IST.323 syllabus v1.5 (file 3736, unit 1250, pulled once the file store
+  was allowed) brought one back, and the guard unit `phase17_119_no_ai_policy` failed as designed. Stack:
+  "Strip it now and automatically". `strip_ai_policy(text)` removes, line by line and with the guard
+  unit's own patterns, a policy line, or a policy heading with the long lines after it up to the next
+  short line; text with no match is untouched, and a unit left empty keeps the line
+  `[AI-use policy section removed]`. A BEFORE INSERT OR UPDATE trigger on `bb_file_text` applies it to
+  every writer (the sync, the Windows fallback, a hand insert); an AFTER UPDATE trigger drops a changed
+  unit's embeddings so it is re-embedded. The one-time pass cut unit 1250's one paragraph (257 characters);
+  119's units are untouched. Under-cuts rather than over-cuts: a section ends at the first short line.
 * **A Blackboard file whose link redirects to another site is saved as a link (2026-10-14, on Stack's
   word; branch `fix/redirect-outside-links`, migration 164; NOT on `main` or prod until his merge word).**
   Since 2026-10-12 the syncs have not pulled five readings (files 3711, 3712, 3713, 3730, 3731): the
