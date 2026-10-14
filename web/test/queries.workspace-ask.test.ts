@@ -293,7 +293,7 @@ describe('the options rows', () => {
     expect(requestOptionsOptions(CONVERSATION, []).enabled).toBe(false);
     const query = requestOptionsOptions(CONVERSATION, [41, 42]);
     expect(query.enabled).toBe(true);
-    expect(query.queryKey).toEqual(workspaceAskKeys.options(CONVERSATION));
+    expect(query.queryKey).toEqual([...workspaceAskKeys.options(CONVERSATION), [41, 42]]);
     expect(workspaceAskKeys.options(CONVERSATION)).toEqual(['workspace', 'request-options', CONVERSATION]);
 
     stub.result = { data: [row, { request_id: 'x' }], error: null };
@@ -316,6 +316,24 @@ describe('the options rows', () => {
       code: '42501',
     });
     await expect(requestOptionsOptions(CONVERSATION, [0]).queryFn!({} as never)).rejects.toThrow(/request id/);
+  });
+
+  it('keys the read by the request ids as well (R2-1): a new id list is a new key, the order is not', () => {
+    const one = requestOptionsOptions(CONVERSATION, [10]).queryKey;
+    const two = requestOptionsOptions(CONVERSATION, [10, 11]).queryKey;
+    expect(two).not.toEqual(one);
+    expect(requestOptionsOptions(CONVERSATION, [11, 10]).queryKey).toEqual(two);
+    expect(two.slice(0, 3)).toEqual(workspaceAskKeys.options(CONVERSATION));
+  });
+
+  it('is still matched by the frozen prefix key when an ask invalidates it (R2-1)', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = requestOptionsOptions(CONVERSATION, [10, 11]).queryKey;
+    client.setQueryData(key, []);
+    // `find` matches exactly; `findAll` matches by prefix, as `invalidateQueries` does.
+    expect(client.getQueryCache().findAll({ queryKey: workspaceAskKeys.options(CONVERSATION) }).map((query) => query.queryKey)).toEqual([key]);
+    await client.invalidateQueries({ queryKey: workspaceAskKeys.options(CONVERSATION) });
+    expect(client.getQueryState(key)?.isInvalidated).toBe(true);
   });
 
   it('restores from the newest request`s row', () => {

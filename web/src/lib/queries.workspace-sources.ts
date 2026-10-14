@@ -189,6 +189,11 @@ function normalizeRows<T>(data: unknown, normalize: (row: unknown) => T | null):
   return (Array.isArray(data) ? data : []).flatMap((row: unknown) => normalize(row) ?? []);
 }
 
+/** A sorted copy of request ids: the order the page holds them in never changes a key. */
+function sortedRequestIds(ids: readonly number[]): number[] {
+  return [...ids].sort((left, right) => left - right);
+}
+
 /** A request id on its way to a filter: a positive integer, or an error. */
 function assertRequestId(value: number): number {
   if (toRequestId(value) !== value) throw new Error(`request id must be a positive integer, got ${String(value)}`);
@@ -199,14 +204,19 @@ function assertRequestId(value: number): number {
  * Queries
  * ------------------------------------------------------------------------ */
 
-/** The turns of a conversation's requests (as the page has them), in request order. */
+/**
+ * The turns of a conversation's requests (as the page has them), in request
+ * order. The sorted ids are a suffix of the frozen key (R2-1), so a new request
+ * is a new key and `workspaceSourceKeys.turns(c)` still matches it by prefix.
+ */
 export function turnsOptions(conversationId: string | null, requestIds: readonly number[]) {
   const id = parseConversationId(conversationId);
+  const sortedIds = sortedRequestIds(requestIds);
   return queryOptions({
-    queryKey: workspaceSourceKeys.turns(id ?? NO_CONVERSATION),
-    enabled: id !== null && requestIds.length > 0,
+    queryKey: [...workspaceSourceKeys.turns(id ?? NO_CONVERSATION), sortedIds] as const,
+    enabled: id !== null && sortedIds.length > 0,
     queryFn: async (): Promise<WorkspaceTurn[]> => {
-      const ids = requestIds.map(assertRequestId);
+      const ids = sortedIds.map(assertRequestId);
       const { data, error } = await untypedClient()
         .from('workspace_turns')
         .select(TURN_COLUMNS)

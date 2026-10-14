@@ -259,18 +259,26 @@ function assertRequestIds(ids: readonly number[]): number[] {
   return [...ids];
 }
 
+/** A sorted copy of request ids: the order the page holds them in never changes a key. */
+function sortedRequestIds(ids: readonly number[]): number[] {
+  return [...ids].sort((left, right) => left - right);
+}
+
 /**
  * The options rows of a conversation's requests, in request order. `requestIds`
- * is the conversation's requests as the page has them; it is not part of the
- * key (the frozen key is the conversation's), and an ask invalidates the key.
+ * is the conversation's requests as the page has them. The sorted ids are a
+ * suffix of the frozen key (R2-1): a new request is a new key, so its row is
+ * read as soon as the page has its id, and an ask's invalidation of
+ * `workspaceAskKeys.options(c)` still matches every suffix by prefix.
  */
 export function requestOptionsOptions(conversationId: string | null, requestIds: readonly number[]) {
   const id = parseConversationId(conversationId);
+  const sortedIds = sortedRequestIds(requestIds);
   return queryOptions({
-    queryKey: workspaceAskKeys.options(id ?? NO_CONVERSATION),
-    enabled: id !== null && requestIds.length > 0,
+    queryKey: [...workspaceAskKeys.options(id ?? NO_CONVERSATION), sortedIds] as const,
+    enabled: id !== null && sortedIds.length > 0,
     queryFn: async (): Promise<WorkspaceRequestOptions[]> => {
-      const ids = assertRequestIds(requestIds);
+      const ids = assertRequestIds(sortedIds);
       const { data, error } = await untypedClient()
         .from('workspace_request_options')
         .select(OPTIONS_COLUMNS)

@@ -169,7 +169,7 @@ describe('the reads', () => {
     expect(turnsOptions(null, [1]).enabled).toBe(false);
     expect(turnsOptions(CONVERSATION, []).enabled).toBe(false);
     const query = turnsOptions(CONVERSATION, [4812]);
-    expect(query.queryKey).toEqual(['workspace', 'turns', CONVERSATION]);
+    expect(query.queryKey).toEqual(['workspace', 'turns', CONVERSATION, [4812]]);
     expect(query.enabled).toBe(true);
     stub.result = { data: [turnRow, { request_id: 'bad' }], error: null };
     await expect(query.queryFn!({} as never)).resolves.toHaveLength(1);
@@ -185,6 +185,24 @@ describe('the reads', () => {
       { target: 'workspace_turns', op: 'in', args: ['request_id', [4812]] },
       { target: 'workspace_turns', op: 'order', args: ['request_id', { ascending: true }] },
     ]);
+  });
+
+  it('keys the turns by the request ids as well (R2-1): a new id list is a new key, the order is not', () => {
+    const one = turnsOptions(CONVERSATION, [10]).queryKey;
+    const two = turnsOptions(CONVERSATION, [10, 11]).queryKey;
+    expect(two).not.toEqual(one);
+    expect(turnsOptions(CONVERSATION, [11, 10]).queryKey).toEqual(two);
+    expect(two.slice(0, 3)).toEqual(workspaceSourceKeys.turns(CONVERSATION));
+  });
+
+  it('is still matched by the frozen prefix key the provenance invalidation uses (R2-1)', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = turnsOptions(CONVERSATION, [10, 11]).queryKey;
+    client.setQueryData(key, []);
+    // `find` matches exactly; `findAll` matches by prefix, as `invalidateQueries` does.
+    expect(client.getQueryCache().findAll({ queryKey: workspaceSourceKeys.turns(CONVERSATION) }).map((query) => query.queryKey)).toEqual([key]);
+    invalidateWorkspaceProvenance(client, CONVERSATION, null);
+    await waitFor(() => expect(client.getQueryState(key)?.isInvalidated).toBe(true));
   });
 
   it('reads one request`s sources by ord, 40 at most', async () => {
