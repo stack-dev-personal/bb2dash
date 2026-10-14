@@ -213,8 +213,11 @@ describe('the files step', () => {
     expect(hop).toHaveBeenCalledTimes(1); // the target itself is never requested
     expect(p.fetchSigned).not.toHaveBeenCalled();
     expect(p.storagePost).not.toHaveBeenCalled();
-    expect(order).toEqual(['linked 33']);
-    expect(p.embed).not.toHaveBeenCalled();
+    // Phase 24a: the embed loop runs once on every pass, a pass that only linked a file included
+    // (DECISIONS 2026-10-08, "course files are embedded on every sync pass"); 164 wrote this
+    // expectation on `main` against the older rule, and the merge of 2026-10-14 brings it to 24a's.
+    expect(order).toEqual(['linked 33', 'embed']);
+    expect(p.embed).toHaveBeenCalledTimes(1);
   });
 
   it('164: pulled, linked and flagged files are counted apart in one pass', async () => {
