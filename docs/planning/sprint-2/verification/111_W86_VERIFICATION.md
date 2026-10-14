@@ -285,3 +285,41 @@ From the worktree root:
 The gates ran on this branch as cut from `0f5b609`. While I worked, the phase branch moved on to
 `997d24d` (111a records a merge of `origin/feat/workspace-24` into it); I did not merge it in, so the
 gates have not been run over the two together. That is the PM's merge to check.
+
+## Round 2 (the PM's review: R2-1, R2-2)
+
+First `git fetch origin` and a merge of `origin/feat/workspace-page-24b` (d6f4a8d, a fast-forward: my
+three commits, two merges of `origin/feat/workspace-24`, and the PM's fix that puts the quotes around
+`planned` back with a `RETIRED_EXEMPT` entry in `status-vocabulary.test.ts`). No package file changed, so
+no `npm ci`.
+
+**R2-1 (8e0e61d): the request ids join the options and turns query keys.** `requestOptionsOptions` and
+`turnsOptions` now key on `[...frozenKey(conversation), sortedIds]`, a sorted copy, so a new id list is a
+new key, the same ids in another order are the same key, and invalidating the frozen key still matches by
+prefix. The frozen key objects are unchanged. A private `sortedRequestIds` in each module (not exported:
+the frozen exports stay a closed list). The two existing key assertions moved to the suffixed form.
+
+    red   $ npx vitest run test/queries.workspace-ask.test.ts test/queries.workspace-sources.test.ts
+          Test Files  2 failed (2)   Tests  4 failed | 45 passed (49)
+    green (same)  Test Files  2 passed (2)   Tests  49 passed (49)
+
+The two prefix-invalidation cases pass before the fix too (the key then was the prefix itself); they stay
+as the guard that the suffix does not break `invalidateQueries`. My first version of them used
+`getQueryCache().find`, which matches exactly by default, and failed after the fix; that was the test's
+fault, so it now uses `findAll`, which matches by prefix as `invalidateQueries` does.
+
+**R2-2 (fd90fe1): an upload title is trimmed again after the cut.** `uploadTitleOf` cuts to 200
+characters and trims the cut; nothing left gives `Untitled`.
+
+    red   $ npx vitest run test/workspace-upload-rules.test.ts test/queries.workspace-files.test.ts
+          Test Files  2 failed (2)   Tests  2 failed | 59 passed (61)
+          (the files case: rejected "Error: a title must be given trimmed")
+    green (same)  Test Files  2 passed (2)   Tests  61 passed (61)
+
+The cases: `'A'.repeat(199) + ' B.pdf'` gives a 199-character title with no trailing space, and
+`uploadFile` with fake ports, its `register` port the real `registerUpload` over the stub, reaches the
+register call with that title.
+
+Gates after both, from `web/`: `npm run typecheck` exit 0; `npx eslint . --max-warnings 0` exit 0;
+`npx vitest run` exit 0, 201 files and 3,722 tests passed (the phase branch now carries Phase 24a's and
+24ab's suites too, so the count is not comparable with the first round's).
