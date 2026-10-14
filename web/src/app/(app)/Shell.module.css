@@ -1,7 +1,37 @@
 .shell {
-  min-height: 100dvh;
+  /* The frame (task 26): exactly the window's height. The bar is its first row, the body fills the
+     rest, and the document does not scroll: the content pane does. */
+  height: 100dvh;
   display: flex;
   flex-direction: column;
+}
+
+/* "Skip to content": clipped away until it has focus, then drawn over the bar's corner. */
+.skip {
+  position: absolute;
+  z-index: 100;
+  top: var(--space-3);
+  left: var(--space-3);
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  text-decoration: none;
+  box-shadow: var(--shadow-lg), 0 0 0 var(--size-underline) var(--color-divider);
+}
+.skip:focus-visible {
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip-path: none;
+  outline: var(--size-focus) solid var(--color-accent);
+  outline-offset: var(--size-focus-gap);
 }
 
 /* Everything below the top bar: the course rail and the content column.
@@ -17,13 +47,30 @@
    what left a dead gap on the right of a wide window; the rail now uses that
    space, and the column takes the rest. Screens that need a reading measure
    set one on their own text blocks. */
+/* The content pane scrolls by itself. It is positioned, so a label placed inside it is contained by
+   it (Workspace.layout.test.tsx), and the gutter is stable so a page that grows a scrollbar does not
+   shift. */
 .main {
   flex: 1;
   min-width: 0;
+  min-height: 0;
+  position: relative;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
   padding: var(--space-8) var(--space-12) var(--space-12);
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
+}
+/* Its children keep their height and the pane scrolls, instead of squeezing them to fit. */
+.main > * {
+  flex-shrink: 0;
+}
+/* Focus lands here from the skip link: the ring sits just inside the pane. */
+.main:focus-visible {
+  outline: var(--size-focus) solid var(--color-accent);
+  outline-offset: calc(var(--size-focus-gap) * -1);
 }
 
 .header {
@@ -40,7 +87,7 @@
 }
 
 .kicker {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--color-accent);
@@ -50,35 +97,11 @@
   margin: 0;
 }
 
-.stub {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-8);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-}
-
-.stubTitle {
-  font-family: var(--font-heading);
-  font-weight: var(--font-heading-weight);
-  font-size: var(--text-lg);
-  margin: 0;
-}
-
 .stubBody {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--text-14);
   color: var(--color-muted);
   max-width: 62ch;
-}
-
-.stubMeta {
-  display: flex;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-  margin-top: var(--space-2);
 }
 
 @media (max-width: 720px) {
