@@ -5174,6 +5174,7 @@ export type Database = {
         Args: { p_run_id: string; p_sync_run_id: number }
         Returns: Json
       }
+      strip_ai_policy: { Args: { p_text: string }; Returns: string }
       suggested_start: {
         Args: { p_course_id: string; p_due: string; p_effort: number }
         Returns: string
