@@ -96,7 +96,25 @@ this section is current.** The reference for every shape is
   `data-column-empty="start"`), task 14 moves them to the new page with the rest.
 * **Workers.** Opus, as the Workers section says (his answer 1 below). 24a's ran on Sonnet by his
   word of 2026-10-08; from 2026-10-14 Phase 24 uses Opus and every other phase keeps Sonnet.
-* **What the walk of 24a shows** (brief 118, task 4) is added here when it is done.
+* **What the walk of 24a showed** (2026-10-14; 109c, "Phase 24ab, the walk"). Fifteen of the sixteen
+  steps and every host proof passed on the restyled page, and P-7 passed (an upload indexed in 2.4 s
+  through the worker's firewall). One defect, D-1: a question of invented words scored 0.781 to 0.789
+  against seven course units, above the runner's floor of 0.78, so the turn stored `found` and the fixed
+  "no passage matched" line was not written. The runner's floor is now 0.81 (W-96, test first, with a
+  measurement kept as `workspace/scripts/eval-floor.mjs`: the golden set reads 9 of 9 at every floor from
+  0.78 to 0.82, its weakest best hit 0.837; four invented-word strings and three unrelated English
+  questions all return nothing at 0.81 and one invented string still returned a hit at 0.80); the
+  materials server's own default stays 0.78, and the contract fixtures keep 0.78 as the example value of
+  the request's `min_similarity`. For the page: (a) a lookup's answer may open with a narration line ("I'll search for …") before
+  the answer; the renderer shows the answer as written, and a prompt line against narration is 24b's to
+  add only if Stack asks for it; (b) the `Used:` line names the model's own tool calls
+  (`search_materials · IST.323`, `get_material_text · 733`) beside the runner's `search` and
+  `planner_feed`; on the new page the Sources panel holds them and nothing is printed under the answer;
+  (c) the feed is 98 rows on every turn and the prompt 13 to 15 KB; a lookup is answered in 7 to 20 s,
+  the Standard question in 15 s after a 1.8 s planning turn, so the page's waiting state must read well
+  at those lengths; (d) Phase 22's page needed no change to pack 24's spec, and task 14 moves the steps
+  to the new page as written; (e) a hand walk of the pack reads the go-live stage's `planner-fingerprint`
+  before the first question.
 * **Stack's answers of 2026-10-14** to the four questions Phase 24ab put to him (his words in quotes):
   1. **Workers: Opus.** "Workers on opus for phase 24 only (keep sonnet on for the default workflow)."
      So W-86 to W-88, and any extra worker of 24b, are Opus; other phases keep Sonnet.
@@ -988,9 +1006,11 @@ Paste into a new Claude Code window started in `C:/Users/stack/projects/bb2dash`
 
 > /bb2dash-pm Start Phase 24b's data layer, early, beside Phase 24ab. Read `docs/planning/sprint-2/briefs/111_PHASE24B_workspace_page.md` in full on the branch `origin/feat/workspace-24` (24a's branch: `git show origin/feat/workspace-24:<path>` or the worktree `C:/Users/stack/projects/bb2dash-wt-24`, read-only; that worktree belongs to the Phase 24ab session and you write nothing there), its "Amendments after 24a, as built" and "The data layer, started early" first, and `118_PHASE24AB_walk_and_handover.md`'s "The end goal, and the road to it". Then the fixture folder `workspace/test/fixtures/contract24/` and its README, and the web app's `web/src/lib/queries.workspace.ts`, `use-workspace-stream.ts` and `workspace-labels.ts`. The brief is approved: give me the triage line and a short report, do not enter plan mode. Cut the phase branch `feat/workspace-page-24b` as the worktree `C:/Users/stack/projects/bb2dash-wt-24b` from `origin/feat/workspace-24`, and work there by full paths. Do task 3 (the wording), write "The data layer's frozen exports" into the brief, then cut W-86's worktree and spawn W-86 on Opus for tasks 4 to 6 as that section narrows them, with probe Q-4. Touch no file under `web/src/app/(app)/workspace/` or `web/src/components/workspace/`, no CSS module and neither layout check: Phase 22 is sweeping them. Nothing live, no PR. When 24ab pushes, merge `origin/feat/workspace-24` into the phase branch; once 24a/24ab is on `main`, merge `origin/main` instead. Stop when the data layer is on the phase branch and its gates are green, and tell me what the page's streams can start from.
 
-## Session prompt (a draft; Phase 24ab's task 12 finalises it)
+## Session prompt for the page (final; Phase 24ab's task 12, 2026-10-14)
 
-Paste into a new Claude Code window started in `C:/Users/stack/projects/bb2dash`, once the gate is open
-(Phase 22 and 24a on `main`, `just accept 24` green):
+Paste into a new Claude Code window started in `C:/Users/stack/projects/bb2dash` once the gate is open:
+Phase 22 on `main` (`dff1e05`, 2026-10-14), 24a and 24ab on `main` (the two PRs of `feat/workspace-24`
+merged) and `just accept 24` green (the "Phase 24a accepted" row in DECISIONS). It may be the data layer's
+session continuing: the branch and worktree already exist.
 
-> `/bb2dash-pm` Start Phase 24b, the Workspace page. Its brief is `docs/planning/sprint-2/briefs/111_PHASE24B_workspace_page.md` on `main`; read it in full, its "Amendments after 24a, as built" first, and `118_PHASE24AB_walk_and_handover.md`'s "The end goal, and the road to it". Check the gate with task 1's two `git merge-base --is-ancestor` lines and the "accepted" row of Phase 24a in DECISIONS; if either fails, stop and tell me. Cut `feat/workspace-page-24b` as its own worktree `C:/Users/stack/projects/bb2dash-wt-24b` from `origin/main` and work there by full paths. Re-read Phase 22 as merged (its tokens, class names and the two Workspace folders) and freeze the brief with that re-read, my answers to its four questions, and the probes Q-1 to Q-5. Workers are as my answer to question 1 says. Anything visual goes in front of me on a preview before the merge. Stop at "ready when you say so"; the cut-over that turns memory on, and `just accept 24` after it, wait for my word.
+> `/bb2dash-pm` Start Phase 24b, the Workspace page. Work in the worktree `C:/Users/stack/projects/bb2dash-wt-24b` (branch `feat/workspace-page-24b`, which already holds the data layer and brief 111's "The data layer's frozen exports"), by full paths: a relative path from where you start lands in the shared checkout, which stays on `main`. Read `docs/planning/sprint-2/briefs/111_PHASE24B_workspace_page.md` in full there, its "Amendments after 24a, as built" first (my four answers and what 24a's walk showed are in it), then `118_PHASE24AB_walk_and_handover.md`'s "The end goal, and the road to it" and 109c's "Phase 24ab, the walk". The brief is approved: give me the triage line and a short report, do not enter plan mode. The first three things, in order: (1) check the gate: `git merge-base --is-ancestor dff1e05 origin/main` and the same for 24a's merge commit (STATUS "Phase 24a" names it) each print 0, and DECISIONS holds the "Phase 24a accepted" row; if any fails, stop and tell me. (2) Merge `origin/main` into `feat/workspace-page-24b` (a merge, never a rebase), keep both sets of rows in the state files, and re-run the data layer's gates (`cd web && npm run typecheck && npx eslint . --max-warnings 0 && npx vitest run`). (3) Re-read Phase 22 as merged (its tokens in `web/src/app/globals.css`, the class names, the two Workspace folders) and freeze the brief with that re-read, the walk's amendments and probes Q-1 to Q-5; then cut W-87 and W-88 on Opus from the frozen commit. Workers are Opus (my answer 1). Memory is switched on at this phase's cut-over (my answer 2), the compose value changed last, after the page is walked. Anything visual goes in front of me on a Vercel preview before the merge. Stop at "ready when you say so"; the merge, the cut-over that turns memory on, and `just accept 24` after it each wait for my word.

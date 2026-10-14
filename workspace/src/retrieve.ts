@@ -10,7 +10,7 @@
  * search is skipped for 5 minutes (the failure is stored for each question meanwhile), so a search
  * function that is down does not cost every question 10 s.
  *
- * Merge: round-robin by rank across the queries, one row per id, floor 0.78, keyword-only hits after
+ * Merge: round-robin by rank across the queries, one row per id, floor 0.81, keyword-only hits after
  * the ones with a similarity; at most 14 passages from materials and uploads together and at most 3
  * remembered items.
  *
@@ -28,7 +28,7 @@ import { parseBatchAnswer, type AttachmentRead, type Hit, type QueryAnswer } fro
 export const RETRIEVE_TIMEOUT_MS = 10_000;
 export const FAILURES_BEFORE_PAUSE = 3;
 export const PAUSE_MS = 5 * 60 * 1000;
-export const SIMILARITY_FLOOR = 0.78;
+export const SIMILARITY_FLOOR = 0.81;
 /** Each kind's limit on one query (`workspace_search`'s `p_limit`). */
 export const PER_QUERY_LIMIT = 10;
 export const ATTACHMENT_MAX_CHARS = 96_000;
