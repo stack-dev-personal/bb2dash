@@ -23,6 +23,7 @@ import {
   BLACKBOARD_ORIGIN,
   MAX_HOPS,
   SIGNED_HOST_SUFFIX,
+  classifyRedirectTarget,
   downloadTo,
   isFollowable,
   isSignedHost,
@@ -245,12 +246,15 @@ test('resolveSignedUrl refuses a starting URL off Blackboard without fetching it
   assert.equal(called, false, 'no credentialed request is issued at all');
 });
 
-test('resolveSignedUrl refuses a redirect to an off-origin host and never fetches it', async () => {
+test('resolveSignedUrl never fetches a redirect to an off-origin host; it reports it as offsite (164)', async () => {
   const calls = [];
   const evil = 'https://evil.com/collect';
   const get = fakeGet({ [DURABLE]: redirect(evil) }, calls);
   const got = await resolveSignedUrl(get, DURABLE);
-  assert.equal(got.outcome, 'refused');
+  // Before 164 this was `refused`. A redirect to another site is now a link to save, not an error;
+  // the walk still never sends the logged-in session there.
+  assert.equal(got.outcome, 'offsite');
+  assert.equal(got.target, evil);
   assert.deepEqual(calls, [DURABLE], 'the off-origin hop is never requested');
 });
 
@@ -266,4 +270,158 @@ test('downloadTo refuses a cleartext CDN url', async () => {
   const fetchImpl = async () => { throw new Error('should not be called'); };
   const got = await downloadTo(fetchImpl, 'http://eu.content.blackboardcdn.com/x.pdf', '/tmp/x.pdf');
   assert.equal(got.outcome, 'refused');
+});
+
+// ---------------------------------------------------------------------------------------------
+// 164: a Blackboard file whose link redirects to another SITE is saved as a link, not an error.
+//
+// Three outcomes for a redirect the walk will not follow, told apart by `classifyRedirectTarget`:
+//   outside   -> `offsite` with the target (never requested; the caller stores the link)
+//   blackboard-> `refused`, the HOST named (Blackboard's file, its bytes still owed; widening the
+//                allow-list is a separate, reviewed change)
+//   unusable  -> `refused` (an IP, localhost, a non-http(s) scheme, credentials, too long, ...)
+// A reason names the host only: a CDN URL carries a signature.
+// ---------------------------------------------------------------------------------------------
+
+test('classifyRedirectTarget: another site is outside', () => {
+  for (const u of [
+    'https://www.cbo.gov/system/files/2024/report.pdf',
+    'http://newyorkfed.org/x',
+    'https://example.com/a?b=c#d',
+    'https://blackboard.syracuse.edu.evil.example/x',
+    'https://notblackboard.com/x',
+    'https://drive.google.com/file/d/abc/view',
+  ]) {
+    assert.equal(classifyRedirectTarget(u), 'outside', u);
+  }
+});
+
+test('classifyRedirectTarget: a Blackboard host not on the allow-list is blackboard, never outside', () => {
+  for (const u of [
+    'http://blackboard.syracuse.edu/x',
+    'https://other.blackboard.syracuse.edu/x',
+    'https://us-east-1.content.blackboardcdn.com/x',
+    'https://learn.blackboardcdn.com/x',
+    'https://blackboardcdn.com/x',
+    'https://help.blackboard.com/x',
+    'https://blackboard.com/x',
+    'https://BLACKBOARD.com/x',
+  ]) {
+    assert.equal(classifyRedirectTarget(u), 'blackboard', u);
+  }
+});
+
+test('classifyRedirectTarget: an unusable target is unusable', () => {
+  for (const u of [
+    'ftp://example.com/x',
+    'javascript:alert(1)',
+    'data:text/html,hi',
+    'file:///etc/passwd',
+    'https://127.0.0.1/x',
+    'https://10.0.0.5/x',
+    'https://169.254.169.254/latest/meta-data/',
+    'https://[::1]/x',
+    'https://2130706433/x',
+    'https://0x7f.1/x',
+    'https://localhost/x',
+    'https://app.localhost/x',
+    'https://intranet/x',
+    'https://user:secret@example.com/x',
+    'https://user@example.com/x',
+    `https://example.com/${'a'.repeat(2048)}`,
+    'https://example.com/a b',
+    'https://example.com/a\tb',
+    'https://example.com/a\nb',
+    'https://example.com/a\u0000b',
+    'not a url',
+    '',
+    null,
+    undefined,
+  ]) {
+    assert.equal(classifyRedirectTarget(u), 'unusable', String(u).slice(0, 60));
+  }
+});
+
+test('classifyRedirectTarget: 2048 characters is the longest it accepts', () => {
+  const base = 'https://example.com/';
+  assert.equal(classifyRedirectTarget(base + 'a'.repeat(2048 - base.length)), 'outside');
+  assert.equal(classifyRedirectTarget(base + 'a'.repeat(2049 - base.length)), 'unusable');
+});
+
+test('resolveSignedUrl: a redirect to another site is offsite, carries the target, and is never requested', async () => {
+  const calls = [];
+  const target = 'https://www.cbo.gov/system/files/report.pdf?token=abc';
+  const get = fakeGet({ [DURABLE]: redirect(target) }, calls);
+  const got = await resolveSignedUrl(get, DURABLE);
+  assert.equal(got.outcome, 'offsite');
+  assert.equal(got.target, target);
+  assert.deepEqual(got.hops, [DURABLE, target]);
+  assert.deepEqual(calls, [DURABLE], 'the walk carries Blackboard cookies and never goes there');
+});
+
+test('resolveSignedUrl: an offsite redirect met after a Blackboard hop is still offsite', async () => {
+  const mid = 'https://blackboard.syracuse.edu/webapps/blackboard/redirect';
+  const target = 'https://www.sec.gov/files/a.pdf';
+  const calls = [];
+  const get = fakeGet({ [DURABLE]: redirect(mid), [mid]: redirect(target) }, calls);
+  const got = await resolveSignedUrl(get, DURABLE);
+  assert.equal(got.outcome, 'offsite');
+  assert.equal(got.target, target);
+  assert.deepEqual(calls, [DURABLE, mid]);
+});
+
+test('resolveSignedUrl: a relative-looking or protocol-relative Location off site is offsite', async () => {
+  const get = fakeGet({ [DURABLE]: redirect('//www.cbo.gov/x.pdf') });
+  const got = await resolveSignedUrl(get, DURABLE);
+  assert.equal(got.outcome, 'offsite');
+  assert.equal(got.target, 'https://www.cbo.gov/x.pdf');
+});
+
+test('resolveSignedUrl: a redirect to a Blackboard host off the allow-list is refused, naming the host only', async () => {
+  const calls = [];
+  const odd = 'https://learn.blackboardcdn.com/files/secret.pdf?X-Amz-Signature=deadbeef';
+  const get = fakeGet({ [DURABLE]: redirect(odd) }, calls);
+  const got = await resolveSignedUrl(get, DURABLE);
+  assert.equal(got.outcome, 'refused');
+  assert.match(got.reason, /learn\.blackboardcdn\.com/);
+  assert.doesNotMatch(got.reason, /deadbeef|X-Amz|secret\.pdf/, 'the signed part of the URL stays out of a reason');
+  assert.deepEqual(calls, [DURABLE]);
+});
+
+test('resolveSignedUrl: a redirect to an IP, localhost or a non-http scheme stays refused, not offsite', async () => {
+  for (const to of [
+    'http://127.0.0.1:9000/x',
+    'https://169.254.169.254/latest/meta-data/',
+    'https://[::1]/x',
+    'https://localhost/x',
+    'ftp://example.com/x',
+    'https://user:pw@example.com/x',
+  ]) {
+    const calls = [];
+    const get = fakeGet({ [DURABLE]: redirect(to) }, calls);
+    const got = await resolveSignedUrl(get, DURABLE);
+    assert.equal(got.outcome, 'refused', to);
+    assert.deepEqual(calls, [DURABLE], to);
+    assert.doesNotMatch(got.reason, /pw|user:/, 'credentials in a target never reach a reason');
+  }
+});
+
+test('resolveSignedUrl: no redirect at all is still flagged, never offsite', async () => {
+  for (const [answer, outcome] of [
+    [{ status: 404, headers: {} }, 'gone'],
+    [{ status: 200, headers: {} }, 'refused'],
+    [{ status: 403, headers: {} }, 'session_expired'],
+    [{ status: 302, headers: {} }, 'refused'],
+  ]) {
+    const got = await resolveSignedUrl(fakeGet({ [DURABLE]: answer }), DURABLE);
+    assert.equal(got.outcome, outcome);
+  }
+  const failing = async () => { throw new Error('socket hang up'); };
+  assert.equal((await resolveSignedUrl(failing, DURABLE)).outcome, 'refused');
+});
+
+test('resolveSignedUrl: a Blackboard-served chain to the CDN is unchanged', async () => {
+  const get = fakeGet({ [DURABLE]: redirect(SIGNED), [SIGNED]: ok() });
+  const got = await resolveSignedUrl(get, DURABLE);
+  assert.deepEqual(got, { outcome: 'ok', signedUrl: SIGNED, hops: [DURABLE, SIGNED] });
 });
