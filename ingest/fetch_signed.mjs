@@ -37,8 +37,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-/** The only host suffix signed Blackboard file URLs are accepted from. */
+/** The CDN host suffix signed Blackboard file URLs are accepted from (the first signed host). */
 export const SIGNED_HOST_SUFFIX = '.content.blackboardcdn.com';
+
+/**
+ * Every host suffix a signed Blackboard file URL is accepted from: the CDN, and Blackboard's own file
+ * store (Xythos), where files 3711, 3712, 3730, 3731 and 3736 redirected in sync 5371 (2026-10-14).
+ * The narrowest pattern that matches what was seen: never `*.files.blackboard.com` or `*.blackboard.com`.
+ * A signed host is downloaded from without cookies and is never requested by the logged-in walk.
+ */
+export const SIGNED_HOST_SUFFIXES = Object.freeze([SIGNED_HOST_SUFFIX, '.prod.files.blackboard.com']);
 
 /** The institution's Blackboard host — where a durable URL starts and redirects may pass. */
 export const BLACKBOARD_ORIGIN = 'blackboard.syracuse.edu';
@@ -47,15 +55,19 @@ export const BLACKBOARD_ORIGIN = 'blackboard.syracuse.edu';
 export const MAX_HOPS = 3;
 
 /**
- * Is this URL on Blackboard's CDN? The suffix is matched at a domain boundary, so
- * `notcontent.blackboardcdn.com.evil.com` is refused while `content.blackboardcdn.com` is allowed.
+ * Is this an https URL on a signed host (the CDN or Blackboard's file store)? Each suffix is matched at
+ * a domain boundary, so `notcontent.blackboardcdn.com.evil.com` and `xprod.files.blackboard.com` are
+ * refused while `content.blackboardcdn.com` is allowed. Cleartext is never a signed host.
  */
 export function isSignedHost(url) {
-  let host;
-  try { host = new URL(String(url)).hostname.toLowerCase(); } catch { return false; }
-  const bare = SIGNED_HOST_SUFFIX.replace(/^\./, '');
-  return host === bare || host.endsWith(SIGNED_HOST_SUFFIX);
+  let u;
+  try { u = new URL(String(url)); } catch { return false; }
+  if (u.protocol !== 'https:') return false;
+  const host = u.hostname.toLowerCase();
+  return SIGNED_HOST_SUFFIXES.some((suffix) => host === suffix.slice(1) || host.endsWith(suffix));
 }
+
+const SIGNED_HOSTS_IN_WORDS = SIGNED_HOST_SUFFIXES.join(' or ');
 
 /** A bare IP literal, v4 or v6. Never a host we are willing to request. */
 function isIpLiteral(host) {
@@ -192,7 +204,7 @@ export function validateHops(hops) {
   const last = chain[chain.length - 1];
   if (!isSignedHost(last)) {
     const host = hostOf(last);
-    return { outcome: 'refused', reason: `final host${host ? ` ${host}` : ''} is not ${SIGNED_HOST_SUFFIX}` };
+    return { outcome: 'refused', reason: `final host${host ? ` ${host}` : ''} is not ${SIGNED_HOSTS_IN_WORDS}` };
   }
   return { outcome: 'ok', signedUrl: last };
 }
@@ -223,6 +235,11 @@ export async function resolveSignedUrl(get, durableUrl) {
   // credentialed round trips.
   if (!isFollowable(current)) {
     return { outcome: 'refused', reason: `starting URL is not followable (origin or scheme)`, hops };
+  }
+  // The first hop carries the logged-in session, so it starts on Blackboard's own host and nowhere else:
+  // a signed host (the CDN, the file store) is followable as a redirect's end, never as a start.
+  if (isSignedHost(current)) {
+    return { outcome: 'refused', reason: 'starting URL is a signed host, not a Blackboard address', hops };
   }
 
   for (let i = 0; i < MAX_HOPS; i++) {
@@ -301,7 +318,7 @@ export async function resolveSignedUrl(get, durableUrl) {
  */
 export async function downloadTo(fetchImpl, signedUrl, destPath) {
   if (!isSignedHost(signedUrl)) {
-    return { outcome: 'refused', reason: `refusing to download from a host outside ${SIGNED_HOST_SUFFIX}` };
+    return { outcome: 'refused', reason: `refusing to download from a host outside ${SIGNED_HOSTS_IN_WORDS}` };
   }
 
   let res;
