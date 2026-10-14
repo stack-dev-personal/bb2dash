@@ -236,6 +236,11 @@ export async function resolveSignedUrl(get, durableUrl) {
   if (!isFollowable(current)) {
     return { outcome: 'refused', reason: `starting URL is not followable (origin or scheme)`, hops };
   }
+  // The first hop carries the logged-in session, so it starts on Blackboard's own host and nowhere else:
+  // a signed host (the CDN, the file store) is followable as a redirect's end, never as a start.
+  if (isSignedHost(current)) {
+    return { outcome: 'refused', reason: 'starting URL is a signed host, not a Blackboard address', hops };
+  }
 
   for (let i = 0; i < MAX_HOPS; i++) {
     let answer;
