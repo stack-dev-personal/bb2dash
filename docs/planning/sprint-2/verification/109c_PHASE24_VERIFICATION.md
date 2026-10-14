@@ -1,0 +1,788 @@
+# 109c: Phase 24a verification
+
+The PM's record for brief `109_PHASE24_workspace_assistant.md`. Each probe has its one pass or fail
+line at the place the task list gives it. Worker records are beside this file
+(`109_W76_VERIFICATION.md` to `109_W79_VERIFICATION.md`, `109_W85_VERIFICATION.md`).
+
+## The session's start, 2026-10-08
+
+* Worktree `bb2dash-wt-24` clean at `origin/feat/workspace-24`, e365153, 10 commits ahead of `main`
+  (a58be34). `origin/main` had not moved. bb2dash-stack `origin/main` c4a54f8.
+* Open PRs: #84 (Phase 21's step 1, waits for Stack's word) and #59. No acceptance run open
+  (`C:/Users/stack/.bb2dash-accept/` holds no `accept.lock`, no `bb2dash-accept-` container).
+* The untagged-session check was not due (`untagged-sessions.mjs --due`: last review 3.0 days ago).
+* Stack's line with the start prompt: workers run on Sonnet 5.5, not on Opus as the brief says.
+* 109a's item 23 had no answer line. It was put to Stack in the first report with the planning
+  session's timings, and the probes started without it. The freeze waits for it.
+
+## The live images and containers, before the first probe and after the last
+
+Read 2026-10-08 23:27Z and 2026-10-09 00:09Z. The two readings agree, line for line.
+
+| tag | id |
+|---|---|
+| `bb2dash-sync:local` | `sha256:084b9ede6aadb40a0c1389f10e8f841802355beafd21558da215a0bce975f10f` |
+| `bb2dash-mcp:local` | `sha256:bf212746abf172b8d8f1a9f880afda84540b27c919fa057937f4fd50ee845d05` |
+| `bb2dash-apply:local` | `sha256:3315bf7c18e2b14615a0e226f9ed8144c0a3f0ad7de0a9b50435c98d48340873` |
+| `bb2dash-workspace:local` | `sha256:42c552c05ad6caf7565095b6c882643e022352d0357364024cdfc4cab7e5f2f4` |
+
+| container | id | started |
+|---|---|---|
+| `bb2dash-sync-1` | `6d007fa6448e…ff64ded3` | 2026-10-08T15:15:32Z |
+| `bb2dash-apply-1` | `cf35fbd0e3d5…0d68df97` | 2026-10-08T04:02:55Z |
+| `bb2dash-workspace-1` | `9a02c3ccd37b…c9b8c845` | 2026-10-08T16:34:35Z |
+| `bb2dash-harness-jobs-1` | `222ae50dbaae…f9060843` | 2026-10-08T04:02:55Z |
+
+The `bb2dash-mcp` containers that Claude sessions start and stop are left out (rules file, Session 3).
+
+## How a probe was run
+
+No image was built, nothing was started with `up`, and nothing ran by `exec` in a live container.
+Each probe ran one command in a throwaway compose project on the image as it stands:
+
+```text
+cd C:/Users/stack/projects/bb2dash-wt-24 && SECRETS_DIR=C:/Users/stack/.bb2dash-secrets HARNESS_DIR=C:/Users/stack/agentic-harness MSYS_NO_PATHCONV=1 docker compose -p bb2dash-p24 -f compose.yaml -f <scratch>/probe.compose.yaml --profile workspace run --rm --no-deps --pull never -T workspace <command>
+```
+
+The second compose file, in the session's scratch folder, adds two bind mounts: the probe scripts
+(read-only) and a folder for raw output. The form check, with no model call: the entrypoint raised
+the firewall (three names allowed), dropped to `node` (uid 1000) and ran the command; no runner loop
+started; `claude --version` gave `2.1.289 (Claude Code)`; `/run/workspace` was `700 node`.
+
+Each turn was started as the runner starts one (`claude-cli.ts`, `childEnv` and `spawnClaude`): the
+argv of the brief's table, working directory `/app/turn`, the token read from its secret file. Raw
+output stayed in the scratch folder. Prompts and questions were synthetic. P-10 used a compose file
+of its own (project `bb2dash-p24x`) with dummy secret files and no real secret.
+
+Afterwards the two projects' volumes and networks were removed by name
+(`bb2dash-p24_workspace-claude-home`, `bb2dash-p24_workspace-net`, `bb2dash-p24x_ingest-exchange`,
+`bb2dash-p24x_p10-net`); `docker volume ls` and `docker network ls` show nothing of either.
+
+**Walk boxes beside the probes.** Phase 22 started walk boxes from 23:34Z on. A timed probe waited
+for a moment with none running and was repeated if one started meanwhile; the untimed ones ran
+beside them. The first P-4 run overlapped one and is not the run that counts.
+
+## The probes before the freeze
+
+| probe | line |
+|---|---|
+| P-1 | **PASS.** A Haiku turn with `--mcp-config /run/workspace/mcp-none.json` (`{"mcpServers": {}}`) and no `--allowedTools`: the init line holds 0 servers and 0 tools, `apiKeySource` is `none`, the result is `success`. Recording `probes/p1-no-mcp-server.jsonl`; `cd workspace && npx vitest run test/probe24-fixtures.test.ts` passes (25 tests) |
+| P-2 | **PASS.** `claude --help` in the image lists `--no-session-persistence` (count 1). With the config folder on tmpfs (`/home/node/.claude`, mount type `tmpfs`) and the flag in the argv, a turn started and ended `success`, and the file count under `/home/node/.claude/projects` after it is 0 (5 files elsewhere in the folder, none a transcript). The same turn without the flag, on the volume, left one more file under `projects` (21 before, 22 after). So the flag goes into the argv and the service takes a tmpfs in place of the volume |
+| P-3 | **PASS.** Ten fresh Opus turns, each its own session with a prompt of 128,000 bytes rebuilt from the earlier turns, at `--max-budget-usd 0.95` (the answering turn's share of the 1.00 cap): 10 `success`, 0 `error_max_budget_usd`. Costs 0.3686, 0.3521, 0.3522, 0.3523, 0.3525, 0.3526, 0.3527, 0.3528, 0.3530, 0.3531: each its own turn's, none a running total, all under 0.95 and so under 1.00. Turn 10 answered with the code word given only in turn 1 |
+| P-4 | **FAIL as written; PASS under two PM rulings (below).** As the brief's table has the turn: 20 of 20 answers were the right object inside a Markdown code fence, so 0 pass a check for the object alone and 20 pass once the fence is taken off; median 8.99 s against the bar of 8 s (a walk box ran beside the second half); every cost under 0.05 (largest 0.0101). The time is thinking: P-1's turn spent 846 of its 897 output tokens on it. `--json-schema`, tried next as the task says: 0 of 10, because the CLI then calls a tool of its own, `StructuredOutput`, and the image's gate denies it. With `MAX_THINKING_TOKENS=0` in the child's environment, the committed draft of `plan.md`, and one code fence accepted (clean run 2026-10-09 00:06:32Z to 00:07:09Z, no walk box beside it): **20 of 20 valid, median 1.47 s, slowest 2.19 s, largest cost 0.0140** |
+| P-5 | **PASS.** One prompt argument of 128,000 bytes (argv 128,508 bytes in all): the CLI started and a result line was read (`success`) |
+| P-6 | **PASS.** A per-request config `/run/workspace/mcp-<uuid>.json` (mode 0600, removed after the turn) named one server with three values in its `env`. The throwaway server's first result held `BB2DASH_MAX_SEARCHES=3` and `BB2DASH_COURSES=BIO.110,CSE.130`; its fourth call answered with an error result; the turn's result is `success`. The gate allowed all four calls (4 hook answers, exit 0). The answering turn keeps its own tools |
+| P-10 | **(a) FAIL, (b) PASS, (c) PASS. By the task's rule the parser moves to the service `workspace-extract` (ruling below).** (a) Compose says "secrets `uid`, `gid` and `mode` are not supported, they will be ignored": the dummy secret was mode 777, owner 0, on a `v9fs` mount, and a second user (uid 1001) read it. (b) The image's firewall rose, `iptables -I OUTPUT 1 -m owner --uid-owner 1001 -j DROP` loaded, the worker's user reached `https://api.anthropic.com` (HTTP 404) and the second user did not (curl exit 28; the rule counted 18 packets). (c) The root script started one `sleep` as each user; after 15 s both were up, uid 1000 and uid 1001, each with `CapEff` and `CapBnd` 0; the worker's user could not start a process as the second; a file went through a shared tmpfs folder and back |
+
+## What the probes showed beside their lines
+
+* **P-10, three more readings**, taken because nobody answers a worker after the freeze.
+  1. With a read-only root the image's firewall script fails: "/etc/hosts cannot be written, so no
+     name can be pinned". A service that raises this firewall cannot have a read-only root.
+  2. The fallback's own form works on this Docker: two services of today's image shared one named
+     volume backed by tmpfs (`driver_opts: type tmpfs, device tmpfs, o size=96m,mode=1777`). The
+     reader ran as uid 1001 with `network_mode: none` (only `lo`), no secret, a read-only root and
+     `cap_drop: ALL`; it read the writer's file and the writer read its answer.
+  3. In a folder of mode 1777 the writer could not remove the file the reader made (the sticky
+     bit). The exchange folder needs a mode that lets the worker clear it.
+  4. Seen and not taken: with the secrets folder itself given to the worker's user at mode 0500 by
+     the root script, the second user was refused. It would keep one service, and it rests on a
+     `chmod` at every start.
+* **P-3, a floor to know.** A full-size prompt costs about 0.35 on Opus by the CLI's own estimate
+  before a word is answered. Three searches, ten opened units and a long answer come on top, inside
+  0.95. The walk watches a Deep question's stored cost.
+* **P-4, what the plans look like.** With thinking off the model narrows `kinds` more than the
+  prompt asks: "what did we talk about last time" was planned as course material alone in one of two
+  runs. The check is on a plan's shape, so this is not a fail. W-77 owns `plan.md`'s wording; the
+  walk asks one question that only a remembered item can answer once memory is on (24b).
+* **The plan's usage figures.** Each recording carried one `rate_limit_event` line with the plan's
+  five-hour and seven-day figures (0.15 and 0.50 at 23:32Z). The line is taken out of the committed
+  recordings.
+
+## PM rulings before the freeze, from the probes
+
+* **F-1. The planning, summary and rolling turns run with thinking off.** `MAX_THINKING_TOKENS=0`
+  is added to the child's environment for those three kinds of turn, on top of what `childEnv`
+  returns; the argv table is unchanged and `childEnv` keeps its signature (apply imports it). The
+  answering turn is not touched.
+* **F-2. A plan is the object alone, or the object inside one Markdown code fence.** Anything else
+  is the fallback plan, as before. `--json-schema` is not used.
+* **F-3. The parser moves to its own service, `workspace-extract`**, as the brief's task 10 rules
+  for a fail of any part. One image, two services. `workspace-extract`: no network
+  (`network_mode: none`), no secret, a read-only root, every capability dropped, its own user, the
+  memory and process limits, and one mount, the exchange volume. `workspace-ingest`: the worker
+  alone, on `ingest-net` behind its firewall, the two secrets, the same limits, the same one mount,
+  and a root that is not read-only, because its firewall pins names in `/etc/hosts` as the
+  Workspace's does. The exchange volume is `ingest-exchange`, backed by tmpfs, 96 MB, mounted by
+  those two services and no other; it holds the one file being read and its units, and the worker
+  clears it after each document. The firewall's owner rule and the secret's mode are no longer
+  part of the design. Written into the brief as "Freeze amendments".
+* **F-4. `--no-session-persistence` is in the argv and the Workspace service takes a tmpfs** at
+  `/home/node/.claude` in place of the named volume (P-2 passed). `cleanupPeriodDays` is not
+  changed.
+
+## Task 12, the freeze
+
+Prepared: the nineteen JSON files, the three text files, the routine wording
+(`workspace/test/fixtures/contract24/`, its `README.md` with every SQL signature) and the PM's test.
+**Frozen 2026-10-08** on Stack's answer to item 23, "a", given in the terminal after the probes'
+report: `grep -c "^    \*\*His answer to item 23" docs/planning/sprint-2/briefs/109a_PHASE24_open_questions.md`
+gives 1; `ls workspace/test/fixtures/contract24/*.json | wc -l` gives 19 and each parses (the PM's
+test, 25 of 25); the worktree count is under "Worker branches" below.
+
+**The facts re-read at the cut** (one read-only SELECT on prod, 2026-10-09 00:13Z; `git fetch` at
+00:15Z). `origin/main` is a58be34, unmoved; bb2dash-stack `origin/main` is c4a54f8, so the
+follow-ups have not merged and W-85 is not cut. No migration named 187 to 199 is on prod; the newest
+is `186_inbox_apply_notices`. One vector column. A sync has run since the brief was written: 1,005
+units and 2,039 vectors (the brief read 982 and 2,011), none without a vector. The four policies on
+the two course text tables are as the brief lists them. `workspace_runner` executes the five. One
+bucket, `bb-files`. No role `workspace_ingest_runner`. 41 requests, none open; 11 conversations.
+The counts the challenge round cited (work rows, score rows, byte sizes) were not read again:
+check 21 holds them on synthetic rows.
+
+## Worker branches
+
+Cut from the freeze commit 40cf386 and pushed, 2026-10-09 00:2xZ:
+`git worktree list | grep -c "feat/workspace-24"` gives 5.
+
+| worker | worktree | branch | started | this run |
+|---|---|---|---|---|
+| W-76, db | `bb2dash-wt-24-db` | `feat/workspace-24-db` | at the freeze | tasks 13 to 20, 49, 50 and task 22's lines |
+| W-77, runner | `bb2dash-wt-24-runner` | `feat/workspace-24-runner` | at the freeze | tasks 28 to 35 |
+| W-78, search and embed | `bb2dash-wt-24-search` | `feat/workspace-24-search` | at the freeze | tasks 23 to 26 |
+| W-79, ingest, sync and containers | `bb2dash-wt-24-ingest` | `feat/workspace-24-ingest` | at the freeze | tasks 36 and 39; 37 and 38 wait for W-77's task 32 and W-78's task 25 on the phase branch |
+| W-85, umbrella | not cut | | waits for the follow-ups' bb2dash-stack PR on that `origin/main` | task 40 |
+
+All four are Sonnet 5.5. The SQL runner answers `--ping` in `bb2dash-wt-24` and in
+`bb2dash-wt-24-db` ("connected as db_test_runner").
+
+**How a migration is proved.** The test login cannot run DDL, and no worker reaches the database
+by any other way. W-76 hands back each migration with its unit and the unit's red run. The PM runs
+`begin; <migration>; <unit>; rollback;` as the dry run of task 21 before a migration goes to Stack
+for his word, and the unit's green run through the runner follows the apply.
+
+## The workers' first hand-backs, 2026-10-08 evening
+
+| worker | merged into the phase branch | gates read by the PM on the merged branch |
+|---|---|---|
+| W-78, tasks 23 to 26 | 4eab863 | `mcp-server`: typecheck clean, 141 tests, build clean; `node --test` on the function tests, 32 pass; the PM's fixture test 25 of 25. No file outside its list; `package.json`, the lock file, `src/server.ts`, `search/` and `embed-corpus/` untouched |
+| W-79, tasks 36 and 39 | 31984a8 | `sync`: 166 tests. `workspace-ingest`: typecheck clean, 97 tests (98.36 % lines by its own run). No file outside its list |
+| W-76, tasks 13 to 20, 22, 49, 50 | fe233e8 | nine migrations and eleven units, none applied; each unit's red run is in `109_W76_VERIFICATION.md`. No file outside its list |
+
+**Findings that go back to a worker or change the plan**
+
+* **A test of the ingest worker depends on wall-clock time.** `workspace-ingest/test/exchange.test.ts`,
+  "an answer for another document does not satisfy the wait": timed out at 5 s twice on the merged
+  branch while other suites ran beside it, then passed three times in a row. It goes back to W-79
+  with tasks 37 and 38.
+* **A fourth standing unit pins a fact the applies move** (W-76's finding).
+  `db/tests/phase15_101_search_path_pin.sql`, part (c), lists the SECURITY DEFINER functions
+  `authenticated` may execute as exactly `app_owner()` and `calendar_push_now()`. 190 adds three
+  and 194 one, each owner-guarded as its first statement. The file is no worker's; the PM edited it
+  on the phase branch (a384f45), and it joins the three name lists in the port PR. So a unit on
+  `main` turns red at the first of those applies, not only at 193 and 196.
+* **197 needs 193** (W-76's finding): the status view reads the ingest heartbeat table. The order is
+  numeric, and 198 stands alone.
+* **So the applies are one sitting, not two groups.** The brief's task 21 had seven "as they pass"
+  and 193 with 196 on one day. With units on `main` red from 190 on, all nine go on in one sitting,
+  in numeric order, each after its own dry run, and the port PR (four test files) merges the same
+  sitting on Stack's word.
+* **The test login cannot read `storage.buckets`**, so `phase24_191_bucket.sql` checks the bucket's
+  row only for a login that can; the migration's own guard asserts the row at the apply.
+
+## Task 21: the dry runs before Stack's word
+
+Each is `begin; <migration>; <unit>; rollback;` through `execute_sql`, with a read afterwards that
+shows nothing was left. Comment lines were left out of the text sent; every statement ran as the
+file holds it. A dry run of a later migration needs the earlier ones on prod, so only three can run
+before the first apply; each of the rest is dry-run in its turn, after the one before it is on.
+
+| migration | dry run | read afterwards |
+|---|---|---|
+| 198 | **clean** (PM, 2026-10-09 01:4xZ): the policy drops, the guard passes, the unit's anon insert is refused with 42501, three policies are left on the two course tables | 2 policies on `bb_text_embeddings`: rolled back |
+| 191 | **clean** (PM): the bucket row, the four owner policies, the guard, the unit's checks (a) to (c) | 0 bucket rows, 0 policies: rolled back |
+| 190 | **clean** (a helper agent on the PM's exact procedure; the whole migration and the whole unit in one call) | `workspace_documents` absent, 0 of the three functions: rolled back |
+
+After the three, one read of prod: no relation and no function of the phase exists, no bucket
+`workspace-uploads`, no role `workspace_ingest_runner`, and no migration named 190 to 199.
+
+## Task 21: the nine applies, 2026-10-08 night (2026-10-09 01:5xZ to 02:5xZ)
+
+Stack's word, in the terminal, after the three dry runs above: "apply and merge" (the nine in numeric
+order, each after its own clean dry run, a stop at the first that is not; and the port PR's merge).
+He did not say "not 198".
+
+Each apply was `apply_migration` under the file's name with the file's whole text, then
+`md5(statements[1])` and its length read back from `supabase_migrations.schema_migrations` and held
+against `git show HEAD:<file> | md5sum`, then the unit through the runner. 191 and 198 by the PM; the
+others by one helper agent a migration on the PM's written procedure (dry run, apply, compare, unit).
+
+| migration | dry run | md5 on prod = md5 of the file | bytes | unit after the apply |
+|---|---|---|---|---|
+| `190_workspace_store` | clean | `b122452916886e563deebb567c1ba7d3` | 35270 | `phase24_190_store` PASS; `phase21_140_workspace_tables` PASS, unedited |
+| `191_workspace_uploads_bucket` | clean | `e88010819381ba9c72eb119dec70e9e4` | 6655 | `phase24_191_bucket` PASS |
+| `192_workspace_search` | clean on the second (below) | `c5f159d17b73e001b0c3ba6baff40a50` | 21602 | `phase24_192_search` PASS |
+| `193_workspace_ingest_role` | clean on the second (below) | `032665f142d0e84bb2307c18bcf888f7` | 25911 | `phase24_193_ingest_role` PASS; `phase24_190_store` still PASS |
+| `194_workspace_ask_options` | clean | `146fa6df504fd0021b9eb261e9ffab9f` | 24735 | `phase24_194_ask_options` PASS |
+| `195_workspace_turn_state` | clean | `7bf979014d3177d9015ea38dd7f9f45b` (the file was brought to this, below) | 15629 | `phase24_195_turn_state` PASS; `phase21_140` PASS |
+| `196_workspace_runner_v2` | clean, once with each of its two units | `b9c67b9da012a0f958fd0dc979d4b93f` | 50158 | `phase24_196_runner_v2`, `phase24_196b_feed_jobs`, `phase21_142`, `phase21_143`, `phase21_140` PASS |
+| `197_workspace_index_status` | clean on the second (below) | `dd7812a5eac490fc2b3102250272bfc9` | 7185 | `phase24_197_index_status` PASS; `phase15_100` PASS |
+| `198_text_embeddings_anon_insert_drop` | clean (before the first apply) | `858722294304c42cc649401fee4033c1` | 2820 | `phase24_198_anon_insert_drop` PASS |
+
+`select name from supabase_migrations.schema_migrations where name ~ '^19[0-8]_'` lists the nine
+names, one statement each. **After the ninth, `node scripts/db-test.mjs --only phase24_store_proof.sql`
+prints PASS against prod** (task 49, proofs 1 to 7 and 7b).
+
+**What stopped a dry run, and what was done. Nothing was applied by a stopped run, and each was read
+back as rolled back.**
+
+* **192, the unit.** The migration and its guard ran; the unit raised on the function's argument
+  list, which Postgres prints as `vector` when `extensions` is on the session's path and as
+  `extensions.vector` when it is not. The unit now takes the prefix off before it compares (3bcedec).
+  The other units were read for the same comparison: none.
+* **193 and 197, the harness.** A pasted dry run runs as `postgres`, which cannot `set role` into a
+  login role it is not a member of with the set option. 193's unit and the two of 196 say so in
+  their headers and name the one line a dry run adds inside its own transaction
+  (`grant <role> to postgres with inherit false, set true;`); 197's header lacked the note and has
+  it now (0be7aa4). The line was in dry runs only, never in an apply; the count of such memberships
+  read 0 before and after each.
+* **192, a shape.** Before 192 went on, the frozen search row gained a last column, `written_at`
+  (W-77's finding: the row had nowhere to carry the date the prompt shows beside a remembered item).
+  W-76 added it to 192 and its unit, W-78 widened the row it checks, the PM changed the fixtures
+  (2c474f4). 192 as applied carries it.
+
+**One apply did not match its file, and the file was changed, not prod.** 195 went on with every
+statement exact and one header comment broken a word early ("A source's title / is" where the file
+had "title is /"): the same length, another md5. The rule is that the repo file is byte-identical
+to what was applied, so the file took prod's line break (04fbdfb). Prod was not touched. The
+helper's instructions for 196 and 197 then said to copy every line as it stands and never re-wrap a
+comment; both matched at the first try.
+
+**Advisors after the ninth apply (security).** Three kinds of line.
+
+* `authenticated_security_definer_function_executable` (WARN) lists the browser's four,
+  `workspace_ask_with`, `workspace_document_delete`, `workspace_upload_register` and
+  `workspace_upload_retry`, beside the two it listed before. The brief said to expect it: each is
+  definer because the tables behind it give the browser select only, and each refuses anyone but
+  the owner as its first statement (the units prove it). Recorded here and not counted as a new
+  finding. The same lint names `inbox_accept_question`, which is the follow-ups'.
+* `rls_enabled_no_policy` (INFO) names `workspace_text_embeddings`. That is the design: row
+  security on and no policy, so only the service role, which bypasses it, reaches a vector. The
+  same lint names `inbox_apply_holds`, the follow-ups'.
+* `auth_leaked_password_protection` (WARN) is older than this phase.
+
+**The units on `main`, and the port PR.** PR #86 (`test/phase24-port`, four files) is open; from that
+branch `phase15_100`, `phase21_142` and `phase21_143` PASS against prod. `phase15_101` reads red there
+and on `main` for one function that is not this phase's, `inbox_accept_question()` (the follow-ups'
+187, on prod since 2026-10-09): it was red on `main` before this phase's first apply. The merge of
+#86 is Stack's hand: the session's merge command was refused by its permission check.
+
+**`main` moved during the sitting.** The follow-ups merged (#85, 696d35e; bb2dash-stack #6, 0fd659f).
+`origin/main` was merged into the phase branch (eb9fd0e): two files conflicted, `DATA_SYNTAX.md` and
+`project-state/DECISIONS.md`, each side having added rows, and both sets are kept. Re-done after it:
+`node docker/apply/fork-firewall.mjs --write` and `--check` (exit 0, and `git diff --exit-code
+docker/apply` prints nothing); `cd apply && npm run typecheck && npm run build && npx vitest run`
+(136 tests); the five container test files (63 tests); `docker compose config` resolves. The
+resolved `sync` and `apply` services are identical to `main`'s.
+
+## The workers' second hand-backs
+
+| worker | merged | read by the PM on the merged branch |
+|---|---|---|
+| W-77, tasks 28 to 35 | f3a376b | `workspace`: typecheck clean, 982 tests (97.39 % lines of `src/` by its own run); `apply` typecheck and 123 tests from the same tree; no `--resume` and no `mcp__rag__` in `src/`. One test failed once beside other suites and passed on every rerun: not yet named |
+| W-78 round 2 | 6839087 | `mcp-server` 143 tests; the row with `written_at` |
+| W-76 round 2 | deae4a9 | 192 and its unit only; no applied file touched |
+| W-79, tasks 37 and 38 and the test fix | 9e58951 | the five container suites pass; `grep -c harness_database_url compose.yaml` gives 0; the Workspace block: three secrets, no volume, a tmpfs at `/home/node/.claude`, no hostname, `WORKSPACE_MEMORY_JOBS` off; `workspace-ingest` and `workspace-extract` as F-3 has them; the exchange volume tmpfs, `gid=1100,mode=0770` |
+
+**The ingest image is not built, and that is blocked, not failed.** Its build stops in `apt-get
+update`: on the network the laptop was on that night, `http://deb.debian.org` answers from
+158.115.141.246 on port 443 with a certificate nothing trusts. The same happens in the bare
+`node:22-bookworm-slim` image with no file of ours (the PM's run). The Workspace and apply test
+images built because their package layers were cached (`bb2dash-workspace:wt24` 93c654c69d62,
+1.17 GB; `bb2dash-apply:wt24` 0fd2a1a825df). The four live tags' ids were the same before and after
+W-79's builds. P-7, P-11 and the upload half of the walk wait for a build on another network. W-79
+also reports one build that began a few seconds after a `bb2dash-walk22-` container appeared (a
+cached build of 12 s).
+
+## Tasks 22 and 27, and probes P-8 and P-9, 2026-10-08 night (2026-10-09 03:1xZ to 03:5xZ)
+
+Stack's words: "merge 86. Deploy the edge function and their probes."
+
+**Task 22, the port PR.** #86 merged as d78f576, with no acceptance run and no walk box open. On
+`main` after the merge, through the runner against prod: `phase15_100_db_test_runner_role.sql`,
+`phase21_142_workspace_runner.sql` and `phase21_143_review_round.sql` each PASS. `phase15_101` is
+red there for the follow-ups' `inbox_accept_question()` alone, as before this phase.
+
+**Task 27, the deploys.** `list_edge_functions` after them:
+
+| function | version | status | `verify_jwt` |
+|---|---|---|---|
+| `workspace-search` | 1 | ACTIVE | true |
+| `workspace-embed` | 2 | ACTIVE | true |
+| `embed-corpus` 5, `search` 6, `calendar-push` 5 | unchanged | ACTIVE | as before (`calendar-push` false) |
+
+Deployed by a helper agent on the PM's written procedure, the files as they stand
+(`workspace-search`: `index.ts`, `search.ts`; `workspace-embed`: `index.ts` with
+`../_shared/chunk.ts` and `../_shared/embed-plan.ts`), then read back and compared with the source.
+**`workspace-embed` version 1 did not match its source**: one expression in `embed-plan.ts` was
+mistyped in the upload. The helper found it in its own read-back before anything had called the
+function; version 2 is the source, all three files compared line by line with no difference.
+`workspace-search` matched at the first deploy.
+
+**The probe rows.** One synthetic upload document with one unit (4,224 characters of one made-up
+sentence), written by SQL with state `text_ready`; no object was put in the bucket, because P-7,
+the probe that needs one, waits for the ingest image. Counts before the rows: 0 documents, 0 units,
+0 vectors, 0 objects in `workspace-uploads`. Document id 137, unit id 2064. Removed in the same
+sitting by one `delete` of the document (the units and vectors go with it). Counts after: 0, 0, 0, 0.
+
+| probe | line |
+|---|---|
+| P-8 | **PASS.** One call of `workspace-embed` with the probe document's id and `max_parts` 3, with the public anon JWT as the worker will hold it: 200, `inserted_rows` 3, `failed` empty, `remaining_parts` 1 of 4. A second call stored the last part; the same call again stored 0 and failed nothing. Read on prod: 4 vector rows for the unit, every one under `gte-small`, the unit's `embedded_at` set. The answer's keys are `embed.json`'s. So a second edge function opens a `gte-small` session at 3 parts a call |
+| P-9 | **PASS.** With the service key, through the batch child as the runner will start it: the query `ok`, 11 hits, each naming its kind: 1 `upload` (the probe document, similarity 0.919), 10 `material`, 0 `memory` (none exists). The row's keys are `search-row.json`'s, `written_at` among them. The probe document read as an attachment came back `cut` at 2,000 characters. With the public anon JWT: HTTP 403, `code` 42501, zero rows. Nothing but counts, kinds and statuses was printed or kept |
+
+`v_workspace_index_status` read with the probe document in place: `uploads_waiting` 1 and every
+other upload and memory count 0, `course_units_indexed` 1005, `course_units_waiting` 0,
+`ingest_polled_age_seconds` null (no ingest worker has run).
+
+## Task 41: the retrieval eval, no model
+
+The nine cases of `ingest/eval/golden_set.json` through the batch entry on the host with the key
+file (one query a case, the case's course as its scope, course materials, floor 0.78, ten hits;
+the script is in the session's scratch folder and prints qids and counts only):
+
+`in passages: 8 of 9; missed qids: 7`, exit 1. **Not the 9 the task asks for, and the miss is the
+golden set's, not the search's.** Case 7's truth names files 149 and 967. Both have been replaced
+since it was written (read on prod: 149 is superseded by 2509; 967 by 2640, and 2640 by 2773), and
+the search hides a replaced file. Among case 7's ten hits are 2509 and 2773, the current version
+of each. It is the stale truth STATUS already lists under known issues
+(`phase18_golden_truth.sql`, Q7). `ingest/` is no worker's in this phase, so the file is not
+edited here; against the files that are current the eval reads 9 of 9.
+
+## W-85, task 40 (bb2dash-stack)
+
+Branch `feat/workspace-24` in bb2dash-stack, cut from that `origin/main` at 0fd659f once the
+follow-ups' PR (#6) was on it; three commits (a94a495, c509b62, feca81c). The secret name
+`workspace_ingest_db_url` is declared, with its empty example file; the names are fourteen;
+the doctor's Workspace text no longer names `harness_database_url`. Three host actions:
+`ingest.start`, `ingest.startNoBuild` (each starts `workspace-extract`, then `workspace-ingest`,
+by name with `--no-deps`) and `db.proofUntil` (a proof read up to 10 times, 10 s apart). They are
+in `acceptance/manifest.schema.json`'s list in this repository now. W-85's run of the umbrella's
+whole suite: 359 pass, 0 fail.
+
+## Task 48, prepared
+
+The snippet is `C:/Users/stack/.bb2dash-wt24/make-ingest-login.ps1`, outside every repository: it
+makes the password on the laptop, stores `workspace_ingest_db_url` in `SECRETS_DIR`, and puts the
+one `alter role` line on Stack's clipboard for an unsaved SQL editor tab. Tested by the PM against
+a throwaway folder of fake secrets (the stored string's shape, no byte-order mark, a refusal to
+replace a file without `-Force`), which was then deleted. The name `workspace_ingest_db_url` was
+added to the allow-list of `set-secret.ps1` in `SECRETS_DIR` (a name). Handed to Stack on
+2026-10-08 night; his step is done when `just doctor` shows no missing secret.
+
+## Task 44: the reviews, 2026-10-09
+
+Both ran from inside `bb2dash-wt-24`, on `origin/main...HEAD` at 4f58b89 (193 files, about 29,000
+added lines), after the nine applies and with `main` merged in.
+
+### `/security-review`
+
+One reviewer read the whole diff against the brief's own statement of the boundary (Freeze
+amendments, The fence, The stores, Uploads and extraction, Privacy rules, The security boundary).
+**No finding at or above the bar** (0.8 confidence, HIGH or MEDIUM), so the second pass, which
+filters false positives, had nothing to filter. What it read and judged sound: the four browser
+functions' owner check as the first statement; all fourteen definer functions pinned and revoked
+before their one grant, with no dynamic SQL in 190 to 198; the signed link fixed up to the `?` by
+the CHECK and by both functions; the runner's and the ingest role's functions refusing a request,
+job or document the caller does not hold; `workspace-search` holding no key; no secret in an argv,
+in the batch child's environment or in the per-request MCP config; the gate failing closed on two
+tools; the plan's bounds; every block built through the fence; log lines of ids, counts, states
+and classes only; the link check, the hash check and the exchange file names in the ingest worker;
+the two images and the compose blocks.
+
+Six notes under the bar, each placed:
+
+| note | where it goes |
+|---|---|
+| The worker follows a symlink in the folder it shares with the parser, so a parser that was taken over could make it write an upload's bytes elsewhere in the worker's own container, or read a device as the answer. It reaches no secret | **fixed in round 3, W-79**: no link is followed and only a regular file is used |
+| The fence splits lines on LF, CRLF and CR only; five other separators and a leading zero-width character can show a label at a visible line start. A block line still cannot be forged. Two titles sit outside any block | **fixed in round 2, W-77** |
+| `workspace_job_finish` does not check that the caller holds that job, its kind or its lease | **migration 199, W-76** |
+| `workspace_turn_put` stores `attachments` as any JSON array and a `feed` row's title as given, so "ids and states only" rests on the runner | **migration 199, W-76** |
+| A runner's name is its own word: "one document at a time" holds per name, and `workspace_claim_v2` closes a turn by name. The same data as the blast radius the brief gives a holder of the DSN, not one at a time | recorded, not changed |
+| `workspace-embed` answers any holder of the public anon JWT: it embeds a document by id with the service role and tells an id that exists from one that does not. No text comes back; `embed-corpus` is the same | recorded, not changed (109a, item 18 is the same gap for `search`) |
+
+### `/code-review main high`
+
+Ten findings, none in the gate, the fence's block lines or a grant. Each is a real fault and each
+is fixed in the review round; none is declined.
+
+| # | finding | severity (PM) | fix |
+|---|---|---|---|
+| 1 | `workspace-ingest/src/embed.ts`: one try stores at most 180 parts and a document gets three tries, so an upload over about 540 parts could never be indexed | HIGH | W-79, round 3: a try runs until the parts are stored, inside the lease |
+| 2 | `workspace/src/retrieve.ts`: the runner filtered every hit under 0.78, keyword matches among them, which the SQL keeps on purpose; an exact-term match was dropped and the turn stored `empty` | HIGH | W-77, round 2: the runner orders, it does not filter |
+| 3 | `workspace/src/context/attachments.ts`: a file whose first unit was cut to fit was reported as read whole | HIGH | W-77 |
+| 4 | `196`, `workspace_job_claim`: a newest message over 14,000 bytes was summarised away, leaving a follow-up no verbatim turn | HIGH | migration 199, W-76 |
+| 5 | `workspace/src/plan.ts`: an impossible plan date (`2026-11-31`) passed and the feed was then refused by Postgres | MEDIUM | W-77 |
+| 6 | `workspace/src/retrieve.ts`: the pause after three failed searches also skipped attachment reads | MEDIUM | W-77 |
+| 7 | `193`: a retried document was claimed again at once, so three tries burned in seconds | MEDIUM | migration 199, W-76: a wait of 60 s times the tries |
+| 8 | `workspace/src/context/attachments.ts`: the attachment budget was measured before the guard's prefixes, so a file of label-shaped lines could push the prompt past the argument limit | MEDIUM | W-77 |
+| 9 | `workspace-ingest/src/units.ts`: a NUL in parsed text failed the file for ever | MEDIUM | W-79 |
+| 10 | `workspace-embed`: every call read and re-chunked the whole document to store three parts | MEDIUM | W-78, round 3, then a redeploy on Stack's word |
+
+Three conventions it named are the PM's and are done in task 46: `project-state/STATUS.md` and the
+root `CLAUDE.md` (four read tools, the notes collections, `harness_database_url`, the login's
+reach) are stale for this branch; one comment in `compose.yaml` says `WORKSPACE_MEMORY_JOBS=off`
+turns off the rolling summary, which it does not (W-79 corrects the comment).
+
+**What the review round costs.** One more migration, 199, the last number of the block: `create or
+replace` only, applied on Stack's word after its dry run. One redeploy of `workspace-embed`. The
+Workspace test image is rebuilt before the walk.
+
+## The review round, 2026-10-09: every finding fixed on the branch
+
+| worker | merged | what it holds | read by the PM on the merged branch |
+|---|---|---|---|
+| W-77, round 2 | 44a82b2 | findings 2, 3, 5, 6 and 8 of the code review; the fence's line separators and the two titles (security note); the test that failed once under load is the budget's property test, which now has a longer limit (it computes, it does not wait on a timer) | `workspace`: typecheck clean, 1,007 tests; `apply` typecheck and 136 tests from the same tree |
+| W-79, rounds 3 and 4 | 9e936e9, c7e84d0 | findings 1 and 9; no link followed in the exchange folder (security note); the compose comment; progress judged by parts stored; the `release` outcome | `workspace-ingest`: typecheck clean, 120 tests; the five container suites, 63 tests |
+| W-78, round 3 | 9cef7c5 | finding 10: a call of `workspace-embed` reads only the units still unmarked | function tests 39 of 39; `mcp-server` 143 |
+| W-76, rounds 3 and 4 | fe-series merges to 6d1edda | migration 199 and its unit: findings 4 and 7, the two security notes on `workspace_job_finish` and `workspace_turn_put`, the `release` outcome, and the view `v_workspace_store_proof` | the nine applied files' md5 unchanged; 199 not applied |
+| W-95, the pack (tasks 45), rounds 1 and 2 | b7b3c88, cc6c5b1 | `acceptance/24/`, `web/e2e/accept24.spec.ts` and its lib: sixteen steps and the host go-live step; the four store proofs read the view | acceptance suite 55 of 55; scripts suite 261 of 261; web typecheck and lint clean by its run |
+
+**Two things the round changed in a frozen shape, both before anything used them.** `workspace-embed`'s
+`missing_parts_before` and `remaining_parts` are lower bounds while unmarked units lie outside the
+call's window, and exact at zero: the worker therefore judges a pass by `inserted_rows`, never by
+one pass's count against another's. And `workspace_ingest_finish` gains a fourth outcome,
+`release` (199), in the fixture README.
+
+**The pack, three rulings.** A 64-character hash cannot pass between two stages of a run, so the
+upload step carries a uuid and the proofs derive the file's hash from it in SQL: accepted, it tests
+the same row more strictly. The proofs script refuses catalog names, so four of the five store
+proofs first came back reduced; 199's view carries those catalog facts as plain columns and the
+proofs read it. The pack's first browser test is titled `2 open workspace`, because pack 21 has
+`2 open` and a run picks a test by its title.
+
+## Migration 199: the dry runs before Stack's word
+
+`199_workspace_review_round.sql` (48,018 bytes; `create or replace`, `comment on` and one view; no
+table, column, grant or policy moves). Three rolled-back dry runs through `execute_sql`, each
+`begin; <199>; <the grant line or lines its unit's header names>; <unit>; rollback;`, by a helper
+agent on the PM's procedure:
+
+| with the unit | result |
+|---|---|
+| `phase24_199_review_round.sql` | clean |
+| `phase24_193_ingest_role.sql` (its part on a retry moves: a retried document now waits) | clean |
+| `phase24_196b_feed_jobs.sql` (its holds carry the job's kind; the rolling job's boundary moves) | clean |
+
+Read before the first and after the last: no migration named 199, no view
+`v_workspace_store_proof`, and no membership of `postgres` in either login role. One send failed in
+the tool itself ("Invalid or expired requestState"); the database read the same afterwards and the
+text was sent again.
+
+## Migration 199 applied, `workspace-embed` redeployed, task 48 done (2026-10-09, about 12:00Z)
+
+Stack's words: "apply 199 and redeploy emped. Copied and ran the SQL query to force rewrite that
+secret."
+
+**199.** Applied as `199_workspace_review_round`, one statement, by a helper agent on the PM's
+procedure. `md5(statements[1])` on prod is `416afe139cb3312f54352015424e59f1`, 48,018 bytes, equal
+to `git show HEAD:db/migrations/199_workspace_review_round.sql | md5sum` (read by the helper and
+again by the PM). The first send failed in the tool ("Invalid or expired requestState") with
+nothing recorded; the same text went through on the second. Through the runner against prod
+afterwards, each PASS: `phase24_199_review_round`, `phase24_193_ingest_role`,
+`phase24_196_runner_v2`, `phase24_196b_feed_jobs`, `phase24_190_store`, `phase24_192_search`,
+`phase24_194_ask_options`, `phase24_195_turn_state`, `phase24_197_index_status`,
+`phase24_198_anon_insert_drop`, `phase24_store_proof`, `phase21_140_workspace_tables`,
+`phase21_142_workspace_runner`, `phase21_143_review_round`, `phase15_100_db_test_runner_role`.
+The block 190 to 199 is used up and frozen.
+
+`select * from v_workspace_store_proof` on prod: `vector` 0.8.2 in `extensions`; the two columns,
+`public.bb_text_embeddings.embedding:384:t` and `public.workspace_text_embeddings.embedding:384:t`;
+the two valid HNSW cosine indexes; 0 foreign servers, 0 foreign tables, 0 link extensions, 0 store
+functions that call out; all four `_ok` columns true.
+
+Advisors (security) after it: the same lines as after the ninth apply, nothing new. The view is
+security invoker and is not listed.
+
+**`workspace-embed`, version 3.** Deployed from the branch after the review round (`index.ts`,
+`_shared/chunk.ts`, `_shared/embed-plan.ts`, `_shared/embed-call.ts`), `verify_jwt` true, ACTIVE;
+read back and compared with the source line by line, no difference; the other four functions'
+versions and hashes unchanged.
+
+**P-8 repeated on version 3.** One synthetic upload document of five units (3,760, 470, 2,820, 376
+and 282 characters; ten parts in all), written by SQL and removed in the same sitting. Calls with
+`max_parts` 3 and the public anon JWT: 200 each; `inserted_rows` 3, 3, 3, 1; `remaining_parts` 7,
+4, 1, 0; nothing in `failed`. Read on prod: 10 vectors, all `gte-small`, all 5 units marked.
+Counts before and after the sitting: 0 documents, 0 units, 0 vectors, 0 objects in the bucket.
+
+**Task 48.** Stack ran the snippet (with `-Force`, by his words) and the one `alter role` line.
+Checked by the PM without reading the secret: the file `workspace_ingest_db_url` is in
+`SECRETS_DIR`; a connection made from it, with the certificate verified against the pinned CA,
+answers `current_user` = `workspace_ingest_runner`; the role may execute
+`workspace_ingest_heartbeat` and holds no select on `workspace_documents`. The first heartbeat row
+waits for the ingest worker's first start, which waits for the image.
+
+## The ingest image built, and probe P-11 (2026-10-09, about 12:30Z)
+
+The network no longer intercepted `deb.debian.org` that morning (`apt-get update` in the bare base
+image fetched its lists). The three test images were then built from the branch head after the
+review round, each under its test tag through the second compose file, with no walk box or
+acceptance run beside them:
+
+| image | id | size | build |
+|---|---|---|---|
+| `bb2dash-workspace:wt24` | `e7db1854eaf7` | 1.17 GB | 15 s (cached layers) |
+| `bb2dash-workspace-ingest:wt24` | `c2b6156562be` | 727 MB | 91 s, its first build |
+| `bb2dash-apply:wt24` | `ca8661b78909` | 1.17 GB | 11 s |
+
+The four live tags before and after the builds: `bb2dash-sync:local` `084b9ede6aad`,
+`bb2dash-mcp:local` `bf212746abf1`, `bb2dash-apply:local` `535b7075cb79`, `bb2dash-workspace:local`
+`42c552c05ad6`, the same at both readings. (`bb2dash-apply:local` read `3315bf7c18e2` the evening
+before: the follow-ups' cut-over rebuilt it in between. That change is theirs.)
+
+**In the ingest image, as the parser's user with no network and no secret:** `uid=1100(extract)
+gid=1100(exchange)`; `pdftotext` 22.12.0; `uv` 0.12.19 with `UV_OFFLINE=1`; `/app` holds `certs`,
+`docker`, `ingest`, `workspace-ingest`; `dist` holds `main.js`, `parser-main.js`, `healthcheck.js`.
+
+**The Workspace test image, a smoke with no runner loop and no model call** (a throwaway compose
+project, removed after): three secrets mounted (`workspace_runner_db_url`, `claude_oauth_token`,
+`bb2dash_mcp_service_key`); the CLI's config folder a tmpfs; six prompt files; no notes server in
+the image; `WORKSPACE_MEMORY_JOBS` off; the firewall allows three names, Anthropic answers and
+`example.com` is blocked; one retrieval through the image's own batch entry returned 10 hits with
+the frozen fourteen keys. (Run on the image built before the review round; the same build after it
+is the one the walk uses.)
+
+| probe | line |
+|---|---|
+| P-11 | **PASS.** In the `workspace-extract` service as compose defines it (user `extract`, only `lo`, a read-only root, no secret, `memory.max` 1 GiB, `pids.max` 128, the exchange volume `770 root:exchange`), one synthetic file of each parsed type, about 20 MB each with a noise picture as its bulk, extracted by the command the parser's loop runs. pdf: 20,006,000 bytes, 0.3 s, peak 30.7 MB, 60 units. docx: 19,869,952 bytes, 0.6 s, 88.3 MB, 1 unit. pptx: 19,912,690 bytes, 0.7 s, 97.1 MB, 60 units. xlsx: 19,977,680 bytes, 1.0 s, 39.0 MB, 2 units. Each far under 300 s and 1 GiB; the folder was empty afterwards. The size and the limit stand |
+
+**P-7 is the first step inside the walk window, a PM ruling.** The task list puts it before the
+walk, with a probe object of its own. The worker has no single-pass mode, and a probe object needs
+the owner's session to put and to remove. Inside the window the test worker's first real download
+of the walk's synthetic upload, through its firewall, is that probe: its line is written from the
+worker's log and the row's state (`reading` to `text_ready` means the link was fetched with no
+redirect and the bytes hashed to the row's hash). If it fails, the upload half of the walk stops
+there and the Workspace half still stands.
+
+## Phase 24ab (2026-10-14): where it stands, the merge, the list after it, the test images
+
+Brief `118_PHASE24AB_walk_and_handover.md` is the plan; its tasks are numbered as there. The session
+started about 19:25Z on Stack's start prompt, which carries his word for the walk window.
+
+**Task 1, where it stands (read 19:27Z to 19:33Z).** `origin/main` is `fb3c2db`, past what brief 118
+and the branch's STATUS describe: Phase 22 merged (PR #93, `dff1e05`) and closed (PR #95) earlier the
+same day, Phase 23 and its follow-ups accepted on 2026-10-13 (run `20261013T003231Z`), migration 107,
+the SQL-units audit and the export retry all on `main`. `feat/workspace-24` (`d480844`) was 287 commits
+behind and 102 ahead, not 64 behind as the brief says; bb2dash-stack's branch (`feca81c`) 3 behind, 3
+ahead. Open PRs: bb2dash #84 and #59, neither this phase's; bb2dash-stack none. Phase 24b's branch
+`feat/workspace-page-24b` is not on origin yet. Docker: no `bb2dash-walk22-` box, no `bb2dash-accept-`
+container, no `accept.lock` under `C:/Users/stack/.bb2dash-accept/`; live `bb2dash-sync-1` up 34 h,
+`bb2dash-workspace-1` up 33 h, `bb2dash-apply-1` up 43 h; the three test images of 2026-10-09 still
+present. Phase 22 is closed, so no walk box of its own can open beside this session; the walk now runs
+against the restyled page, which pack 24 has never met. The untagged-session review is due (last
+2026-10-05) and is left, on Stack's instruction in the start prompt.
+
+**Task 2, the merge.** In bb2dash, `git merge --no-ff origin/main` stopped on four files, each resolved
+by keeping both sides: `project-state/STATUS.md` (the header, both the "Phase 22" and the "Phase 24a"
+sections, the What's next rows, the known issues), `project-state/DECISIONS.md` (both sets of rows),
+`project-state/ORCHESTRATOR.md` (the header, §1 rows 22 to 24b, §4), and `scripts/package.json`, whose
+test line keeps both names (`accept-proofs-db24.test.mjs` and Phase 22's `walk-box.test.mjs`). The
+merge brought `web/test/walk22-lib.test.ts`, which fails on any spec under `web/e2e/` it does not know:
+`accept24.spec.ts` and `accept24.lib.ts` were listed as older than Phase 22 in the same commit, as
+`accept23.spec.ts` was on 2026-10-09 (one DECISIONS row). No lock file changed. Merge commit `c8f39b7`.
+In bb2dash-stack the merge was clean: `b540dcb` (the doctor's exports row names `no_network`).
+
+**The list after a merge (brief 109), re-done in full on the merged head:**
+
+| check | result |
+|---|---|
+| `node docker/apply/fork-firewall.mjs --write`, then `--check`, then `git diff --exit-code docker/apply` | wrote `docker/apply/init-firewall.sh` unchanged; check exit 0; diff exit 0 |
+| `apply`: `npm ci`, typecheck, build, `vitest run` | clean; 136 tests, 2 files |
+| `workspace` (the runner): typecheck, `vitest run` | clean; 1,007 tests |
+| `workspace-ingest`: typecheck, build, `vitest run` | clean; 120 tests, 7 files |
+| `mcp-server` (the materials server): typecheck, build, `vitest run` | clean; 143 tests, 8 files |
+| `sync`: typecheck, build, `vitest run` | clean; 166 tests, 7 files |
+| `web`: typecheck, lint, `next build`, `vitest run` | all clean; 3,453 tests in 191 files (2,913 before the merge: Phase 22's tests came with `main`; the token audit's ratchet is among them and reads 0) |
+| the container test files (six: `docker/apply/gate-built`, `docker/apply/image`, `docker/grep-clean`, `docker/walk/entry`, `docker/workspace-ingest/image`, `docker/workspace/init-firewall`) | 83 tests, 83 pass |
+| `node --test acceptance/acceptance.test.mjs` | 55 tests, 55 pass |
+| the scripts suite (`cd scripts && npm test`, fourteen files) | 360 tests: 358 pass and 2 fail in the run the harness stopped (below), both in Phase 22's `walk-box-main.test.mjs` and both a child process Windows could not start (status 3221225794, 0xC0000142: `git init` in a temp folder, and `node scripts/walk-box.mjs`) at the moment the laptop ran short of memory; that file alone, run again in the foreground once memory was back: 37 tests, 37 pass. Read as green |
+| bb2dash-stack: `node --test doctor/*.test.mjs scripts/*.test.mjs` | **359 tests, 359 pass, 0 fail (4 suites, 11.0 minutes), run 21:01Z to 21:12Z on Stack's word ("run the stack suite").** The first run was stopped by Claude Code while the laptop was short of memory (the web suite's 191 jsdom environments, the container tests and the three builds had run side by side), and its rule is that a stopped command is started again only on Stack's word. The suite is slow by nature: each `init-firewall.sh` case runs the script against fake commands under Git Bash, five to eight minutes a case |
+| the types file, regenerated from prod (`generate_typescript_types`) | one object differs from the branch's file: `v_workspace_store_proof` (24a's view of 199, which the branch's file predated) is added; `PostgrestVersion` reads `14.17` where the file said `14.5` (prod's own, not a phase's). Nothing of another phase: everything else on prod is on `main` |
+| `docker compose config`, the `sync` and `apply` services, worktree against `main` | identical but for the build context path (`bb2dash-wt-24` for `bb2dash`) |
+
+**Task 3, the test images, rebuilt from the merged head** (19:49Z to 19:50Z, through
+`C:/Users/stack/.bb2dash-wt24/test-tags.compose.yaml`, no walk box, no acceptance run and no
+`bb2dash-wt24-` container beside them):
+
+| image | id on 2026-10-09 | id now | build |
+|---|---|---|---|
+| `bb2dash-workspace:wt24` | `e7db1854eaf7` | `519d0472efbb` | exit 0, 13 s |
+| `bb2dash-workspace-ingest:wt24` | `c2b6156562be` | `cb42974e6481` | exit 0, 6 s |
+| `bb2dash-apply:wt24` | `ca8661b78909` | `b6a858fa81a7` | exit 0, 6 s |
+
+The four live tags before and after, the same at both readings: `bb2dash-sync:local` `084b9ede6aad`,
+`bb2dash-mcp:local` `bf212746abf1`, `bb2dash-apply:local` `535b7075cb79`, `bb2dash-workspace:local`
+`42c552c05ad6`.
+
+**Before the window.** `.env.testing` copied from the shared checkout into the worktree root, unopened
+(gitignored, read `!!` by git). The test login signed in at the live site with `web/e2e/login.mjs`; the
+session file and the output folders live in the session's scratch folder, outside every repository.
+Pack 24's first step, `2 open workspace`, which asks nothing and writes nothing, was run once against
+the live page with the live Workspace still running, as a read of the restyled page: passed in 6.3 s
+(`path` `/workspace`, `channel` `joined`, `offline_line_shown` false, one conversation listed); the
+picture shows Phase 22's dark page with the `Workspace` link underlined in the bar, the `Conversations`
+heading, the one line `Ask a question to start a conversation.`, the question box and `Ask`. Read on
+prod at 19:49Z: `workspace_documents` 0, `workspace_document_text` 0, `workspace_text_embeddings` 0,
+objects in `workspace-uploads` 0, `workspace_ingest_heartbeat` 0 rows (the worker has never started),
+`workspace_conversations` not archived 1 (Stack's own, six days old), no sync or `inbox_feedback` request
+queued or claimed; `v_workspace_status` runner `workspace@9a02c3ccd37b`, polled 8 s ago.
+
+## Phase 24ab, the walk (2026-10-14, 20:00Z to 20:23Z)
+
+**Checked at 20:00:19Z, the moment before the window:** no sync or `inbox_feedback` request queued or
+claimed (the newest sync, 5088, done 17:59Z; the newest apply, 5089, done 19:26Z), no `accept.lock`, no
+`bb2dash-accept-` and no `bb2dash-walk22-` container. The live Workspace was stopped at 20:01Z
+(`docker compose stop workspace` from bb2dash-stack; the session's permission classifier refused the one
+command that stopped it and started the test runner together, and allowed the two apart). The test
+services came up from the worktree as project `bb2dash-wt24` on the rebuilt test tags, each alone:
+`workspace` at 20:01:30Z, healthy within 20 s, runner `workspace@ab3691098afa`, firewall 3 names;
+`workspace-extract` at 20:01:49Z, healthy; `workspace-ingest` at 20:02:01Z, healthy in 7 s, firewall 2
+names (the project host on 443, the session pooler on 5432), `db: connected as workspace_ingest_runner`,
+and the first row ever of `workspace_ingest_heartbeat` (id 1, `workspace-ingest@b99cf0482b74`, 20:02:01Z):
+task 48's login, proved live. `v_workspace_status` showed the test runner's heartbeat.
+
+**A sync ran inside the window, and it was not this session's.** Request 5091 (kind `sync`, scope `all`)
+was created 20:12:28Z, claimed by `sync-runner` and done 20:14:07Z; step 9's pictures show the Sync
+button reading `crawling…`. Nothing in this session starts a sync, so it was a press on the desktop or the
+web app. The planner read the same before and after (step 10), and the sync container's id and start time
+are the same at both ends of the window; the walk stands. The rules file's rule 3 speaks of a window that
+opens beside a sync; one that opens during a window is noted here.
+
+**The steps, each run once, in the spec's order, from `web/` with `ACCEPT=1 ACCEPT_ONLY="<title>"`, the
+saved session as `ACCEPT_STATE`, the output folder as `ACCEPT_OUT`, and from step 13 on a `carry.json`
+with step 11's `nonce_id` and `document_id` as `ACCEPT_IN`. The host proofs ran from the worktree with
+`node scripts/accept-proofs.mjs 24 <proof> --sha 1fdd6b6` and `since` 20:02:40Z. Every picture was looked at.**
+
+| step | request | tier · plan · retrieval | sources | what the page showed | host proof |
+|---|---|---|---|---|---|
+| 2 open workspace | – | – | – | the page as Phase 22 draws it: `Workspace` underlined in the bar, `Conversations` with one conversation, the empty-column line, the box, `Ask`; `channel` joined, no offline line (10.1 s) | – |
+| 3 course question | 831 | low · skipped · found 10 (1.8 s) | 10 materials (IST.323 syllabus doc 733, course-intro slides 11, 2 and 4, …; similarity 0.869 to 0.897) + the feed (98 rows) | `Haiku · lookup`, 248 characters, done in 9 s; cites the course introduction's slide 11 and names the file; `Used: search, planner_feed` | `turn-found` pass |
+| 4 lookup one turn | 832 | low · skipped · found 10 | 10 + feed; the model also called `search_materials` and `get_material_text` 733 itself | `Haiku · lookup`, 1,053 characters: the syllabus's section headings; the first line is a narration (`I'll search for …`) before the list (O-1) | `turn-lookup` pass, after 831 |
+| 5 standard plan | 833 | mid · planned (1.77 s, $0.0142) · found 10 (1.06 s) | 10 IST.352 slides and the syllabus (0.867 to 0.909) + feed | `Sonnet · standard`, 2,345 characters in 15 s; says plainly what the slides do not state and what is its own inference | `turn-planned` pass, after 832 |
+| 6 planner feed | 834 | low · skipped · found 10 | 10 + feed | `Haiku · lookup`, 1,154 characters: the two weeks' items with their dates, kinds and points, week by week | `turn-feed` pass (feeds 1), after 833 |
+| 7 follow-up | 835 | low · skipped · found 10 | 10 + feed, in 831's conversation | `Haiku · lookup`, 830 characters: the grading breakdown and scale, from the syllabus | `turn-followup` pass: same conversation, asked after 831, session id null |
+| 8 nothing matches | 836 | low · skipped · **found 7** | 7 materials at similarity **0.781 to 0.789** (ECN.304 slides 22, 24, 25; IST.466 page 10 and two slides 8; an IST.323 doc) + feed | `Haiku · lookup`, 309 characters; the first line is the model's own ("That's not a real term …"), not the fixed sentence | **FAIL**: the test (first line is not `LINES.empty`) and `turn-empty` (`retrieval_state` `found`, `found_n` 7). Defect D-1 below |
+| 9 stop then answer | 837, then 838 | mid, stopped; then low | – | `Sonnet · standard` stopped at 2,186 characters with `You stopped this answer.` under the text and the button back to `Ask`; then `Haiku · lookup`, 379 characters, in the same conversation | `turn-stopped` pass (state `cancelled`, the runner took it, the turn row stored); `turn-done-after-stop` pass |
+| 10 planner unchanged | – | – | – | – | pass by a direct read: no row of `assignment_progress` (88 rows, newest 18:02:00Z) or `reading_progress` (76, newest 18:00:15Z) changed since 20:02:40Z; `planner-fingerprint` read at 20:14:36Z `ap=2026-10-14T18:02:00.221319Z,rp=2026-10-14T18:00:15.629292Z,n=101,apn=88,rpn=76`. The go-live stage's `planner-fingerprint` was not run before the walk (the PM's omission), so the pack's `planner-unchanged` had no `before`; the direct read is the same fact |
+| 11 upload file | – | – | – | document 215: 189 bytes `text/plain`, sha256 `04bf9963…`, key `u/<sha>`, `stored`, `existing` false (8.3 s) | – |
+| 12 indexed, **P-7** | – | – | – | the row went from `stored` (20:15:18.98Z) to `indexed` (20:15:21.81Z); the worker's one log line: `document 215 indexed in 2408 ms (try 1)` | `upload-indexed` pass (one row holds the hash the proof derives from the nonce in SQL, `attempts` 0) |
+| 13 find upload | 839 | low · skipped · found 11 | 10 materials + **the upload** (215) + feed | `Haiku · lookup`, 104 characters: the memo's lamp, its hinges and its shade (23.5 s) | `turn-upload-found` pass (`source_is_the_upload`) |
+| 14 send twice | – | – | – | `rows_before` 1, `uploaded` false, `existing` true, `rows_after` 1 (5.8 s) | `upload-one-row` pass |
+| 15 delete upload | – | – | – | `deleting`, 1 object removed, `deleted`, 0 rows (6.1 s) | `upload-gone` pass; `conversations-unarchived` pass (7 made in the run, 0 listed) |
+| 16 the store | – | – | – | – | `store-extension` (0.8.2 in `extensions`), `store-vector-columns` (2), `store-vector-indexes` (2), `store-counts` (1,014 course units indexed, 0 waiting, 0 uploads, 0 memory, none indexed without a vector), `store-no-links` (0, 0, 0, 0): all pass |
+
+| probe | line |
+|---|---|
+| P-7 | **PASS.** The upload worker's first real download, through its firewall (2 names pinned, IPv6 closed), of the walk's synthetic file: registered `stored` at 20:15:18.98Z, `indexed` at 20:15:21.81Z, `indexed in 2408 ms (try 1)` in the worker's log, `attempts` 0, no error code, and the hash the proof derives from the nonce in SQL is the row's. A redirect or a refused host would have left the row `failed` with `download_failed`; it did not. The intermediate states `reading` and `text_ready` were not caught by a read (the whole pass took 2.4 s). The file was plain text, so the parser service was not called for it (its log holds only `parser: started`); the parser's own probe is P-11 |
+
+**D-1, the walk's one defect: a question made of invented words is `found`, not `empty`.** The runner's
+floor is 0.78 (`workspace/src/retrieve.ts:31`, passed to `workspace_search` as `min_similarity`), set from the
+measurement of 2026-09-09 in `mcp-server/src/config.ts:36-41`: relevant 0.830 to 0.920, nonsense English
+0.753 to 0.767, gibberish 0.818, "gibberish is the known gap". Pack 24's step 8 asks gibberish, and today it
+scored 0.781 to 0.789 on seven units, so the runner stored `found` and wrote no fixed line. The pack was
+written as if gibberish stayed under the floor; the brief (109, line 685) cites only the nonsense-English
+figure. The product's promise (Stack's answer 8) holds for real unrelated English at 0.78 and fails for
+gibberish. Ruling: raise the runner's floor, with a measurement, as a test-first change by W-96 (Opus) on
+`feat/workspace-24-floor`, cut from 1fdd6b6: the eval's nine golden cases and a set of gibberish and
+unrelated-English questions through the batch entry at 0.78, 0.80, 0.81 and 0.82; the floor is the lowest
+of those at which every gibberish and unrelated question returns nothing while the golden set keeps 8 of 9
+(9 of 9 counting case 7's replaced files); default 0.80. The materials server's own default stays 0.78 (the
+runner passes its own floor). Step 8 is walked again in a second, short window on the rebuilt test image
+after the fix is merged into the branch; step 3 is walked beside it as the control that a real question
+still finds its passages.
+
+**Seen, and not defects (for brief 111's "What the walk shows"):**
+* O-1. A lookup's answer may open with a narration line (`I'll search for the IST.323 syllabus document.`)
+  before the answer (step 4). The system prompt asks for the answer; the model narrates its own tool call.
+  24b's renderer shows the answer as written; a prompt line against narration is a 24b choice.
+* O-2. The page's `Used:` line names the model's own tool calls (`search_materials · IST.323`,
+  `get_material_text · 733`) beside the runner's `search` and `planner_feed` (steps 4, 5, 7, 9). On the new
+  page these belong in the Sources panel, not under the answer.
+* O-3. The planner feed is 98 rows on every turn and the prompt 12.9 to 15.1 KB; a lookup's retrieval takes
+  0.9 to 1.8 s, a planning turn 1.8 s; a lookup is answered in 7 to 20 s, the Standard question in 15 s.
+* O-4. Phase 22's page needed no change to the pack: every selector and every string the spec reads held on
+  the restyled page.
+* O-5. The go-live stage's `planner-fingerprint` must be read before the first question when the pack is
+  walked by hand; the acceptance run does it itself.
+
+**Closing the window.** 20:21:50Z the three test services stopped by name; their containers, the two
+networks `bb2dash-wt24_ingest-net` and `bb2dash-wt24_workspace-net` and the volume `bb2dash-wt24_ingest-exchange`
+removed by name; nothing of the project left. 20:22:45Z `docker compose start workspace` from bb2dash-stack:
+the container started 20:22:49Z, `runner started as workspace@9a02c3ccd37b`, `db: connected as
+workspace_runner`, healthy by 20:25Z, its heartbeat fresh. Read again: `bb2dash-sync-1` `6d007fa6448e…`,
+started 2026-10-13T09:53:57Z, the same; the four live image ids the same as before the window; the store 0
+documents, 0 units, 0 vectors, 0 objects (the walk's file deleted); conversations not archived 1 (Stack's
+own, as before); no request open; `workspace_requests` 831 to 839 are the window's nine;
+`workspace_ingest_heartbeat` keeps its one row. The output folder with the answers and pictures stays in
+the session's scratch folder and nothing of it is committed.
+
+**On the plan:** nine answers and one stopped answer, none on Opus: seven `Haiku · lookup` (831, 832, 834,
+835, 836, 838, 839), two `Sonnet · standard` (833; 837 stopped), and one Haiku planning turn (833's, $0.0142
+by the CLI's figure).
+
+## Phase 24ab: D-1 fixed, the second window, step 8 walked again (2026-10-14, 20:26Z to 20:37Z)
+
+W-96 (Opus, `feat/workspace-24-floor`, cut from 1fdd6b6) measured first, with a script kept as
+`workspace/scripts/eval-floor.mjs` (the key is read from a file named by an environment value and nothing
+of it is printed; the output is counts and similarities): on prod, read-only, limit 10, at floors 0.78,
+0.80, 0.81 and 0.82, the golden set's nine cases each hit their own truth file at every floor (case 7's
+original files too, so its replacements were not needed; the weakest best hit is case 9 at 0.837); the
+pack's question returned 7 hits at 0.78 (best 0.789) and none from 0.80 on; three more invented-word
+strings returned 10 hits each at 0.78 (best 0.795, 0.804 and 0.798), and one of them still one hit at
+0.80 (0.804); "What is the capital of France?" and a bicycle-tyre question returned nothing at any floor,
+and a 1998 World Cup question one hit at 0.78 (0.784) and none from 0.80 on. The rule picked **0.81**: the
+lowest of 0.80, 0.81 and 0.82 at which every must-find-nothing question returns nothing while the golden
+set keeps 9 of 9. Test first: `retrieve.test.ts` pinned 0.78 in two places (3 failed, 20 passed before
+the change); then `SIMILARITY_FLOOR = 0.81` and the header comment, the ordering test at the edge (0.81
+sorts above the floor, 0.805 below), and a test that pins the constant. Suites: workspace 1,008 (from
+1,007), typecheck clean; mcp-server 143, untouched. Commits d68aad2 (the measurement) and 5fc2572 (the
+fix), read by the PM in the diff (4 lines of `retrieve.ts`, 18 of the test; the script holds no secret),
+merged into the phase branch as 036cd28 and pushed. Left as they are, on the PM's ruling: the contract
+fixtures `batch-request.json` and `search-function.json` keep `min_similarity: 0.78` as the example
+value of the request's shape (`mcp-server/test/batch.test.ts:114` and the frozen function's own test
+`supabase/functions/workspace-search/search_test.ts:79` pin that example), and the materials server's
+`DEFAULT_MIN_SIMILARITY` stays 0.78 (the runner passes its own floor; the MCP tools of a Claude session
+keep the September measurement's rule).
+
+`bb2dash-workspace:wt24` was rebuilt from 036cd28 at 20:31Z: exit 0 in 79 s, id `b9a17226882f` (from
+`519d0472efbb`); `bb2dash-apply:wt24`, whose image copies `workspace/src`, at 20:37Z: `4adebe98f82e`
+(from `b6a858fa81a7`); `bb2dash-workspace-ingest:wt24` unchanged, `cb42974e6481`. The four live tags
+the same before and after each build.
+
+**The second window (20:33:00Z to 20:36:20Z).** Checked at 20:32:49Z: no request open (the newest, 5091,
+done), no `accept.lock`, no walk box, no acceptance container, no `bb2dash-wt24-` container. The live
+Workspace stopped at 20:33:00Z; the test runner alone (`up -d --no-deps workspace`) at 20:33:10Z, healthy
+in 8 s, `workspace@72678a37775b`; no ingest service, since this window uploads nothing. Walked in order
+into a second output folder; proofs with `--sha 036cd28` and `since` 20:33:30Z:
+
+| step | request | tier · plan · retrieval | similarities | what the page showed | proof |
+|---|---|---|---|---|---|
+| 3 course question (the control) | 840 | low · skipped · found 10 (2.2 s) | 0.868 to 0.891 | `Haiku · lookup`, 232 characters: slide 11's late-work line | `turn-found` pass |
+| 7 follow-up | 841 | low · skipped · found 10 (5.4 s) | 0.872 to 0.923 | `Haiku · lookup`, 452 characters: the grading breakdown; archives 840's conversation | `turn-followup` pass |
+| 8 nothing matches | 842 | low · skipped · **empty**, found 0 (1.0 s) | none (the one source row is the feed) | `Haiku · lookup`, 324 characters: **the first line is the fixed sentence**, then the model's own words; `first_line_is_the_fixed_sentence` true | **`turn-empty` pass** (`retrieval_state` `empty`, `found_n` 0, `content_sources` 0) |
+
+Closed at 20:36:10Z: the test runner stopped and removed, the network `bb2dash-wt24_workspace-net`
+removed, nothing of the project left; the live Workspace started at 20:36:20Z, healthy by 20:37:10Z,
+`workspace@9a02c3ccd37b` with a fresh heartbeat. Read again: the sync container the same; the four live
+ids the same; the store 0, 0, 0, 0; conversations not archived 1; no request open. On the plan: three
+Haiku lookups (840, 841, 842). With this every step of pack 24 has passed on the branch at least once,
+step 8 on the floor the branch now holds, and **the walk is done**; what it changed in the product is D-1
+alone.
+
+**What waits:** the two PRs' merge (bb2dash #97, opened 20:46Z; bb2dash-stack #8, opened 20:47Z; the
+bb2dash-stack suite read 359 of 359 at 21:12Z on Stack's word), the cut-over and `just accept 24`, each on his word.
+
+**`main` merged a second time (ade23cb, 20:5xZ).** PR #96 (Phase 23 closed out) moved `main` after the PRs were opened and GitHub marked #97 conflicting. Only `project-state/STATUS.md` and `ORCHESTRATOR.md` differed, each in its header line; both updates are kept, 24ab's first, then main's Phase 23 close-out, then the shared chain. No code or test file changed on either side, so no suite was touched by it.
+
+**`main` merged a third time (25fc603, 21:2xZ): migration 164.** Eighteen commits of the redirect-outside-links fix (ingest, sync, web, db tests, docs) landed on `main` while the stack suite ran. Conflicts: STATUS (the header and the known-issues block), DECISIONS (rows) and `sync/src/files.ts` (the return line: 164's `linked` count and 24a's `unitsPosted`, both kept). The types file regenerated from prod again (10 lines of 164's objects). Gates touched by the merge, re-run: sync typecheck and build clean, 181 tests (one of 164's expected no embed loop after a linked-only pass; it now expects 24a's one loop per pass; `test/integration.test.ts`'s end-to-end replay timed out in three of five full runs while the web suite or another run shared the laptop, and passed four times alone and in two full runs, serial and parallel, once the laptop was quiet: its wait is a count of 5,000 event-loop turns against real disk reads, Phase 14's test, unchanged by 164 or by 24a, noted under STATUS's known issues); `ingest/fetch_signed.test.mjs` 45; web typecheck, lint and build clean and 3,465 tests in 192 files after the merge (164 brought twelve), typecheck clean again on the regenerated types file.
+
+**`main` merged a fourth time (f8759c1, 21:4xZ): PR #103, Blackboard's file store as a signed host.** Seven commits (ingest's downloader and its test, eleven lines of `sync/test/files.test.ts`, STATUS, DECISIONS). Conflicts in STATUS (the 164 known-issue bullet, edited on both sides: main's newer wording kept, the branch's older tail removed) and DECISIONS (both rows). Gates touched, re-run: `ingest/fetch_signed.test.mjs` 51 of 51; the sync suite 182 of 182. The stale known-issue bullet on `phase18_123_file_sessions.sql` (corrected by the audit of 2026-10-09) is struck in the same commit.

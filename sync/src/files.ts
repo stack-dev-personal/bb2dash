@@ -17,7 +17,8 @@
  * `sync_file_outside_link(…)` and counted as `linked`; the target is never requested. A redirect to a Blackboard host off the allow-list stays `refused`. Keys and checks are `ingest/pull_files.mjs`'s
  * exported pure helpers; its `main`, whose update SQL is the owner's, is never run.
  *
- * Once at least one unit was posted, `ingest/embed_corpus.mjs`'s loop runs once, in-process; never on none.
+ * `ingest/embed_corpus.mjs`'s loop runs once on every pass, in-process, whether or not this pass posted a unit
+ * (Phase 24a); `report.ts` decides what a failure on a pass with no new unit means.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -292,13 +293,13 @@ export async function runFilesStep(p: FilesPorts): Promise<FilesStepResult> {
   }
   p.log(`files: ${pulled} pulled, ${linked} saved as links, ${notPulled.length} not pulled, ${unitsPosted} units posted`);
 
+  // Phase 24a: the loop runs on every pass, so a unit that could not embed last time is tried again
+  // even when this pass posted none. The report decides what a failure with no new unit means.
   let embedError: string | null = null;
-  if (unitsPosted > 0) {
-    const run = await p.embed();
-    if (run.code !== 0) embedError = `embed_corpus.mjs's loop ended ${run.code}: ${run.tail}`;
-  }
+  const run = await p.embed();
+  if (run.code !== 0) embedError = `embed_corpus.mjs's loop ended ${run.code}: ${run.tail}`;
 
-  return { files: { pulled, not_pulled: notPulled, ...(linked > 0 ? { linked } : {}) }, stopped, embedError };
+  return { files: { pulled, not_pulled: notPulled, ...(linked > 0 ? { linked } : {}) }, stopped, embedError, unitsPosted };
 }
 
 /** Storage and `bb_file_text` POSTs with the publishable key (`SB_ANON_KEY`), as pull_files.mjs does. */
