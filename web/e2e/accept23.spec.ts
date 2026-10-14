@@ -37,7 +37,7 @@
 
 import { randomInt } from 'node:crypto';
 import { expect, test, type BrowserContext, type Locator, type Page, type Request } from '@playwright/test';
-import { acceptSettings, readCarry, readFacts, requireCarried } from './accept.env';
+import { acceptSettings, stepId, type Facts } from './accept.env';
 import { acceptStep, registerAcceptHooks, type Recorder } from './accept.lib';
 import { CHECKOUT_ROOT, MINUTE_MS, openSettled, utcNow } from './walk21.lib';
 
@@ -90,6 +90,9 @@ const SYNC_UNCLAIMED = 'waiting on the container…';
 const TAB_NEEDS_YOU = /^Needs you/;
 const TAB_ANSWERED = /^Answered, not applied/;
 const TAB_ARCHIVED = /^Archived/;
+/** The three tabs by the name each shows before its count: what a step's facts say was selected when a shot was taken. */
+type TabName = 'Needs you' | 'Answered, not applied' | 'Archived';
+const TAB_BY_NAME: Readonly<Record<TabName, RegExp>> = { 'Needs you': TAB_NEEDS_YOU, 'Answered, not applied': TAB_ANSWERED, Archived: TAB_ARCHIVED };
 
 /** The word typed into a card's Answer box, and the reason typed into step 6's "why": the pack's own, no course text. */
 const ANSWER_WORD = 'accepted';
@@ -133,12 +136,22 @@ const TAG_RANDOM_DIGITS = 1000;
 
 const FIRST_STEP = '1';
 
-/** One number from step 1's facts: of this stage when step 1 ran here, else of the carry-over. */
+/**
+ * What step 1 has made so far, while it is the test that runs. Its facts file is written only when
+ * the test ends, and step 1 finds its own cards by the run tag before that.
+ */
+let stepOneSoFar: Facts = {};
+
+/** Notes one of step 1's ids in its facts and keeps it for the rest of the step. */
+function noteStepOne(rec: Recorder, ids: Readonly<Record<string, number>>): void {
+  rec.note(ids);
+  stepOneSoFar = { ...stepOneSoFar, ...ids };
+}
+
+/** One number from step 1's facts: of the running step 1, of this stage when step 1 ran here, else of the carry-over. */
 function fromStepOne(field: string): number {
   const settings = acceptSettings(process.env, CHECKOUT_ROOT);
-  const here = settings === null ? null : readFacts(settings.outDir, FIRST_STEP)?.[field];
-  if (typeof here === 'number' && Number.isSafeInteger(here) && here > 0) return here;
-  return requireCarried(readCarry(process.env['ACCEPT_IN']), FIRST_STEP, field, 'integer');
+  return stepId(stepOneSoFar, settings?.outDir ?? null, process.env['ACCEPT_IN'], FIRST_STEP, field);
 }
 
 const runTag = (): number => fromStepOne('run_tag_id');
@@ -213,8 +226,27 @@ async function openTab(page: Page, name: RegExp): Promise<void> {
   await expect(page.getByRole('tab', { name })).toHaveAttribute('aria-selected', 'true');
 }
 
-async function bringToTop(card: Locator): Promise<void> {
-  await card.evaluate((element) => element.scrollIntoView({ block: 'start' }));
+/** The top bar and the footer both lie over the page: a card is whole in a picture only when it is this far clear of each edge. */
+const SHOT_CLEAR_PX = 72;
+
+/**
+ * Takes a shot that is about one card. The card is brought whole into the picture, clear of the top
+ * bar and the footer, and the page moves no further than that takes: a card near the top of its
+ * list leaves the tab row in the picture, one far down the list does not. So the tab that is
+ * selected is checked here and noted in the facts (`tab_at_<shot>`), and no picture has to show it.
+ * (Run 20261009T122929Z: the card was scrolled to the very top, its title under the top bar and the
+ * tab row out of the picture, and the operator could not judge the step.)
+ */
+async function shootCard(page: Page, rec: Recorder, card: Locator, shot: string, tab: TabName): Promise<void> {
+  await expect(page.getByRole('tab', { name: TAB_BY_NAME[tab] }), `the ${tab} tab is selected`).toHaveAttribute('aria-selected', 'true');
+  await card.evaluate((element, clear) => {
+    // Scroll margins change where a scroll stops and nothing the page shows.
+    element.style.scrollMarginTop = `${clear}px`;
+    element.style.scrollMarginBottom = `${clear}px`;
+    element.scrollIntoView({ block: 'nearest' });
+  }, SHOT_CLEAR_PX);
+  rec.note({ [`tab_at_${shot}`]: tab });
+  await rec.shot(page, shot);
 }
 
 const textOf = async (locator: Locator): Promise<string | null> => ((await locator.count()) === 0 ? null : ((await locator.first().innerText()).trim() || null));
@@ -257,20 +289,44 @@ async function pressAndFile(page: Page, button: Locator): Promise<number> {
 interface ApplyWatch {
   /** The labels the button read, in order, each once. */
   labels: string[];
-  /** `done` or `failed` when the request closed, `waiting on the worker…` when nothing took it, null when the time ran out. */
+  /** `done` or `failed` when the request closed, `waiting on the worker…` when nothing took it, null when the time ran out or the queue emptied unseen. */
   endedAs: string | null;
+  /** True when the footer came to read `0 answered` while the button was at rest: a request closed that the page never saw open. */
+  emptiedUnseen: boolean;
 }
 
-async function watchApplyButton(page: Page, limitMs: number): Promise<ApplyWatch> {
+/**
+ * Watches the button. With `untilEmptied` it also ends when the footer reads `0 answered` while the
+ * button is at rest. That is how a request the page did not file can end: the page looks for one
+ * every 30 seconds while answers wait (`INBOX_APPLY_WATCH_MS`), and a request whose answers need no
+ * reading opens and closes in about five seconds (trial run 20261009T123422Z: request 5073, 12:38:03Z
+ * to 12:38:08Z), so the button may never leave its resting label.
+ */
+async function watchApplyButton(page: Page, limitMs: number, untilEmptied = false): Promise<ApplyWatch> {
   const until = Date.now() + limitMs;
   const labels: string[] = [];
   for (;;) {
     const label = await applyLabel(page);
     if (labels.at(-1) !== label) labels.push(label);
-    if (label === APPLY_DONE || label === APPLY_FAILED || label === APPLY_UNCLAIMED) return { labels, endedAs: label };
-    if (Date.now() > until) return { labels, endedAs: null };
+    if (label === APPLY_DONE || label === APPLY_FAILED || label === APPLY_UNCLAIMED) return { labels, endedAs: label, emptiedUnseen: false };
+    if (untilEmptied && label === APPLY_LABEL && (await footerCount(page).innerText()).trim() === NOTHING_ANSWERED) return { labels, endedAs: null, emptiedUnseen: true };
+    if (Date.now() > until) return { labels, endedAs: null, emptiedUnseen: false };
     await page.waitForTimeout(LOOK_EVERY_MS);
   }
+}
+
+/**
+ * What step 3 leaves when the sync's request closed without the page seeing it open: both answers
+ * under Archived, nothing pasted, and no result line, because a page cannot show the result of a
+ * request it never followed. The host's proof reads the request itself.
+ */
+async function recordClosedUnseen(page: Page, rec: Recorder, labels: readonly string[]): Promise<void> {
+  await openTab(page, TAB_ARCHIVED);
+  await expect(cardOf(page, 'confirm')).toBeVisible();
+  await expect(cardOf(page, 'dismiss')).toBeVisible();
+  await expect(page.locator('code').filter({ hasText: PASTE_COMMAND }), 'nothing was pasted: no command is shown').toHaveCount(0);
+  rec.note({ labels_seen: [...labels], ended_as: null, status_line: await statusLine(page), count_at_end: (await footerCount(page).innerText()).trim(), archived_tab_shows: ['confirm', 'dismiss'] });
+  await shootCard(page, rec, cardOf(page, 'confirm'), 'done', 'Archived');
 }
 
 /** What a closed request leaves on the page: its result line, no paste command, and no answer left waiting. */
@@ -318,7 +374,7 @@ async function raiseQuestion(page: Page, session: Session, tag: number, label: L
 // Step 1: raise the four questions, then confirm the first and dismiss the second in the Inbox.
 acceptStep('1 raise questions', { shots: ['raised', 'answered'] }, async ({ page, context }, rec) => {
   const tag = Number(`${Math.floor(Date.now() / 1000)}${String(randomInt(TAG_RANDOM_DIGITS)).padStart(3, '0')}`);
-  rec.note({ run_tag_id: tag });
+  noteStepOne(rec, { run_tag_id: tag });
 
   // A read the page makes as the signed-in owner: its bearer token is not the public key itself.
   const firstRead = page.waitForRequest(async (request) => {
@@ -332,15 +388,14 @@ acceptStep('1 raise questions', { shots: ['raised', 'answered'] }, async ({ page
   const items: Record<Label, number> = { confirm: 0, dismiss: 0, note: 0, offline: 0 };
   for (const label of ['confirm', 'dismiss', 'note', 'offline'] as const) {
     items[label] = await raiseQuestion(page, session, tag, label);
-    rec.note({ [`${label}_item_id`]: items[label] });
+    noteStepOne(rec, { [`${label}_item_id`]: items[label] });
   }
   await allowWrites(context, [{ method: 'PATCH', table: 'attention_items', items: [items.confirm, items.dismiss] }]);
 
   await openInbox(page);
   for (const label of ['confirm', 'dismiss', 'note', 'offline'] as const) await expect(cardOf(page, label)).toBeVisible();
   rec.note({ cards_seen_open: 4 });
-  await bringToTop(cardOf(page, 'confirm'));
-  await rec.shot(page, 'raised');
+  await shootCard(page, rec, cardOf(page, 'confirm'), 'raised', 'Needs you');
 
   await saveCard(page, cardOf(page, 'confirm'), null);
   await expect(cardOf(page, 'confirm')).toHaveCount(0);
@@ -354,8 +409,7 @@ acceptStep('1 raise questions', { shots: ['raised', 'answered'] }, async ({ page
   await expect(cardOf(page, 'note')).toHaveCount(0);
   await expect(cardOf(page, 'offline')).toHaveCount(0);
   rec.note({ answered_tab_shows: ['confirm', 'dismiss'] });
-  await bringToTop(cardOf(page, 'confirm'));
-  await rec.shot(page, 'answered');
+  await shootCard(page, rec, cardOf(page, 'confirm'), 'answered', 'Answered, not applied');
 });
 
 // Step 2: Sync is pressed in the top bar, and the sync container takes the request.
@@ -389,25 +443,26 @@ acceptStep('3 watch apply', { shots: ['watching', 'done'] }, async ({ page }, re
   test.setTimeout(SYNC_WATCH_TEST_MS);
   await openInbox(page);
   const countAtStart = (await footerCount(page).innerText()).trim();
-  rec.note({ watch_started_at: utcNow(), label_at_start: await applyLabel(page), count_at_start: countAtStart, closed_before_the_page_opened: false });
+  rec.note({ watch_started_at: utcNow(), label_at_start: await applyLabel(page), count_at_start: countAtStart, closed_before_the_page_opened: false, closed_between_two_looks: false });
   await rec.shot(page, 'watching');
 
   if (countAtStart === NOTHING_ANSWERED) {
     // The sync and the apply request it filed both ended before this page opened (the operator looks at step 2's pictures
     // between the two tests, and a sync takes about two minutes). A page cannot follow a request it never saw open,
     // so it shows no result line; the answers are archived and none waits. The host's proof checks the request itself.
-    await openTab(page, TAB_ARCHIVED);
-    await expect(cardOf(page, 'confirm')).toBeVisible();
-    await expect(cardOf(page, 'dismiss')).toBeVisible();
-    await expect(page.locator('code').filter({ hasText: PASTE_COMMAND }), 'nothing was pasted: no command is shown').toHaveCount(0);
-    rec.note({ closed_before_the_page_opened: true, labels_seen: [await applyLabel(page)], ended_as: null, status_line: await statusLine(page) });
-    await bringToTop(cardOf(page, 'confirm'));
-    await rec.shot(page, 'done');
+    rec.note({ closed_before_the_page_opened: true });
+    await recordClosedUnseen(page, rec, [await applyLabel(page)]);
     return;
   }
 
-  const watch = await watchApplyButton(page, SYNC_WATCH_MS);
+  const watch = await watchApplyButton(page, SYNC_WATCH_MS, true);
   rec.note({ labels_seen: watch.labels, ended_as: watch.endedAs });
+  if (watch.emptiedUnseen) {
+    // The request opened and closed between two of the page's own looks for one: the answers are archived and none waits.
+    rec.note({ closed_between_two_looks: true });
+    await recordClosedUnseen(page, rec, watch.labels);
+    return;
+  }
   if (watch.endedAs === null) throw new Error('inconclusive: the sync was still running after nine minutes');
   if (watch.endedAs === APPLY_UNCLAIMED) throw new Error('the apply worker did not take the request: the button read waiting on the worker');
   await expectClosedClean(page, rec, watch);
@@ -431,8 +486,7 @@ acceptStep('4 archived', { shots: ['answered', 'archived'] }, async ({ page }, r
   await expect(cardOf(page, 'confirm')).toContainText('archived');
   await expect(cardOf(page, 'dismiss')).toContainText('archived');
   rec.note({ archived_tab_shows: ['confirm', 'dismiss'] });
-  await bringToTop(cardOf(page, 'confirm'));
-  await rec.shot(page, 'archived');
+  await shootCard(page, rec, cardOf(page, 'confirm'), 'archived', 'Archived');
 });
 
 // Step 6: the third question is confirmed with a reason; a press of Apply answers runs by itself, through one Claude run.
@@ -449,8 +503,7 @@ acceptStep('6 note and apply', { shots: ['saved', 'done'] }, async ({ page, cont
   await expect(cardOf(page, 'note')).toBeVisible();
   await expect(footerCount(page)).toHaveText('1 answered');
   rec.note({ saved_with_a_reason: true });
-  await bringToTop(cardOf(page, 'note'));
-  await rec.shot(page, 'saved');
+  await shootCard(page, rec, cardOf(page, 'note'), 'saved', 'Answered, not applied');
 
   const button = applyButton(page);
   await expect(button).toHaveText(APPLY_LABEL);
@@ -466,8 +519,7 @@ acceptStep('6 note and apply', { shots: ['saved', 'done'] }, async ({ page, cont
   await expectClosedClean(page, rec, watch);
   await openTab(page, TAB_ARCHIVED);
   await expect(cardOf(page, 'note')).toBeVisible();
-  await bringToTop(cardOf(page, 'note'));
-  await rec.shot(page, 'done');
+  await shootCard(page, rec, cardOf(page, 'note'), 'done', 'Archived');
 });
 
 /* ---------------------------------------------------------------------------
@@ -506,6 +558,8 @@ acceptStep('7a offline press', { shots: ['queued', 'waiting', 'command'] }, asyn
   await expect(command).toBeVisible();
   const shown = ((await command.first().innerText()) ?? '').trim();
   rec.note({ command_shown: true, command_names_the_request: shown === `claude "/inbox-apply ${requestId}"` });
+  // The picture is for the command: it is brought into the window first, wherever the page put its box.
+  await command.first().scrollIntoViewIfNeeded();
   await rec.shot(page, 'command');
   expect(shown, 'the command names the request that was filed').toBe(`claude "/inbox-apply ${requestId}"`);
 });
@@ -530,6 +584,5 @@ acceptStep('7b taken after', { shots: ['archived'] }, async ({ page }, rec) => {
   await expect(cardOf(page, 'offline')).toContainText('archived');
   await expect(footerCount(page)).toHaveText(NOTHING_ANSWERED);
   rec.note({ archived_tab_shows: ['offline'], nothing_answered: true });
-  await bringToTop(cardOf(page, 'offline'));
-  await rec.shot(page, 'archived');
+  await shootCard(page, rec, cardOf(page, 'offline'), 'archived', 'Archived');
 });

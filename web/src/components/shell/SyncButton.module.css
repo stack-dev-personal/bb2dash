@@ -1,4 +1,4 @@
-/* Sync button — sits in the top bar next to the ⌘K affordance. */
+/* Sync button — sits in the top bar next to the search icon. A pill in the secondary button's colours. */
 
 .wrap {
   position: relative;
@@ -8,51 +8,55 @@
 
 .button {
   all: unset;
+  app-region: no-drag;
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 5px 10px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-divider);
-  color: var(--color-neutral-300);
+  padding: var(--size-5) var(--size-10);
+  border-radius: var(--radius-control);
+  border: var(--size-underline) solid var(--color-neutral-600);
+  background: var(--color-neutral-900);
+  color: var(--color-neutral-200);
   font-size: var(--text-sm);
   white-space: nowrap;
   cursor: pointer;
+  user-select: none;
+  -webkit-user-drag: none;
+  transition: var(--motion-control);
 }
 .button:hover:not(:disabled) {
-  background: var(--color-hover);
+  background: var(--color-neutral-800);
   color: var(--color-text);
   border-color: var(--color-accent);
 }
-.button:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
+.button:active:not(:disabled) {
+  transform: scale(0.98);
 }
+.button:focus-visible {
+  outline: var(--size-focus) solid var(--color-accent);
+  outline-offset: var(--size-focus-gap);
+}
+/* Disabled only while the request is in flight: half strength, and the pointer says it is working. */
 .button:disabled {
-  opacity: 0.55;
+  opacity: 0.5;
   cursor: progress;
 }
 
 .button svg {
-  width: 14px;
-  height: 14px;
+  width: var(--size-14);
+  height: var(--size-14);
   fill: currentColor;
   display: block;
 }
 
-/* The arrows circle while the sync container works the request (`data-live`). */
+/* The arrows circle while the sync container works the request (`data-live`). Under reduced
+   motion the global reduce block stops them; the label already names the phase. */
 .button[data-live] svg {
-  animation: sync-spin 1.1s linear infinite;
+  animation: sync-spin var(--motion-spin) var(--ease-linear) infinite;
 }
 @keyframes sync-spin {
   to {
     transform: rotate(360deg);
-  }
-}
-/* Reduced motion: the label already names the phase, so the arrows stand still. */
-@media (prefers-reduced-motion: reduce) {
-  .button[data-live] svg {
-    animation: none;
   }
 }
 
@@ -60,14 +64,20 @@
 .stack {
   position: absolute;
   z-index: 30;
-  top: 38px;
+  top: var(--size-toast-top);
   right: 0;
-  width: 320px;
+  width: var(--size-toast-width);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
 }
 
+/* The alert and the toast open from the bar: no-drag (Electron's drag regions ignore stacking). */
+.stack {
+  app-region: no-drag;
+}
+
+/* A toast arrives from under its control: it fades in and drops by one panel distance. */
 .toast {
   display: flex;
   flex-direction: column;
@@ -75,7 +85,25 @@
   padding: var(--space-3);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
-  box-shadow: var(--shadow-lg), 0 0 0 1px var(--color-divider);
+  box-shadow: var(--shadow-lg), 0 0 0 var(--size-underline) var(--color-divider);
+  transition:
+    opacity var(--motion-enter) var(--ease-out),
+    transform var(--motion-enter) var(--ease-out);
+}
+@starting-style {
+  .toast {
+    opacity: 0;
+    transform: translateY(calc(var(--motion-shift) * -1));
+  }
+}
+/* Leaving: a closing panel stays for one exit (useExit.ts), shorter than it arrived, and takes no presses. */
+.toast[data-leaving] {
+  opacity: 0;
+  transform: translateY(calc(var(--motion-shift) * -1));
+  pointer-events: none;
+  transition:
+    opacity var(--motion-exit) var(--ease-in),
+    transform var(--motion-exit) var(--ease-in);
 }
 
 .toastLine {
@@ -100,23 +128,33 @@
   font-size: var(--text-sm);
   color: var(--color-accent-200);
   text-decoration: none;
+  transition: var(--motion-control);
 }
 .toastLink:hover {
   text-decoration: underline;
 }
+.toastLink:active {
+  opacity: 0.7;
+}
 
 .toastDismiss {
   all: unset;
+  app-region: no-drag;
   cursor: pointer;
   font-size: var(--text-sm);
   color: var(--color-neutral-500);
+  user-select: none;
+  transition: var(--motion-control);
 }
 .toastDismiss:hover {
   color: var(--color-text);
 }
+.toastDismiss:active {
+  background: var(--color-active);
+}
 .toastDismiss:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
+  outline: var(--size-focus) solid var(--color-accent);
+  outline-offset: var(--size-focus-gap);
 }
 
 .command {
@@ -136,8 +174,46 @@
   font-size: var(--text-sm);
 }
 
+/* The label's own span. Above 1023.98px it is as wide as its words. */
+.label {
+  min-width: 0;
+}
+
+/* The unfolded bar, search collapsed, must fit the desktop window's 900px minimum with the
+   longest label (brief 103, "The fold"): the label gives way with an ellipsis. Its title holds
+   the full label. */
+@media (max-width: 1023.98px) {
+  .label {
+    max-width: var(--size-sync-label-max);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+/* At 480px and below the button shows its icon only. The label stays in the DOM for the
+   accessible name: these are .sr-only's declarations (globals.css), copied. */
+@media (max-width: 480px) {
+  .label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+
 @media (max-width: 720px) {
+  /* The toast's box is .stack. Anchored to the button it would start left of the viewport, so the
+     button stops being its containing block and the bar's right-hand group (TopNav .right) takes
+     over: .stack ends at the bar's right edge. */
+  .wrap {
+    position: static;
+  }
   .stack {
-    width: min(320px, calc(100vw - 28px));
+    width: min(var(--size-toast-width), calc(100vw - var(--size-panel-gutter)));
   }
 }
