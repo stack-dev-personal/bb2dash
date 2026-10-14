@@ -58,7 +58,7 @@ Supabase project: `goultdzqcavefcgnifdy` (us-east-1, Postgres 17). Full access v
   superseded on 2026-09-16 (DECISIONS).
 * Retrieval: hybrid mode of the `search` edge function is the default (see EVAL doc).
   Search UIs must scrub/label PPTX `[notes]` speaker-note markers and `Page N` headers.
-* GUI: layout spec = the Nocturne artboards; CSS Modules + custom properties, no Tailwind.
+* GUI: layout spec = the Nocturne artboards; styling = direction D "Charcoal" (Phase 22, merged 2026-10-14): the tokens in `web/src/app/globals.css` (dark by default, a light block, the Dark / Light / Auto control in the account menu), the design system under `design-system/bb2dash/`, the token audit as a ratchet in `npm test` (`web/test/token-audit.*`, baselines at 0); CSS Modules + custom properties, no Tailwind.
   No fabricated numbers anywhere — no grade display until real gradebook data exists.
 * Workspace (Phase 21): a chat page at `/workspace`. A container runner answers each question with one
   `claude -p` turn of the pinned CLI (2.1.289) on Stack's Claude subscription: no API key, never `--bare`,
