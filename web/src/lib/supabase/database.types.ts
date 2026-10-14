@@ -906,6 +906,7 @@ export type Database = {
           local_path: string | null
           mime_type: string | null
           notes: string | null
+          outside_url: string | null
           path: string | null
           reading_id: number | null
           run_id: string | null
@@ -936,6 +937,7 @@ export type Database = {
           local_path?: string | null
           mime_type?: string | null
           notes?: string | null
+          outside_url?: string | null
           path?: string | null
           reading_id?: number | null
           run_id?: string | null
@@ -966,6 +968,7 @@ export type Database = {
           local_path?: string | null
           mime_type?: string | null
           notes?: string | null
+          outside_url?: string | null
           path?: string | null
           reading_id?: number | null
           run_id?: string | null
@@ -3623,6 +3626,7 @@ export type Database = {
       v_bb_files_current: {
         Row: {
           assignment_id: string | null
+          attempt_id: string | null
           bb_course_id: string | null
           bb_modified_at: string | null
           bucket: Database["public"]["Enums"]["file_bucket"] | null
@@ -3639,6 +3643,7 @@ export type Database = {
           local_path: string | null
           mime_type: string | null
           notes: string | null
+          outside_url: string | null
           path: string | null
           reading_id: number | null
           run_id: string | null
@@ -3652,6 +3657,7 @@ export type Database = {
         }
         Insert: {
           assignment_id?: string | null
+          attempt_id?: string | null
           bb_course_id?: string | null
           bb_modified_at?: string | null
           bucket?: Database["public"]["Enums"]["file_bucket"] | null
@@ -3668,6 +3674,7 @@ export type Database = {
           local_path?: string | null
           mime_type?: string | null
           notes?: string | null
+          outside_url?: string | null
           path?: string | null
           reading_id?: number | null
           run_id?: string | null
@@ -3681,6 +3688,7 @@ export type Database = {
         }
         Update: {
           assignment_id?: string | null
+          attempt_id?: string | null
           bb_course_id?: string | null
           bb_modified_at?: string | null
           bucket?: Database["public"]["Enums"]["file_bucket"] | null
@@ -3697,6 +3705,7 @@ export type Database = {
           local_path?: string | null
           mime_type?: string | null
           notes?: string | null
+          outside_url?: string | null
           path?: string | null
           reading_id?: number | null
           run_id?: string | null
@@ -5180,6 +5189,10 @@ export type Database = {
         Returns: undefined
       }
       sync_enqueue: { Args: { p_trigger: string }; Returns: number }
+      sync_file_outside_link: {
+        Args: { p_id: number; p_url: string }
+        Returns: boolean
+      }
       sync_file_stored: {
         Args: {
           p_bytes: number

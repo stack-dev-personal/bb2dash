@@ -120,7 +120,8 @@ Supabase project: `goultdzqcavefcgnifdy` (us-east-1, Postgres 17). Full access v
   client-side (RLS is the boundary). Since Phase 14 (R-28) the sync runs in Docker: the `sync`
   container (`compose.yaml`, `docker/sync/`, `sync/`) holds Blackboard's login, logs in through
   `http://127.0.0.1:6080/vnc.html`, and reaches the database only as the `sync_runner` role through its
-  SECURITY DEFINER functions (091, 093). Secrets live in `SECRETS_DIR` (`C:/Users/stack/.bb2dash-secrets/`),
+  SECURITY DEFINER functions (091, 093; fifteen since 164, which added `sync_file_outside_link`: a file whose
+  link redirects to another site is saved as `bb_files.outside_url` and never requested). Secrets live in `SECRETS_DIR` (`C:/Users/stack/.bb2dash-secrets/`),
   outside every repo; the service key's only home is `bb2dash_mcp_service_key` there. Never
   `docker compose up` or recreate `sync` while a sync is open, and never touch the `bb-profile` volume (it is
   the login). The Windows `/bb-sync` skill stays the fallback. Keep OS-bound code behind thin adapters.

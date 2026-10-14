@@ -59,7 +59,7 @@ inferred. `inferred` = existence inferred (placeholders like "quiz series").
 | `bb_material_history` | per-crawl history: one row per content item or file that appeared, changed or vanished in a registered crawl (132) | transform (`material_history_record`) |
 | `sync_runs` | provenance log per capture | sync jobs |
 | `bb_raw` | raw crawl payload per (run, course) | crawler |
-| `bb_files` | harvested file: bucket, links, hash, storage + local paths | bb-course-pull |
+| `bb_files` | harvested file: bucket, links, hash, storage + local paths; `outside_url` (164) is where a Blackboard file's link redirects when that is another site: http(s), at most 2048 characters, set only by the sync runner's `sync_file_outside_link`, never requested. A row with one (like a row whose `source_url` is off Blackboard, 161) is an **outside link**: no bytes to pull, no `storage_path` gap, "Outside link" in Materials, which opens it. Null otherwise | bb-course-pull; sync runner (`outside_url`) |
 | `bb_file_text` | extracted text unit (slide/page/doc/sheet) per file | bb-course-pull |
 | `course_maps` | versioned per-course pull plan (jsonb) | bb-course-map |
 | `bb_text_embeddings` | vector embedding per (text unit, model, part) | embed job (pending) |
