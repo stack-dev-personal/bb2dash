@@ -2005,7 +2005,7 @@ Remaining advisor items: ~~7 pre-existing mutable `search_path` functions (`set_
   report line reads "Files: N pulled, M saved as links, K not pulled". `sync_runner` executes fifteen
   functions now. `v_bb_files_current` is re-created so it carries `outside_url` (and `attempt_id`). What is
   still unknown at the build: where the five redirect. **Live 2026-10-14** (#98 `926e8e6`, 164 on prod
-  21:53 version `20261014205334` byte-identical, test fix #99, classifier fix #100 `a5a1c73`; `sync` rebuilt
+  20:53Z, version `20261014205334`, byte-identical, test fix #99, classifier fix #100 `a5a1c73`; `sync` rebuilt
   alone twice, login kept). **Sync 5371 answered it: all five, and the new IST.323 file 3736, redirect to
   `prod02-use1-prod02-xythos.prod.files.blackboard.com`, Blackboard's own file store.** So they are not
   outside links and stay flagged, now with that host named; 3713 answers 404. Pulling their bytes needs
