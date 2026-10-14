@@ -117,18 +117,37 @@ function hostOf(url) {
  *
  * The same rule lives in SQL as `sync_file_outside_link` (164); keep the two in step.
  */
-export function classifyRedirectTarget(url) {
-  if (typeof url !== 'string' || url === '' || url.length > MAX_LINK_LENGTH) return 'unusable';
-  if (/[\s\u0000-\u001f\u007f]/.test(url)) return 'unusable';
+/**
+ * Why a redirect target is 'unusable', in words a report can carry, or null when it is not. The host
+ * is named only where naming it is safe: never for credentials or an IP address.
+ *
+ * The host is judged BEFORE the length (sync 5370, 2026-10-14): a long signed address on a Blackboard
+ * content host is Blackboard's file, and its host is the one fact the report must carry. The length
+ * limit is for a link that would be kept, so it is checked last.
+ */
+export function unusableReason(url) {
+  if (typeof url !== 'string' || url === '') return 'no address';
+  if (/[\s\u0000-\u001f\u007f]/.test(url)) return 'whitespace or a control character in the address';
   let u;
-  try { u = new URL(url); } catch { return 'unusable'; }
-  if (u.protocol !== 'http:' && u.protocol !== 'https:') return 'unusable';
-  if (u.username || u.password || u.href.length > MAX_LINK_LENGTH) return 'unusable';
+  try { u = new URL(url); } catch { return 'an address that does not parse'; }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return 'not http(s)';
+  if (u.username || u.password) return 'credentials in the address';
   const host = u.hostname.toLowerCase().replace(/\.$/, '');
-  if (host === '' || isIpLiteral(host)) return 'unusable';
-  if (host === 'localhost' || host.endsWith('.localhost')) return 'unusable';
+  if (host === '' || isIpLiteral(host)) return 'an IP address';
+  if (host === 'localhost' || host.endsWith('.localhost')) return 'localhost';
+  if (BLACKBOARD_FAMILY.some((domain) => onDomain(host, domain))) return null;
+  if (!host.includes('.')) return 'a single-label host';
+  if (LOGIN_HOSTS.some((h) => onDomain(host, h)) || UNIVERSITY_DOMAINS.some((d) => onDomain(host, d))) return null;
+  if (carriesSignature(u)) return null;
+  if (url.length > MAX_LINK_LENGTH || u.href.length > MAX_LINK_LENGTH) return `longer than ${MAX_LINK_LENGTH} characters at ${host}`;
+  return null;
+}
+
+export function classifyRedirectTarget(url) {
+  if (unusableReason(url) !== null) return 'unusable';
+  const u = new URL(url);
+  const host = u.hostname.toLowerCase().replace(/\.$/, '');
   if (BLACKBOARD_FAMILY.some((domain) => onDomain(host, domain))) return 'blackboard';
-  if (!host.includes('.')) return 'unusable';
   if (LOGIN_HOSTS.some((h) => onDomain(host, h)) || UNIVERSITY_DOMAINS.some((d) => onDomain(host, d))) return 'login';
   if (carriesSignature(u)) return 'signed';
   return 'outside';
@@ -258,7 +277,7 @@ export async function resolveSignedUrl(get, durableUrl) {
         // A signed URL expires; keeping it as a link would keep a dead one. Host only: it carries the signature.
         return { outcome: 'refused', reason: `redirect target at ${hostOf(next)} is a signed URL, not a link to keep`, hops };
       }
-      return { outcome: 'refused', reason: 'redirect target is not followable (origin or scheme) and not a usable link', hops };
+      return { outcome: 'refused', reason: `redirect target is not followable and not a usable link: ${unusableReason(next) ?? 'unknown'}`, hops };
     }
 
     hops.push(next);

@@ -519,3 +519,41 @@ test('resolveSignedUrl: a Blackboard-served chain to the CDN is unchanged', asyn
   const got = await resolveSignedUrl(get, DURABLE);
   assert.deepEqual(got, { outcome: 'ok', signedUrl: SIGNED, hops: [DURABLE, SIGNED] });
 });
+
+// Sync 5370 (2026-10-14): six files came back "not a usable link" and the report named nothing. A
+// long signed address on a Blackboard content host was judged by its length before its host, so the
+// one fact needed (which host) was lost. The host decides first; the length matters only for a link
+// that would be kept; and an unusable target says which check it failed.
+
+test('classifyRedirectTarget: the host decides before the length; a long Blackboard address is a Blackboard host', () => {
+  const longQuery = `?Policy=${'p'.repeat(2100)}&Signature=s&Key-Pair-Id=k`;
+  assert.equal(classifyRedirectTarget(`https://us-east-1.learn.blackboardcdn.com/f.pdf${longQuery}`), 'blackboard');
+  assert.equal(classifyRedirectTarget(`https://login.microsoftonline.com/x${longQuery}`), 'login');
+  assert.equal(classifyRedirectTarget(`https://files.example.org/f.pdf${longQuery}`), 'signed');
+  assert.equal(classifyRedirectTarget(`https://example.com/${'a'.repeat(2100)}`), 'unusable');
+});
+
+test('resolveSignedUrl: a long redirect to a Blackboard content host is refused with that host named', async () => {
+  const target = `https://us-east-1.learn.blackboardcdn.com/f.pdf?Policy=${'p'.repeat(2100)}&Signature=s`;
+  const got = await resolveSignedUrl(fakeGet({ [DURABLE]: redirect(target) }), DURABLE);
+  assert.equal(got.outcome, 'refused');
+  assert.ok(got.reason.includes('us-east-1.learn.blackboardcdn.com'), got.reason);
+  assert.ok(!got.reason.includes('Policy'), got.reason);
+});
+
+test('resolveSignedUrl: an unusable redirect target says which check it failed, naming the host only where that is safe', async () => {
+  const cases = [
+    [`https://example.com/${'a'.repeat(2100)}`, /longer than 2048 characters/, 'example.com'],
+    ['ftp://example.com/x', /not http\(s\)/, null],
+    ['https://intranet/x', /single-label host/, null],
+    ['https://10.0.0.5/x', /an IP address/, null],
+    ['https://user:secret@example.com/x', /credentials/, null],
+  ];
+  for (const [target, why, host] of cases) {
+    const got = await resolveSignedUrl(fakeGet({ [DURABLE]: redirect(target) }), DURABLE);
+    assert.equal(got.outcome, 'refused', target.slice(0, 40));
+    assert.match(got.reason, why, target.slice(0, 40));
+    if (host) assert.ok(got.reason.includes(host), got.reason);
+    assert.ok(!got.reason.includes('secret') && !got.reason.includes('10.0.0.5'), got.reason);
+  }
+});
