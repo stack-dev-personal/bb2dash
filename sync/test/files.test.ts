@@ -190,6 +190,17 @@ describe('the files step', () => {
     expect(p.storagePost).not.toHaveBeenCalled();
   });
 
+  it('a file whose link redirects to Blackboard\'s file store is pulled, and the file store is downloaded from, never hopped to', async () => {
+    const fileStore = 'https://prod02-use1-prod02-xythos.prod.files.blackboard.com/xythoswfs/webui/_xy-1?X-Blackboard-Signature=abc';
+    const hop = vi.fn(async () => ({ status: 302, headers: { location: fileStore } }));
+    const { p, stored, linked } = ports([row('12')], { hop });
+    const r = await runFilesStep(p);
+    expect(r.files).toEqual({ pulled: 1, not_pulled: [] });
+    expect(stored.map((s) => s.id)).toEqual(['12']);
+    expect(linked).toEqual([]);
+    expect(hop).toHaveBeenCalledTimes(1);
+    expect(p.fetchSigned).toHaveBeenCalledWith(fileStore);
+  });
   it('refused (a redirect to a Blackboard host off the allow-list) is reported in not_pulled with the host, never stored or linked', async () => {
     const hop = vi.fn(async () => ({ status: 302, headers: { location: 'https://learn.blackboardcdn.com/x.pdf?X-Amz-Signature=beef' } }));
     const { p, stored, linked } = ports([row('32')], { hop });

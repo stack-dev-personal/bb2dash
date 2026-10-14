@@ -2119,6 +2119,14 @@ Remaining advisor items: ~~7 pre-existing mutable `search_path` functions (`set_
   20:53Z, version `20261014205334`, byte-identical, test fix #99, classifier fix #100 `a5a1c73`; `sync` rebuilt
   alone twice, login kept). **Sync 5371 answered it: all five, and the new IST.323 file 3736, redirect to
   `prod02-use1-prod02-xythos.prod.files.blackboard.com`, Blackboard's own file store.** So they are not
+  outside links and stay flagged, now with that host named; 3713 answers 404. **Then, on Stack's word
+  ("continue"), branch `fix/file-store-allowlist`:** Blackboard's file store, `*.prod.files.blackboard.com`
+  (narrowest pattern seen; never `*.files.blackboard.com` or `*.blackboard.com`), joins the CDN as a signed
+  host (`SIGNED_HOST_SUFFIXES` in `ingest/fetch_signed.mjs`). A signed host is downloaded from without
+  cookies and is never requested by the logged-in walk, so the Blackboard session still goes only to
+  Blackboard's own origin; a signed host must now also be https. If the file store refuses a cookie-free
+  download, the files stay flagged and nothing is widened further without Stack. `phase18_post_embed_checks`
+  fails on these six until they are pulled.
   outside links and stay flagged, now with that host named; 3713 answers 404. Pulling their bytes needs
   the download allow-list to take Blackboard's file-store hosts (`*.prod.files.blackboard.com`), a change
   to the guard on what the logged-in walk may request: planned on its own, on Stack's word.

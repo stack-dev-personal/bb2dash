@@ -24,6 +24,7 @@ import {
   MAX_HOPS,
   LOGIN_HOSTS,
   SIGNED_HOST_SUFFIX,
+  SIGNED_HOST_SUFFIXES,
   UNIVERSITY_DOMAINS,
   classifyRedirectTarget,
   downloadTo,
@@ -555,5 +556,75 @@ test('resolveSignedUrl: an unusable redirect target says which check it failed, 
     assert.match(got.reason, why, target.slice(0, 40));
     if (host) assert.ok(got.reason.includes(host), got.reason);
     assert.ok(!got.reason.includes('secret') && !got.reason.includes('10.0.0.5'), got.reason);
+  }
+});
+
+// ---------------------------------------------------------------------------------------------
+// Blackboard's file store (sync 5371, 2026-10-14): files 3711, 3712, 3730, 3731 and 3736 redirect to
+// prod02-use1-prod02-xythos.prod.files.blackboard.com. Their bytes are Blackboard's and owed, so the
+// file store joins the signed hosts: downloaded without cookies, never requested by the logged-in walk.
+
+const FILE_STORE = 'https://prod02-use1-prod02-xythos.prod.files.blackboard.com/xythoswfs/webui/_xy-1?X-Blackboard-Signature=abc&X-Blackboard-Expiration=1';
+
+test('SIGNED_HOST_SUFFIXES: the CDN first, then the file store, and nothing wider', () => {
+  assert.deepEqual(SIGNED_HOST_SUFFIXES, ['.content.blackboardcdn.com', '.prod.files.blackboard.com']);
+  assert.equal(SIGNED_HOST_SUFFIXES[0], SIGNED_HOST_SUFFIX);
+});
+
+test('isSignedHost: the file store passes; look-alikes, wider Blackboard hosts, cleartext and IPs do not', () => {
+  assert.equal(isSignedHost(FILE_STORE), true);
+  assert.equal(isSignedHost('https://prod01-euw1-xythos.prod.files.blackboard.com/x'), true);
+  for (const url of [
+    'https://prod.files.blackboard.com.evil.com/x',
+    'https://xprod.files.blackboard.com/x',
+    'https://files.blackboard.com/x',
+    'https://x.files.blackboard.com/x',
+    'https://x.blackboard.com/x',
+    'http://prod02-use1-prod02-xythos.prod.files.blackboard.com/x',
+    'http://eu.content.blackboardcdn.com/x',
+    'https://10.0.0.5/x',
+  ]) {
+    assert.equal(isSignedHost(url), false, url);
+  }
+});
+
+test('resolveSignedUrl: a redirect to the file store is the signed URL, and the file store is never requested by the walk', async () => {
+  const calls = [];
+  const got = await resolveSignedUrl(fakeGet({ [DURABLE]: redirect(FILE_STORE) }, calls), DURABLE);
+  assert.equal(got.outcome, 'ok');
+  assert.equal(got.signedUrl, FILE_STORE);
+  assert.deepEqual(calls, [DURABLE]);
+});
+
+test('downloadTo: downloads from the file store without cookies, and still refuses a host off the list', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bb2dash-fetch-'));
+  const dest = path.join(dir, 'out.pdf');
+  const body = Buffer.from('%PDF-1.7 file store');
+  const seen = [];
+  const fetchImpl = async (url, init) => { seen.push({ url, init }); return { ok: true, status: 200, arrayBuffer: async () => body }; };
+  const got = await downloadTo(fetchImpl, FILE_STORE, dest);
+  assert.equal(got.outcome, 'ok');
+  assert.deepEqual(fs.readFileSync(dest), body);
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].url, FILE_STORE);
+  assert.equal(seen[0].init, undefined);
+  const off = await downloadTo(async () => { throw new Error('should not be called'); }, 'https://x.files.blackboard.com/x.pdf', dest);
+  assert.equal(off.outcome, 'refused');
+  assert.match(off.reason, /prod\.files\.blackboard\.com/);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('validateHops: a chain ending at the file store is accepted', () => {
+  const got = validateHops([DURABLE, FILE_STORE]);
+  assert.equal(got.outcome, 'ok');
+  assert.equal(got.signedUrl, FILE_STORE);
+});
+
+test('resolveSignedUrl: the logged-in walk starts only on Blackboard, never on a signed host (CDN or file store)', async () => {
+  for (const start of [SIGNED, FILE_STORE]) {
+    const calls = [];
+    const got = await resolveSignedUrl(fakeGet({}, calls), start);
+    assert.equal(got.outcome, 'refused', start);
+    assert.deepEqual(calls, [], start);
   }
 });
