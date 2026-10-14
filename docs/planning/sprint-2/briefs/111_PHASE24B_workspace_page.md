@@ -690,7 +690,9 @@ export function normalizeRequestOptions(row: unknown): WorkspaceRequestOptions |
 export const workspaceAskKeys = { options: (conversationId: string) => ['workspace', 'request-options', conversationId] as const };
 export function requestOptionsOptions(conversationId: string | null, requestIds: readonly number[]);
   // select from workspace_request_options where request_id in (requestIds); enabled when the id is a
-  // uuid and the list is not empty; the ids are the conversation's requests as the page has them
+  // uuid and the list is not empty; the ids are the conversation's requests as the page has them;
+  // (R2-1, 2026-10-14) a sorted copy of the ids is the key's suffix, so a new request is a new key and
+  // a prefix invalidation of options(conversationId) still reaches it
 export function useWorkspaceRequestOptions(conversationId: string | null, requestIds: readonly number[]);
 export function lastRequestOptionsOf(rows: readonly WorkspaceRequestOptions[]): WorkspaceRequestOptions | null;
   // the highest request_id: the row the composer restores its routine and course chips from
@@ -722,7 +724,7 @@ export const workspaceSourceKeys = {
   turns: (conversationId: string) => ['workspace', 'turns', conversationId] as const,
   sources: (requestId: number) => ['workspace', 'sources', requestId] as const,
 };
-export function turnsOptions(conversationId: string | null, requestIds: readonly number[]);  // workspace_turns, request_id in (...)
+export function turnsOptions(conversationId: string | null, requestIds: readonly number[]);  // workspace_turns, request_id in (...); the sorted ids are the key's suffix (R2-1)
 export function sourcesOptions(requestId: number | null);   // workspace_sources where request_id = …, order ord asc, limit 40
 export function useWorkspaceTurns(conversationId: string | null, requestIds: readonly number[]);
 export function useWorkspaceSources(requestId: number | null);
