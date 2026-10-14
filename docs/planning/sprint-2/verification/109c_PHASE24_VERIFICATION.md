@@ -779,4 +779,4 @@ step 8 on the floor the branch now holds, and **the walk is done**; what it chan
 alone.
 
 **What waits:** the bb2dash-stack suite's verdict (the harness stopped it; Stack's word to run it), the
-two PRs' merge, the cut-over and `just accept 24`, each on his word.
+two PRs' merge (bb2dash #97, opened 20:46Z; bb2dash-stack #8, opened 20:47Z), the cut-over and `just accept 24`, each on his word.
