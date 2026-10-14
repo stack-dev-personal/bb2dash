@@ -60,6 +60,7 @@ gitignored `.env` at registration (2026-09-29: `dist` built, 88 unit tests, `npm
 | 22 | Styling | `briefs/103_PHASE22_styling.md` | R-53, R-46; S2-styling-1 | none | planned; last |
 | 23 | Inbox auto-apply: a sync files the request, the `apply` container runs `/inbox-apply` | none for the phase (Stack's ask and three choices, 2026-10-07; STATUS "Phase 23", DECISIONS six rows); the follow-ups: `briefs/110_PHASE23_followups.md` (frozen 2026-10-08) | amends B-44; builds R-96's release | 180–186 live (183 at the cut-over, 185 and 186 the session-answer fix, 187 the follow-ups' apply side on 2026-10-09; 188 is written and reviewed and goes on at the follow-ups' cut-over; 189 is free; block 180–189) | **merged 2026-10-07 on Stack's word (PR #79 `d454f6f`; bb2dash-stack #4 `ec0e304`) and cut over: `sync` rebuilt, `apply` running**; first live run archived 13 of 16 answers; the session-answer fix merged 2026-10-07 (PR #81 `b8d3b13`) and has run live since; **the follow-ups are built, reviewed and in two PRs on Stack's merge word of 2026-10-09** (a skipped answer is held, the transform reads archived answers and stamps session links, the exporter is scheduled for notes only, `just up` knows `apply`, pack 23 is written; 187 on prod); **open:** the cut-over on his word (skills, his `.env` line, `apply` rebuilt, 188, the scheduled task, the first export), then `just accept 23` (STATUS "Phase 23 follow-ups") |
 | 24a | Workspace assistant, behind the page: sessions from the database, a planning turn and an answering turn, one pgvector store in bb2dash, uploads, the planner and grades feed, memory | `briefs/109_PHASE24_workspace_assistant.md` (frozen 2026-10-08; answers in `109a`) | Stack's ask of 2026-10-08, S2-workspace-2 | 190–199 live, the block used up | **built and reviewed 2026-10-09 on `feat/workspace-24` (bb2dash and bb2dash-stack)**: the ten migrations on prod and byte-identical, `workspace-search` and `workspace-embed` deployed, the store's proof green on prod, both reviews run and fixed; **open:** the PM's walk (a window Stack agrees to), the ingest image's first build and probes P-7 and P-11 (blocked by the laptop's network), the merge of the two PRs, then the cut-over and `just accept 24`, each on its own word (STATUS "Phase 24a"; record `verification/109c_PHASE24_VERIFICATION.md`) |
+| 24ab | Finish 24a and make 24b ready: the walk, the two PRs, the cut-over, `just accept 24`, brief 111 brought up to date | `briefs/118_PHASE24AB_walk_and_handover.md` (Stack named it 2026-10-14) | none new | none | **next**: its start prompt is the brief's last section; the walk has his word in it, the merge and the cut-over each wait for their own |
 | 24b | Workspace assistant, the page | `briefs/111_PHASE24B_workspace_page.md` | the same ask; his answers 3, 9, 11, 12, 13 | none | not cut; its branch `feat/workspace-page-24b` is cut only after Phase 22 and 24a are on `main`; it turns memory on and extends pack 24 |
 
 Outside the phases: R-109 and the state-doc refresh landed on the planning branch (Stage D); R-105 and
@@ -671,15 +672,6 @@ E — Open items
 
 
 
-### F. Phase 24a: the walk, the PRs and the cut-over (if a fresh session takes them)
+### F. Phase 24ab: the walk, the PRs, the cut-over and 24b made ready
 
-> `/bb2dash-pm` Finish Phase 24a. Its worktree is `C:/Users/stack/projects/bb2dash-wt-24` on `feat/workspace-24`, and bb2dash-stack's is
-> `C:/Users/stack/projects/bb2dash-stack-wt-24` on the branch of the same name; work there by full paths. Read
-> `docs/planning/sprint-2/verification/109c_PHASE24_VERIFICATION.md` from its last heading backwards until you know what is done, then STATUS
-> "Phase 24a" and the brief's "Freeze amendments" and Task list rows 43 to 47. Migrations 190 to 199 are on prod and frozen and the block is
-> used up; two edge functions are deployed. What is left: the walk on today's page in a window I agree to (the test project `bb2dash-wt24`,
-> built under test tags through `C:/Users/stack/.bb2dash-wt24/test-tags.compose.yaml`, the only runner on the queue, the live Workspace
-> stopped and put back); the ingest image's first build and probes P-7 and P-11 once the laptop is on a network that does not intercept
-> `deb.debian.org`; a merge of `origin/main` into both branches and the brief's list after it; both PRs; then stop at "ready when you say so".
-> The cut-over and `just accept 24` wait for a separate word from me. Never rebuild, restart or stop a live container outside a window I
-> have agreed to, and never through a whole-project `up`. Phase 24b (brief 111) is cut only after Phase 22 and 24a are on `main`.
+The prompt is the last section of `docs/planning/sprint-2/briefs/118_PHASE24AB_walk_and_handover.md` on `feat/workspace-24` (Stack named the phase on 2026-10-14). Phase 24b's draft prompt is the last section of brief 111; 24ab's task 12 finalises it.

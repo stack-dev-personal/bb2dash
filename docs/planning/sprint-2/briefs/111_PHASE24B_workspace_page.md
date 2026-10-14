@@ -2,11 +2,11 @@
 
 Date 2026-10-08 · PM: the Fable session · Product manager: Stack · Requirements: Stack's ask of
 2026-10-08 (the tag the PM assigns to brief 109) · Answers on record:
-`109a_PHASE24_open_questions.md` · **Gate: Phase 22 and Phase 24a are both on `main`** · Branch
+`109a_PHASE24_open_questions.md` · **Gate: Phase 22 and Phase 24a are both on `main`, and 24a is accepted (`just accept 24` green)** · Branch
 `feat/workspace-page-24b` · Worktree `bb2dash-wt-24b` · Neither is cut yet · Workers W-86 to W-88
 (24a uses W-76 to W-79 and W-85; W-80 to W-84 are the Phase 23 follow-ups', brief 110 at d558994,
 line 13; the PM confirms the one numbering at the freeze) · No migration: the page uses 24a's
-objects, and 199 stays slack (24a took 198 in the review round of its store clause) · One PR in
+objects; 24a used the whole block 190–199, so a database change here needs a ruling and a new block · One PR in
 bb2dash · Verification file
 `docs/planning/sprint-2/verification/111a_PHASE24B_VERIFICATION.md`, called 111a below · Status:
 **drafted with brief 109 on Stack's answers of 2026-10-08, and through the challenge round of the
@@ -50,6 +50,57 @@ where a token exists.
   `data-column-empty`.
 * The web app holds no name of his: a grep of `web/src` for `user_metadata`, `display_name`,
   `full_name`, `first_name` and `given_name` gives 0 hits outside the generated types file.
+
+## Amendments after 24a, as built (2026-10-14)
+
+Brief 109's 24a was built, reviewed and its database and edge functions put live on 2026-10-08 and
+10-09; its walk, merge and cut-over are Phase 24ab's (brief `118_PHASE24AB_walk_and_handover.md`, which
+also holds the whole road from 24a to 24b and beyond). **Where this section and a clause below differ,
+this section is current.** The reference for every shape is
+`workspace/test/fixtures/contract24/README.md` on `main` once 24a merges.
+
+* **No migration number is left.** 24a used 190–199 (199 was its review round). If 24b needs a
+  database change, the PM rules first and takes the next free block of ten (200–209 at the time of
+  writing; check before taking it). The Seams row on 24a below is read with this.
+* **Labels and source rows.** `[M<n>]` resolves by `workspace_sources.text_id`; `[U<n>]` by
+  `doc_text_id` of kind `upload`; `[R<n>]` by a memory row's `document_id`; `[P]` by the row of kind
+  `feed`. **An attached file is one block with no label and one source row of origin `attached` with
+  no unit id**, so the Sources tab lists an attached file as one row and no chip in the answer points
+  at it; the model names its page in words.
+* **The calls the page makes.** `workspace_upload_register(p_sha256, p_title, p_mime, p_byte_size,
+  p_signed_url, p_signed_url_expires_at, p_course_id)` with a title of 1 to 200 characters, returning
+  `{id, state, existing}`; `workspace_upload_retry(p_document_id, p_signed_url, p_signed_url_expires_at)`;
+  `workspace_document_delete(p_document_id, p_object_removed)` returning `{id, kind, state,
+  storage_key}` (`state` is `deleting` or `deleted`); `workspace_ask_with(p_conversation_id, p_text,
+  p_options)` with the six keys of `ask-options.json`, attachments numbered files first, then uploads.
+  The refusals are the fixture README's.
+* **What the page reads.** The ten error codes of a failed upload (`too_large`, `bad_type`,
+  `bad_bytes`, `no_text`, `extract_timeout`, `extract_failed`, `too_many_units`, `link_expired`,
+  `download_failed`, `embed_failed`); an upload's states (`stored`, `reading`, `text_ready`,
+  `indexed`, `failed`, `deleting`); the attachment states a turn records (`read`, `cut`, `not_ready`,
+  `failed`, `missing`, `no_text`); `workspace_turns.retrieval_state` (`found`, `attached_only`,
+  `empty`, `failed`) and `plan_state` (`skipped`, `planned`, `fallback`); the `sources` event
+  `{request_id, state, found_n}`; `v_workspace_memory` (its id column is `document_id`) and
+  `v_workspace_index_status` as migrations 197 and 199 define them. The fixed sentences are
+  `workspace/src/lines.ts` (`lines.txt` in the fixtures); task 3's test compares with it.
+* **Memory.** The runner asks for memory jobs only when `WORKSPACE_MEMORY_JOBS` is `on`; 24a's compose
+  says `off` (the rolling summary of a long conversation is on regardless). Since 199 a job's finish
+  is checked against its holder and its lease. Task 13 flips the one value; task 16's check stands.
+* **The acceptance pack exists.** `acceptance/24/` (sixteen steps on today's page and the host's go-live
+  step), `web/e2e/accept24.spec.ts` and `accept24.lib.ts`. The upload step carries a uuid and the
+  proofs derive the file's hash from it in SQL; the four store proofs read `v_workspace_store_proof`;
+  the host actions `ingest.start`, `ingest.startNoBuild` and `db.proofUntil` exist in bb2dash-stack.
+  Task 14 extends this pack. A browser test's title must not repeat another pack's (a suite case
+  forbids it: pack 24's first test is `2 open workspace` for that reason). The pack's steps 3 to 9 use
+  today's page; where 24b changes what they read (the attributes `data-used` and
+  `data-column-empty="start"`), task 14 moves them to the new page with the rest.
+* **Workers.** The Workers section says Opus. 24a's ran on Sonnet 5.5 by Stack's word of 2026-10-08;
+  which model 24b's run on is his to say (question 1 below). Until he says, the default is Sonnet.
+* **What the walk of 24a shows** (brief 118, task 4) is added here when it is done.
+* **Questions put to Stack in Phase 24ab** (brief 118, "24b: what is still his to say"), each with the
+  PM's default: (1) workers Sonnet or Opus, default Sonnet; (2) memory on at 24b's cut-over, default on;
+  (3) start the data stream (W-86) before Phase 22 merges, default no; (4) remove the old transcript
+  volume after 24a's acceptance, default leave it. His answers are written here when he gives them.
 
 ## Why
 
@@ -417,7 +468,7 @@ to 16.
 
 | # | task | owner | deterministic check |
 |---|---|---|---|
-| 1 | Gate: Phase 22 and 24a are on `main`; this brief re-read against both and frozen; the branch cut | PM | `git merge-base --is-ancestor <Phase 22's merge commit> HEAD; echo $?` and the same for 24a's each print 0 |
+| 1 | Gate: Phase 22 and 24a are on `main` and 24a is accepted; this brief re-read against both and frozen; the branch cut | PM | `git merge-base --is-ancestor <Phase 22's merge commit> HEAD; echo $?` and the same for 24a's each print 0 |
 | 2 | Probes Q-1 to Q-5 (below) | PM + W-86 | one pass or fail line each in 111a |
 | 3 | Wording frozen in `workspace-labels.ts` and its test, before worker branches are cut | PM | `cd web && npx vitest run test/workspace-labels.test.ts` passes, and its case comparing the two fixed sentences with `workspace/src/lines.ts` passes; the line under Delete for an upload says that answers already written keep what they quoted |
 | 4 | `answer-format.ts` and `AnswerBody.tsx` | W-86 | `npx vitest run test/answer-format.test.ts test/AnswerBody.test.tsx`: for generated strings the tree holds no `img`, `a`, `iframe`, `script` or `style` and no `href` or `src`; an unclosed form is text; the parser throws for no input |
@@ -447,7 +498,7 @@ to 16.
 
 ## Workers
 
-Workers are Opus, commit and push per task, never touch `project-state/`, and hand the PM a
+Workers are Opus (but see the amendments: Sonnet unless Stack says otherwise), commit and push per task, never touch `project-state/`, and hand the PM a
 verification section with each task's red run and green run (`111_W86_VERIFICATION.md` to
 `111_W88_VERIFICATION.md`, beside 111a). A worker with an unclear point states its default and takes
 it. Nobody answers a running worker by message (ruling W-S).
@@ -470,7 +521,7 @@ W-87 and W-88 type against W-86's modules from this Contract until they are on t
 | with | seam | rule here |
 |---|---|---|
 | Phase 22 | it sweeps the two Workspace folders and freezes the tokens | 24b is cut only after Phase 22 is on `main`. It is written on Phase 22's tokens alone and adds no literal. Its fixture, its phone cases and its token baseline are the PM's to extend |
-| Phase 24a | the objects, the labels, the `format` option, the upload order, the error codes, `lines.ts` | none edited. If the page needs a database change, it is migration 199, the one slack number left, and a ruling first |
+| Phase 24a | the objects, the labels, the `format` option, the upload order, the error codes, `lines.ts` | none edited. If the page needs a database change, it is a ruling first and a new block of ten (24a used 190–199) |
 | The live Workspace | one queue | one runner on the queue at a time during the walk, on Stack's word, as in 24a |
 | The acceptance run | pack 24 grows; pack 21 is no longer run and stays in the tree as the acceptance suite's fixture | the host actions it needs are the ones 24a added to bb2dash-stack. A step that waits for a memory item uses the action that reads a proof again until it passes. Each step archives the conversation it opened, so a run leaves nothing in his memory or his list. The cut-over makes the Workspace container again; it does not restart it |
 | The Phase 23 follow-ups (brief 110) | its pack 23 and its W-84 edit `acceptance/pack-check.mjs` and `OPERATOR.md` where they name the Workspace alone; its workers are W-80 to W-84 | this phase edits neither file. Its workers are W-86 to W-88. If the follow-ups' pack reads a Workspace string this phase removes, the pack check says so at integration and the PM keeps the string or edits that sentence, named in 111a |
@@ -514,3 +565,10 @@ Three things the pictures show and this phase leaves out, each with its reason:
   already written. The line under the button says so.
 * **Not checked:** whether an opened PDF can land on a page (Q-2); the upload and the file dialog in
   the desktop window (Q-1, Q-3); the renderer's cost while streaming (Q-4).
+
+## Session prompt (a draft; Phase 24ab's task 12 finalises it)
+
+Paste into a new Claude Code window started in `C:/Users/stack/projects/bb2dash`, once the gate is open
+(Phase 22 and 24a on `main`, `just accept 24` green):
+
+> `/bb2dash-pm` Start Phase 24b, the Workspace page. Its brief is `docs/planning/sprint-2/briefs/111_PHASE24B_workspace_page.md` on `main`; read it in full, its "Amendments after 24a, as built" first, and `118_PHASE24AB_walk_and_handover.md`'s "The end goal, and the road to it". Check the gate with task 1's two `git merge-base --is-ancestor` lines and the "accepted" row of Phase 24a in DECISIONS; if either fails, stop and tell me. Cut `feat/workspace-page-24b` as its own worktree `C:/Users/stack/projects/bb2dash-wt-24b` from `origin/main` and work there by full paths. Re-read Phase 22 as merged (its tokens, class names and the two Workspace folders) and freeze the brief with that re-read, my answers to its four questions, and the probes Q-1 to Q-5. Workers are as my answer to question 1 says. Anything visual goes in front of me on a preview before the merge. Stop at "ready when you say so"; the cut-over that turns memory on, and `just accept 24` after it, wait for my word.
