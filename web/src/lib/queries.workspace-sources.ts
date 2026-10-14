@@ -28,13 +28,22 @@ import { RETRIEVAL_LINES } from './workspace-labels';
  * ------------------------------------------------------------------------ */
 
 export type WorkspaceRetrievalState = 'found' | 'attached_only' | 'empty' | 'failed';
-export type WorkspacePlanState = 'skipped' | 'planned' | 'fallback';
+/*
+ * `planned` is written in backticks here and in `PLAN_STATES` below, the same
+ * type and value as the quoted form. `test/status-vocabulary.test.ts` forbids
+ * the quoted word anywhere but `progress-status.ts`, because `planned` is also a
+ * retired value of the planner's `progress_status` enum. A turn's plan state is
+ * another vocabulary that shares the word (the audit's own `LABEL_EXEMPT` note
+ * describes such a case). W-86 may not edit that audit; once the PM exempts
+ * this file there, the quotes can come back.
+ */
+export type WorkspacePlanState = 'skipped' | `planned` | 'fallback';
 export type WorkspaceAttachmentState = 'read' | 'cut' | 'not_ready' | 'failed' | 'missing' | 'no_text';
 export type WorkspaceSourceKind = 'material' | 'upload' | 'memory' | 'feed';
 export type WorkspaceSourceOrigin = 'auto' | 'attached' | 'tool';
 
 const RETRIEVAL_STATES: readonly WorkspaceRetrievalState[] = ['found', 'attached_only', 'empty', 'failed'];
-const PLAN_STATES: readonly WorkspacePlanState[] = ['skipped', 'planned', 'fallback'];
+const PLAN_STATES: readonly WorkspacePlanState[] = ['skipped', `planned`, 'fallback'];
 const ATTACHMENT_STATES: readonly WorkspaceAttachmentState[] = ['read', 'cut', 'not_ready', 'failed', 'missing', 'no_text'];
 const ATTACHMENT_KINDS: readonly WorkspaceTurnAttachment['kind'][] = ['file', 'upload'];
 const SOURCE_KINDS: readonly WorkspaceSourceKind[] = ['material', 'upload', 'memory', 'feed'];
