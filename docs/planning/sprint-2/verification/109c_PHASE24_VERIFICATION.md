@@ -780,3 +780,5 @@ alone.
 
 **What waits:** the bb2dash-stack suite's verdict (the harness stopped it; Stack's word to run it), the
 two PRs' merge (bb2dash #97, opened 20:46Z; bb2dash-stack #8, opened 20:47Z), the cut-over and `just accept 24`, each on his word.
+
+**`main` merged a second time (ade23cb, 20:5xZ).** PR #96 (Phase 23 closed out) moved `main` after the PRs were opened and GitHub marked #97 conflicting. Only `project-state/STATUS.md` and `ORCHESTRATOR.md` differed, each in its header line; both updates are kept, 24ab's first, then main's Phase 23 close-out, then the shared chain. No code or test file changed on either side, so no suite was touched by it.
