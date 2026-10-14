@@ -31,8 +31,9 @@ declare
                          'bucket', 'week_no', 'session_id', 'assignment_id', 'reading_id',
                          'classified_by', 'classification_confidence', 'storage_path', 'downloaded_at',
                          'bb_modified_at', 'text_status', 'notes', 'superseded_by', 'link_confidence'];
+  -- outside_url (164) is held too: the apply worker has no use for a file's outside link.
   v_held text[] := array['run_id', 'bb_course_id', 'content_id', 'source_url', 'sha256', 'local_path',
-                         'attempt_id'];
+                         'attempt_id', 'outside_url'];
 begin
   if position('session_link' in (select prosrc from pg_proc
                                   where oid = 'public.inbox_apply_prepare(bigint)'::regprocedure)) = 0 then
