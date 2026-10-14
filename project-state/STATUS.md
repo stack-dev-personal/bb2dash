@@ -1958,13 +1958,10 @@ read the same and the sync container was untouched.
    `workspace-extract`, `workspace-ingest`, `apply` (it copies the runner's modules), then `sync` (its
    files pass changed). The old volume `workspace-claude-home` goes after the acceptance run (his word).
 3. **`just accept 24`** right after the cut-over; green counts.
-4. **bb2dash-stack's `node --test doctor/*.test.mjs scripts/*.test.mjs` has no verdict for the merged
-   branch**: Claude Code stopped the background run while the laptop was short of memory and its rule is
-   that a stopped command is run again only on Stack's word (109c, "The list after a merge"). The merge
-   changed three of the doctor's files (the exports row).
+4. ~~bb2dash-stack's suite has no verdict for the merged branch~~ Run on Stack's word at 21:01Z: 359 of 359
+   in 11 minutes (109c, "The list after a merge").
 
-**What Stack has to do:** the merge words for the two PRs; the cut-over word; the word to run
-bb2dash-stack's suite once. His own step of this phase, the upload worker's login, is done (2026-10-09)
+**What Stack has to do:** the merge words for the two PRs; the cut-over word. His own step of this phase, the upload worker's login, is done (2026-10-09)
 and was proved live by the worker's first heartbeat row at the walk.
 
 ## What's next — Sprint 2

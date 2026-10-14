@@ -605,7 +605,7 @@ In bb2dash-stack the merge was clean: `b540dcb` (the doctor's exports row names 
 | the container test files (six: `docker/apply/gate-built`, `docker/apply/image`, `docker/grep-clean`, `docker/walk/entry`, `docker/workspace-ingest/image`, `docker/workspace/init-firewall`) | 83 tests, 83 pass |
 | `node --test acceptance/acceptance.test.mjs` | 55 tests, 55 pass |
 | the scripts suite (`cd scripts && npm test`, fourteen files) | 360 tests: 358 pass and 2 fail in the run the harness stopped (below), both in Phase 22's `walk-box-main.test.mjs` and both a child process Windows could not start (status 3221225794, 0xC0000142: `git init` in a temp folder, and `node scripts/walk-box.mjs`) at the moment the laptop ran short of memory; that file alone, run again in the foreground once memory was back: 37 tests, 37 pass. Read as green |
-| bb2dash-stack: `node --test doctor/*.test.mjs scripts/*.test.mjs` | NOT RUN TO A VERDICT: Claude Code stopped the background command while the laptop was short of memory (the web suite's 191 jsdom environments, the container tests and the three builds had run side by side), and its rule is that a stopped command is started again only on Stack's word. 27 files; the merge changed three of the doctor's files (the exports row). Owed before the PR is called ready |
+| bb2dash-stack: `node --test doctor/*.test.mjs scripts/*.test.mjs` | **359 tests, 359 pass, 0 fail (4 suites, 11.0 minutes), run 21:01Z to 21:12Z on Stack's word ("run the stack suite").** The first run was stopped by Claude Code while the laptop was short of memory (the web suite's 191 jsdom environments, the container tests and the three builds had run side by side), and its rule is that a stopped command is started again only on Stack's word. The suite is slow by nature: each `init-firewall.sh` case runs the script against fake commands under Git Bash, five to eight minutes a case |
 | the types file, regenerated from prod (`generate_typescript_types`) | one object differs from the branch's file: `v_workspace_store_proof` (24a's view of 199, which the branch's file predated) is added; `PostgrestVersion` reads `14.17` where the file said `14.5` (prod's own, not a phase's). Nothing of another phase: everything else on prod is on `main` |
 | `docker compose config`, the `sync` and `apply` services, worktree against `main` | identical but for the build context path (`bb2dash-wt-24` for `bb2dash`) |
 
@@ -778,7 +778,7 @@ Haiku lookups (840, 841, 842). With this every step of pack 24 has passed on the
 step 8 on the floor the branch now holds, and **the walk is done**; what it changed in the product is D-1
 alone.
 
-**What waits:** the bb2dash-stack suite's verdict (the harness stopped it; Stack's word to run it), the
-two PRs' merge (bb2dash #97, opened 20:46Z; bb2dash-stack #8, opened 20:47Z), the cut-over and `just accept 24`, each on his word.
+**What waits:** the two PRs' merge (bb2dash #97, opened 20:46Z; bb2dash-stack #8, opened 20:47Z; the
+bb2dash-stack suite read 359 of 359 at 21:12Z on Stack's word), the cut-over and `just accept 24`, each on his word.
 
 **`main` merged a second time (ade23cb, 20:5xZ).** PR #96 (Phase 23 closed out) moved `main` after the PRs were opened and GitHub marked #97 conflicting. Only `project-state/STATUS.md` and `ORCHESTRATOR.md` differed, each in its header line; both updates are kept, 24ab's first, then main's Phase 23 close-out, then the shared chain. No code or test file changed on either side, so no suite was touched by it.
