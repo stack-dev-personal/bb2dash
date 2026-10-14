@@ -35,6 +35,15 @@ const RE_EXPORTERS = new Set(['lib/queries.today.ts']);
  */
 const LABEL_EXEMPT = new Set(['lib/queries.grades.ts']);
 
+/**
+ * `queries.workspace-sources.ts` reads `workspace_turns.plan_state` (Phase 24a, migration
+ * 195: `skipped`, `planned`, `fallback`), whether the assistant ran a planning turn before it
+ * answered. That vocabulary shares the word `planned` with the planner status
+ * migration 078 retired, and says nothing about Stack's plan for an assignment.
+ * The same reasoning as LABEL_EXEMPT: one coinciding word is not one vocabulary.
+ */
+const RETIRED_EXEMPT = new Set(['lib/queries.workspace-sources.ts']);
+
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {
     const full = join(dir, entry);
@@ -98,7 +107,7 @@ describe('the status vocabulary lives in one file', () => {
 
   it('is the only file that names a retired enum value', () => {
     const offenders = files
-      .filter(({ path }) => path !== VOCABULARY && !RE_EXPORTERS.has(path))
+      .filter(({ path }) => path !== VOCABULARY && !RE_EXPORTERS.has(path) && !RETIRED_EXEMPT.has(path))
       .filter(({ text }) =>
         RETIRED.some((value) => new RegExp(`['"]${value}['"]`).test(text)),
       )
