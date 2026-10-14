@@ -56,8 +56,10 @@
 //            'relpath', bb_file_relpath(f.id), 'mime', f.mime_type, 'source_url', f.source_url,
 //            'bucket', f.bucket, 'attempt_id', f.attempt_id))
 //     from bb_files f where f.storage_path is null and f.superseded_by is null
-//      and f.source_url is not null and not bb_file_is_outside_link(f.source_url);
-//   An outside link (migration 161: an http(s) source_url off the Blackboard host) is never pulled.
+//      and f.source_url is not null and not bb_file_is_outside_link(f.source_url)
+//      and f.outside_url is null;
+//   An outside link (migration 161: an http(s) source_url off the Blackboard host; migration 164: a
+//   Blackboard file whose link redirects to another site, bb_files.outside_url) is never pulled.
 //   With `--fetch`, the Playwright fallback adds `hops` to every row before this script reads it.
 //   `mime` may be null: it is then inferred from the extension. An optional `key` overrides the
 //   Storage key (a re-upload of an already-stored file needs its own; see file 145). `attempt_id`

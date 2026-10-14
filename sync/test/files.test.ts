@@ -66,6 +66,7 @@ function hopFor(statusByUrl: Record<string, number> = {}) {
 
 function ports(rows: WorklistRow[], over: Partial<FilesPorts> = {}) {
   const stored: FileStoredArgs[] = [];
+  const linked: { id: string; url: string }[] = [];
   const order: string[] = [];
   const p: FilesPorts = {
     rpc: {
@@ -79,6 +80,11 @@ function ports(rows: WorklistRow[], over: Partial<FilesPorts> = {}) {
         }
         stored.push(a);
         order.push(`stored ${a.id}`);
+        return true;
+      }),
+      fileOutsideLink: vi.fn(async (id: string, url: string) => {
+        linked.push({ id, url });
+        order.push(`linked ${id}`);
         return true;
       }),
     },
@@ -104,7 +110,7 @@ function ports(rows: WorklistRow[], over: Partial<FilesPorts> = {}) {
     log: () => {},
     ...over,
   };
-  return { p, stored, order };
+  return { p, stored, order, linked };
 }
 
 describe('the files step', () => {
@@ -184,12 +190,153 @@ describe('the files step', () => {
     expect(p.storagePost).not.toHaveBeenCalled();
   });
 
-  it('refused (a redirect off the CDN) is reported in not_pulled and never stored', async () => {
-    const hop = vi.fn(async () => ({ status: 302, headers: { location: 'https://evil.example.com/x' } }));
-    const { p, stored } = ports([row('32')], { hop });
+  it('refused (a redirect to a Blackboard host off the allow-list) is reported in not_pulled with the host, never stored or linked', async () => {
+    const hop = vi.fn(async () => ({ status: 302, headers: { location: 'https://learn.blackboardcdn.com/x.pdf?X-Amz-Signature=beef' } }));
+    const { p, stored, linked } = ports([row('32')], { hop });
     const r = await runFilesStep(p);
-    expect(r.files.not_pulled[0]).toMatchObject({ id: '32', reason: expect.stringMatching(/^refused: /) });
+    expect(r.files.not_pulled).toHaveLength(1);
+    expect(r.files.not_pulled[0]).toMatchObject({ id: '32', reason: expect.stringMatching(/^refused: .*learn\.blackboardcdn\.com/) });
+    expect(r.files.not_pulled[0]!.reason).not.toMatch(/beef|X-Amz/);
     expect(stored).toEqual([]);
+    expect(linked).toEqual([]);
+    expect(r.files.linked ?? 0).toBe(0);
+  });
+
+  it('164: a redirect to another site is saved as a link: no bytes, no gap, counted as linked not as not_pulled', async () => {
+    const target = 'https://www.cbo.gov/system/files/2024/report.pdf';
+    const hop = vi.fn(async () => ({ status: 302, headers: { location: target } }));
+    const { p, stored, linked, order } = ports([row('33')], { hop });
+    const r = await runFilesStep(p);
+    expect(linked).toEqual([{ id: '33', url: target }]);
+    expect(r.files).toEqual({ pulled: 0, not_pulled: [], linked: 1 });
+    expect(stored).toEqual([]);
+    expect(hop).toHaveBeenCalledTimes(1); // the target itself is never requested
+    expect(p.fetchSigned).not.toHaveBeenCalled();
+    expect(p.storagePost).not.toHaveBeenCalled();
+    expect(order).toEqual(['linked 33']);
+    expect(p.embed).not.toHaveBeenCalled();
+  });
+
+  it('164: pulled, linked and flagged files are counted apart in one pass', async () => {
+    const target = 'https://www.sec.gov/a.pdf';
+    const hop = vi.fn(async (url: string): Promise<{ status: number; headers: Record<string, string> }> => {
+      if (url.endsWith('xid-35_1')) return { status: 302, headers: { location: target } };
+      if (url.endsWith('xid-36_1')) return { status: 404, headers: {} };
+      return { status: 302, headers: { location: CDN } };
+    });
+    const { p, linked } = ports([row('34'), row('35'), row('36')], { hop });
+    const r = await runFilesStep(p);
+    expect(r.files).toEqual({ pulled: 1, not_pulled: [{ id: '36', reason: 'gone: status 404' }], linked: 1 });
+    expect(linked).toEqual([{ id: '35', url: target }]);
+  });
+
+  it('164: a redirect to an IP, localhost or credentials is flagged, not linked', async () => {
+    for (const location of ['http://127.0.0.1:9000/x', 'https://localhost/x', 'ftp://example.com/x', 'https://u:p@example.com/x']) {
+      const hop = vi.fn(async () => ({ status: 302, headers: { location } }));
+      const { p, linked } = ports([row('37')], { hop });
+      const r = await runFilesStep(p);
+      expect(linked).toEqual([]);
+      expect(r.files.not_pulled).toHaveLength(1);
+      expect(r.files.not_pulled[0]!.reason).toMatch(/^refused: /);
+      expect(r.files.not_pulled[0]!.reason).not.toMatch(/u:p|127\.0\.0\.1/);
+    }
+  });
+
+  it('164: a redirect to a sign-in page or a university host is flagged with the host, never linked, and never asks the login check', async () => {
+    for (const location of [
+      'https://login.microsoftonline.com/tenant/saml2?SAMLRequest=abc',
+      'https://shib.syracuse.edu/idp/x',
+      'https://www.syr.edu/x',
+      'https://files.example.org/f.pdf?X-Amz-Signature=beef',
+    ]) {
+      const hop = vi.fn(async () => ({ status: 302, headers: { location } }));
+      const loginCheck = vi.fn(async () => 'alive' as const);
+      const { p, linked } = ports([row('50')], { hop, loginCheck });
+      const r = await runFilesStep(p);
+      expect(linked).toEqual([]);
+      expect(loginCheck).not.toHaveBeenCalled();
+      expect(r.files.not_pulled).toHaveLength(1);
+      expect(r.files.not_pulled[0]!.reason).toContain(new URL(location).hostname);
+      expect(r.files.not_pulled[0]!.reason).not.toMatch(/SAMLRequest|beef|X-Amz/);
+    }
+  });
+
+  it('164: before saving a link the login check is asked, and a dead session stops the step like a 401', async () => {
+    const target = 'https://www.cbo.gov/x.pdf';
+    const hop = vi.fn(async () => ({ status: 302, headers: { location: target } }));
+    const loginCheck = vi.fn(async () => 'dead' as const);
+    const { p, linked } = ports([row('51'), row('52')], { hop, loginCheck });
+    const r = await runFilesStep(p);
+    expect(loginCheck).toHaveBeenCalledTimes(1);
+    expect(linked).toEqual([]);
+    expect(r.stopped).toBe('session_expired');
+    expect(r.files.not_pulled).toHaveLength(1);
+    expect(r.files.not_pulled[0]!.id).toBe('51');
+    expect(r.files.not_pulled[0]!.reason).toMatch(/^session_expired: /);
+    expect(hop).toHaveBeenCalledTimes(1);
+  });
+
+  it('164: a login check that does not answer saves nothing and names the host', async () => {
+    const target = 'https://www.cbo.gov/x.pdf?page=1';
+    const hop = vi.fn(async () => ({ status: 302, headers: { location: target } }));
+    const loginCheck = vi.fn(async () => 'error' as const);
+    const { p, linked } = ports([row('53'), row('54')], { hop, loginCheck });
+    const r = await runFilesStep(p);
+    expect(linked).toEqual([]);
+    expect(r.stopped).toBeNull();
+    expect(r.files.not_pulled).toEqual([
+      { id: '53', reason: 'offsite: www.cbo.gov, but the login check did not answer, so the link was not saved' },
+      { id: '54', reason: 'offsite: www.cbo.gov, but the login check did not answer, so the link was not saved' },
+    ]);
+  });
+
+  it('164: an alive login check saves the link', async () => {
+    const target = 'https://www.cbo.gov/x.pdf';
+    const hop = vi.fn(async () => ({ status: 302, headers: { location: target } }));
+    const loginCheck = vi.fn(async () => 'alive' as const);
+    const { p, linked } = ports([row('55')], { hop, loginCheck });
+    const r = await runFilesStep(p);
+    expect(loginCheck).toHaveBeenCalledTimes(1);
+    expect(linked).toEqual([{ id: '55', url: target }]);
+    expect(r.files.linked).toBe(1);
+  });
+
+  it('164: no redirect (404, a 200 page) is flagged as before, never linked', async () => {
+    const { p, linked } = ports([row('38'), row('39')], {
+      hop: hopFor({
+        'https://blackboard.syracuse.edu/bbcswebdav/xid-38_1': 404,
+        'https://blackboard.syracuse.edu/bbcswebdav/xid-39_1': 200,
+      }),
+    });
+    const r = await runFilesStep(p);
+    expect(linked).toEqual([]);
+    expect(r.files.not_pulled.map((n) => n.id)).toEqual(['38', '39']);
+  });
+
+  it('164: sync_file_outside_link answering false or refusing leaves the file flagged, with the host only', async () => {
+    const target = 'https://www.cbo.gov/x.pdf?page=secret';
+    const hop = vi.fn(async () => ({ status: 302, headers: { location: target } }));
+    const answers: (boolean | Error)[] = [false, new Error('sync_file_outside_link: url is not a usable link')];
+    const rows = [row('40'), row('47')];
+    const { p } = ports(rows, {
+      hop,
+      rpc: {
+        fileWorklist: vi.fn(async () => rows),
+        fileStored: vi.fn(async () => true),
+        fileOutsideLink: vi.fn(async () => {
+          const a = answers.shift()!;
+          if (a instanceof Error) throw a;
+          return a;
+        }),
+      },
+    });
+    const r = await runFilesStep(p);
+    expect(r.files.linked ?? 0).toBe(0);
+    expect(r.files.not_pulled).toEqual([
+      { id: '40', reason: 'offsite: www.cbo.gov, but the database kept the row as it was (stored, superseded or gone)' },
+      { id: '47', reason: 'offsite: www.cbo.gov, sync_file_outside_link refused: sync_file_outside_link: url is not a usable link' },
+    ]);
+    for (const n of r.files.not_pulled) expect(n.reason).not.toMatch(/secret/);
   });
 
   it('R2 item 2: a course file already in Storage (409 or Duplicate) goes on to the text and sync_file_stored', async () => {
@@ -323,6 +470,7 @@ describe('the files step', () => {
           if (a instanceof Error) throw a;
           return a;
         }),
+        fileOutsideLink: vi.fn(async () => true),
       },
     });
     const r = await runFilesStep(p);

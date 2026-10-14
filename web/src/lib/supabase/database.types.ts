@@ -906,6 +906,7 @@ export type Database = {
           local_path: string | null
           mime_type: string | null
           notes: string | null
+          outside_url: string | null
           path: string | null
           reading_id: number | null
           run_id: string | null
@@ -936,6 +937,7 @@ export type Database = {
           local_path?: string | null
           mime_type?: string | null
           notes?: string | null
+          outside_url?: string | null
           path?: string | null
           reading_id?: number | null
           run_id?: string | null
@@ -966,6 +968,7 @@ export type Database = {
           local_path?: string | null
           mime_type?: string | null
           notes?: string | null
+          outside_url?: string | null
           path?: string | null
           reading_id?: number | null
           run_id?: string | null
