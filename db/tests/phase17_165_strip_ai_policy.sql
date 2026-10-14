@@ -52,8 +52,25 @@ begin
        E'A.\nB.'),
       -- CRLF line ends keep their \r on the lines that stay
       ('crlf',
-       E'Keep one.\r\nAI Use\r\nA long policy paragraph that runs past eighty characters so it belongs to the section.\r\nKeep two.\r\n',
-       E'Keep one.\r\nKeep two.\r\n'),
+       E'Keep one.\r\nAI Use\r\nA long policy paragraph that runs past eighty characters so it belongs to the section.\r\nKeep two\r\n',
+       E'Keep one.\r\nKeep two\r\n'),
+      -- review of 2026-10-14: a line that only mentions the phrase goes alone and takes nothing with it
+      ('mention goes alone',
+       E'Week 11: Artificial Intelligence Use in Incident Response\nAn ordinary bullet about the week that runs a good deal longer than eighty characters in all.\nRead chapter 9.',
+       E'An ordinary bullet about the week that runs a good deal longer than eighty characters in all.\nRead chapter 9.'),
+      ('short run-in label goes alone',
+       E'On the use of AI: Prohibited.\nLate work. Work handed in late loses ten percent of its points for each day, up to three days.\nNext.',
+       E'Late work. Work handed in late loses ten percent of its points for each day, up to three days.\nNext.'),
+      -- hard-wrapped PDF text: a wrapped line does not end the section; the next heading does
+      ('pdf wrapped',
+       E'AI Use\nStudents may use generative tools only as directed in each assignment and must\ndisclose any use in a footnote on the first page.\nGrading\nPoints.',
+       E'Grading\nPoints.'),
+      ('ends at a colon heading',
+       E'On the use of AI:\nA policy paragraph that runs past sixty characters and ends with a full stop.\nGrading:\nPoints.',
+       E'Grading:\nPoints.'),
+      ('a matching line at the end', E'Keep.\nAI Use', E'Keep.'),
+      -- one heading takes at most 12 lines
+      ('cap', E'Policies\nAI Use\nA long ordinary line number 1 that runs well past sixty characters and ends a sentence.\nA long ordinary line number 2 that runs well past sixty characters and ends a sentence.\nA long ordinary line number 3 that runs well past sixty characters and ends a sentence.\nA long ordinary line number 4 that runs well past sixty characters and ends a sentence.\nA long ordinary line number 5 that runs well past sixty characters and ends a sentence.\nA long ordinary line number 6 that runs well past sixty characters and ends a sentence.\nA long ordinary line number 7 that runs well past sixty characters and ends a sentence.\nA long ordinary line number 8 that runs well past sixty characters and ends a sentence.\nA long ordinary line number 9 that runs well past sixty characters and ends a sentence.\nA long ordinary line number 10 that runs well past sixty characters and ends a sentence.\nA long ordinary line number 11 that runs well past sixty characters and ends a sentence.\nA long ordinary line number 12 that runs well past sixty characters and ends a sentence.\nA long ordinary line number 13 that runs well past sixty characters and ends a sentence.\nA long ordinary line number 14 that runs well past sixty characters and ends a sentence.\nA long ordinary line number 15 that runs well past sixty characters and ends a sentence.\nNext', E'Policies\nA long ordinary line number 13 that runs well past sixty characters and ends a sentence.\nA long ordinary line number 14 that runs well past sixty characters and ends a sentence.\nA long ordinary line number 15 that runs well past sixty characters and ends a sentence.\nNext'),
       -- kept: IST.323's deliverable, a mention in passing, and text with no policy
       ('appendix B kept', E'Appendix B: AI Use Statement\nDescribe how you used AI.', E'Appendix B: AI Use Statement\nDescribe how you used AI.'),
       ('mention kept', E'Week 12 | AI and Security | Reading', E'Week 12 | AI and Security | Reading'),
@@ -94,6 +111,29 @@ begin
                     and (t.tgtype & 1) = 1 and (t.tgtype & 2) = 0 and (t.tgtype & 16) = 16
                     and p.prosecdef and coalesce(p.proconfig, '{}') @> array['search_path=public, pg_temp']) then
     v_fail := v_fail || '(b) bb_file_text_drop_stale_embeddings is not an AFTER UPDATE row trigger with a definer function'::text;
+  end if;
+  -- The insert trigger's behaviour, on a temporary table (the test login cannot write bb_file_text).
+  create temp table p165_text (id integer, text text) on commit drop;
+  create trigger p165_strip before insert or update of text on p165_text
+    for each row execute function public.bb_file_text_strip_ai_policy();
+  insert into p165_text values (1, E'Keep.\nOn the use of AI: You may use AI tools on this assignment if you disclose how and where you used them.\nKeep too.');
+  update p165_text set text = E'Changed.\nAI Use' where id = 1;
+  insert into p165_text values (2, E'Nothing here.');
+  if (select text from p165_text where id = 1) is distinct from 'Changed.'
+     or (select text from p165_text where id = 2) is distinct from 'Nothing here.' then
+    v_fail := v_fail || '(b) the trigger function does not strip on insert and update'::text;
+  end if;
+  if not exists (select 1 from pg_trigger t where t.tgrelid = 'public.bb_file_text'::regclass
+                    and t.tgname = 'bb_file_text_strip_ai_policy' and t.tgenabled = 'O'
+                    and t.tgfoid = 'public.bb_file_text_strip_ai_policy()'::regprocedure) then
+    v_fail := v_fail || '(b) bb_file_text_strip_ai_policy is not enabled, or runs another function'::text;
+  end if;
+  if not exists (select 1 from pg_trigger t where t.tgrelid = 'public.bb_file_text'::regclass
+                    and t.tgname = 'bb_file_text_drop_stale_embeddings' and t.tgenabled = 'O'
+                    and t.tgfoid = 'public.bb_file_text_drop_stale_embeddings()'::regprocedure
+                    and t.tgattr::text = (select a.attnum::text from pg_attribute a
+                                           where a.attrelid = 'public.bb_file_text'::regclass and a.attname = 'text')) then
+    v_fail := v_fail || '(b) bb_file_text_drop_stale_embeddings is not enabled on UPDATE OF text, or runs another function'::text;
   end if;
   if has_function_privilege('anon', 'public.bb_file_text_drop_stale_embeddings()', 'execute')
      or has_function_privilege('authenticated', 'public.bb_file_text_drop_stale_embeddings()', 'execute') then

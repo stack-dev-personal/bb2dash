@@ -10,14 +10,19 @@
 --
 -- WHAT
 --   1. strip_ai_policy(text) returns text: line by line, with the guard unit's own patterns.
---      * A line that matches a policy pattern is removed.
---      * When that line is short (80 characters or fewer: a heading), the long lines and blank lines
---        after it go with it, up to the next short line, which stays.
+--      * A line that matches a policy pattern is removed, that line alone.
+--      * Only when the whole line IS a policy heading ("AI Use", "On the use of AI:", "Artificial
+--        Intelligence Language:", "... Artificial Intelligence Use") do the lines after it go too: up to
+--        the next heading (a line of 60 characters or fewer that does not end in . , or ;), and never
+--        more than 12 lines. Blank lines in the section go with it.
 --      * Everything else is returned byte for byte; a text with no match is returned as it came.
 --      * A text left with nothing keeps one line, '[AI-use policy section removed]', so its file still
 --        has a text unit and the search has nothing to quote.
---      The rule under-cuts rather than over-cuts: a section ends at the first short line. IST.323's
---      "Appendix B: AI Use Statement" deliverable does not match, and stays (as 119 left it).
+--      A line that only mentions the phrase (a schedule row, a slide title) is removed alone and takes
+--      nothing with it; the guard unit already counts such a line as policy. IST.323's "Appendix B: AI
+--      Use Statement" deliverable does not match, and stays (as 119 left it). Review of 2026-10-14: a
+--      section first ended at any short line (hard-wrapped PDF text ended it early) and began at any
+--      short matching line (a schedule row took the lines after it).
 --   2. bb_file_text_strip_ai_policy: BEFORE INSERT OR UPDATE OF text, sets new.text to the rule's
 --      result. Every writer is covered: the sync runner's insert (as anon), the Windows /bb-sync
 --      fallback, a hand insert.
@@ -41,8 +46,13 @@ create or replace function public.strip_ai_policy(p_text text)
   set search_path = pg_catalog, pg_temp
 as $$
 declare
-  -- A heading is a short line; a paragraph is longer. Measured on the line with its edges trimmed.
-  c_short   constant integer := 80;
+  -- A heading is a line of at most this many characters (edges trimmed) that does not end in . , or ;
+  c_heading_max  constant integer := 60;
+  -- The most lines one policy heading may take with it.
+  c_section_max  constant integer := 12;
+  -- A line that IS a policy heading, lower-cased, edges and a trailing colon trimmed.
+  c_policy_heading constant text :=
+    '^(ai use|on the use of ai|artificial intelligence language|([a-z ,-]+ )?artificial intelligence use( policy)?)$';
   -- db/tests/phase17_119_no_ai_policy.sql's patterns, case-insensitive.
   c_pattern constant text :=
     '(artificial intelligence language'
@@ -56,6 +66,7 @@ declare
   v_line    text;
   v_trim    text;
   v_skip    boolean := false;
+  v_taken   integer := 0;
   v_changed boolean := false;
   v_result  text;
 begin
@@ -65,16 +76,22 @@ begin
   foreach v_line in array string_to_array(p_text, E'\n') loop
     v_trim := btrim(v_line, E' \t\r');
     if v_skip then
-      -- Inside a heading's section: its long lines and blank lines go; the first short line ends it.
-      if v_trim = '' or char_length(v_trim) > c_short then
+      -- Inside a policy heading's section: blank lines go; the next heading ends it, and so does the cap.
+      if v_trim = '' then
         continue;
       end if;
-      v_skip := false;
+      if (char_length(v_trim) <= c_heading_max and v_trim !~ '[.,;]$') or v_taken >= c_section_max then
+        v_skip := false;
+      else
+        v_taken := v_taken + 1;
+        continue;
+      end if;
     end if;
     if v_line ~* c_pattern then
       v_changed := true;
-      if char_length(v_trim) <= c_short then
+      if lower(regexp_replace(v_trim, ':$', '')) ~ c_policy_heading then
         v_skip := true;
+        v_taken := 0;
       end if;
       continue;
     end if;
@@ -93,8 +110,8 @@ end $$;
 comment on function public.strip_ai_policy(text) is
   'AI-use policy rule (165; Stack 2026-09-29 and 2026-10-14): removes a course''s AI-use policy from '
   'extracted text, line by line, with the patterns of db/tests/phase17_119_no_ai_policy.sql. A matching '
-  'line goes; a matching short line (a heading) takes the long and blank lines after it up to the next '
-  'short line. Text with no match is returned unchanged; text left empty becomes '
+  'line goes alone; a line that is a policy heading takes the lines after it up to the next heading (at '
+  'most 12). Text with no match is returned unchanged; text left empty becomes '
   '''[AI-use policy section removed]''. Run on every bb_file_text write by a trigger.';
 
 -- =============================================================================================
@@ -114,6 +131,8 @@ comment on function public.bb_file_text_strip_ai_policy() is
   'Trigger function (165): bb_file_text.text passes through strip_ai_policy on every insert and update.';
 
 revoke all on function public.bb_file_text_strip_ai_policy() from public, anon, authenticated;
+-- The test login attaches it to a temporary table to prove what it does (phase17_165).
+grant execute on function public.bb_file_text_strip_ai_policy() to db_test_runner;
 
 drop trigger if exists bb_file_text_strip_ai_policy on public.bb_file_text;
 create trigger bb_file_text_strip_ai_policy
@@ -175,16 +194,20 @@ begin
   end if;
   if not exists (select 1 from pg_trigger t
                   where t.tgrelid = 'public.bb_file_text'::regclass and not t.tgisinternal
-                    and t.tgname = 'bb_file_text_strip_ai_policy'
+                    and t.tgname = 'bb_file_text_strip_ai_policy' and t.tgenabled = 'O'
+                    and t.tgfoid = 'public.bb_file_text_strip_ai_policy()'::regprocedure
                     and (t.tgtype & 1) = 1 and (t.tgtype & 2) = 2 and (t.tgtype & 4) = 4 and (t.tgtype & 16) = 16) then
-    raise exception 'FAIL 165: bb_file_text_strip_ai_policy is not a BEFORE INSERT OR UPDATE row trigger';
+    raise exception 'FAIL 165: bb_file_text_strip_ai_policy is not an enabled BEFORE INSERT OR UPDATE row trigger';
   end if;
   if not exists (select 1 from pg_trigger t join pg_proc p on p.oid = t.tgfoid
                   where t.tgrelid = 'public.bb_file_text'::regclass and not t.tgisinternal
-                    and t.tgname = 'bb_file_text_drop_stale_embeddings'
+                    and t.tgname = 'bb_file_text_drop_stale_embeddings' and t.tgenabled = 'O'
+                    and t.tgfoid = 'public.bb_file_text_drop_stale_embeddings()'::regprocedure
                     and (t.tgtype & 1) = 1 and (t.tgtype & 2) = 0 and (t.tgtype & 16) = 16
+                    and t.tgattr::text = (select a.attnum::text from pg_attribute a
+                                           where a.attrelid = 'public.bb_file_text'::regclass and a.attname = 'text')
                     and p.prosecdef and coalesce(p.proconfig, '{}') @> array['search_path=public, pg_temp']) then
-    raise exception 'FAIL 165: bb_file_text_drop_stale_embeddings is not an AFTER UPDATE row trigger with a definer function';
+    raise exception 'FAIL 165: bb_file_text_drop_stale_embeddings is not an enabled AFTER UPDATE OF text row trigger with a definer function';
   end if;
   if has_function_privilege('anon', 'public.bb_file_text_drop_stale_embeddings()', 'execute')
      or has_function_privilege('authenticated', 'public.bb_file_text_drop_stale_embeddings()', 'execute') then
