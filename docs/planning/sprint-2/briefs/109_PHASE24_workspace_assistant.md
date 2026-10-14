@@ -228,6 +228,13 @@ most are edited in place and say "freeze amendment".
 * **Item 23** of 109a, answered by Stack on 2026-10-08: "a". The hybrid search keeps its ranking
   and uses no index in this phase; both vector columns get their HNSW index; proof 4 stands as
   written. Nothing in the store's clause moves.
+* **F-5 (2026-10-14, Phase 24ab's walk, defect D-1). The runner's similarity floor is 0.81, not 0.78**
+  (`workspace/src/retrieve.ts`, `SIMILARITY_FLOOR`; "floor 0.78" under The stores and the figure at
+  "search floor is 0.78" below are read as 0.81). Invented words scored 0.781 to 0.789 at the walk, so a
+  question nothing matches stored `found`; W-96 measured on prod (`workspace/scripts/eval-floor.mjs`):
+  the golden set 9 of 9 from 0.78 to 0.82, every invented-word and unrelated question empty at 0.81, one
+  invented string still a hit at 0.80. The materials server's `DEFAULT_MIN_SIMILARITY` and the contract
+  fixtures' example value stay 0.78; the runner passes its own floor (DECISIONS 2026-10-14).
 * **Frozen 2026-10-08** on that answer. Worker branches are cut from this commit.
 
 ## Why

@@ -728,3 +728,55 @@ the session's scratch folder and nothing of it is committed.
 **On the plan:** nine answers and one stopped answer, none on Opus: seven `Haiku · lookup` (831, 832, 834,
 835, 836, 838, 839), two `Sonnet · standard` (833; 837 stopped), and one Haiku planning turn (833's, $0.0142
 by the CLI's figure).
+
+## Phase 24ab: D-1 fixed, the second window, step 8 walked again (2026-10-14, 20:26Z to 20:37Z)
+
+W-96 (Opus, `feat/workspace-24-floor`, cut from 1fdd6b6) measured first, with a script kept as
+`workspace/scripts/eval-floor.mjs` (the key is read from a file named by an environment value and nothing
+of it is printed; the output is counts and similarities): on prod, read-only, limit 10, at floors 0.78,
+0.80, 0.81 and 0.82, the golden set's nine cases each hit their own truth file at every floor (case 7's
+original files too, so its replacements were not needed; the weakest best hit is case 9 at 0.837); the
+pack's question returned 7 hits at 0.78 (best 0.789) and none from 0.80 on; three more invented-word
+strings returned 10 hits each at 0.78 (best 0.795, 0.804 and 0.798), and one of them still one hit at
+0.80 (0.804); "What is the capital of France?" and a bicycle-tyre question returned nothing at any floor,
+and a 1998 World Cup question one hit at 0.78 (0.784) and none from 0.80 on. The rule picked **0.81**: the
+lowest of 0.80, 0.81 and 0.82 at which every must-find-nothing question returns nothing while the golden
+set keeps 9 of 9. Test first: `retrieve.test.ts` pinned 0.78 in two places (3 failed, 20 passed before
+the change); then `SIMILARITY_FLOOR = 0.81` and the header comment, the ordering test at the edge (0.81
+sorts above the floor, 0.805 below), and a test that pins the constant. Suites: workspace 1,008 (from
+1,007), typecheck clean; mcp-server 143, untouched. Commits d68aad2 (the measurement) and 5fc2572 (the
+fix), read by the PM in the diff (4 lines of `retrieve.ts`, 18 of the test; the script holds no secret),
+merged into the phase branch as 036cd28 and pushed. Left as they are, on the PM's ruling: the contract
+fixtures `batch-request.json` and `search-function.json` keep `min_similarity: 0.78` as the example
+value of the request's shape (`mcp-server/test/batch.test.ts:114` and the frozen function's own test
+`supabase/functions/workspace-search/search_test.ts:79` pin that example), and the materials server's
+`DEFAULT_MIN_SIMILARITY` stays 0.78 (the runner passes its own floor; the MCP tools of a Claude session
+keep the September measurement's rule).
+
+`bb2dash-workspace:wt24` was rebuilt from 036cd28 at 20:31Z: exit 0 in 79 s, id `b9a17226882f` (from
+`519d0472efbb`); `bb2dash-apply:wt24`, whose image copies `workspace/src`, at 20:37Z: `4adebe98f82e`
+(from `b6a858fa81a7`); `bb2dash-workspace-ingest:wt24` unchanged, `cb42974e6481`. The four live tags
+the same before and after each build.
+
+**The second window (20:33:00Z to 20:36:20Z).** Checked at 20:32:49Z: no request open (the newest, 5091,
+done), no `accept.lock`, no walk box, no acceptance container, no `bb2dash-wt24-` container. The live
+Workspace stopped at 20:33:00Z; the test runner alone (`up -d --no-deps workspace`) at 20:33:10Z, healthy
+in 8 s, `workspace@72678a37775b`; no ingest service, since this window uploads nothing. Walked in order
+into a second output folder; proofs with `--sha 036cd28` and `since` 20:33:30Z:
+
+| step | request | tier · plan · retrieval | similarities | what the page showed | proof |
+|---|---|---|---|---|---|
+| 3 course question (the control) | 840 | low · skipped · found 10 (2.2 s) | 0.868 to 0.891 | `Haiku · lookup`, 232 characters: slide 11's late-work line | `turn-found` pass |
+| 7 follow-up | 841 | low · skipped · found 10 (5.4 s) | 0.872 to 0.923 | `Haiku · lookup`, 452 characters: the grading breakdown; archives 840's conversation | `turn-followup` pass |
+| 8 nothing matches | 842 | low · skipped · **empty**, found 0 (1.0 s) | none (the one source row is the feed) | `Haiku · lookup`, 324 characters: **the first line is the fixed sentence**, then the model's own words; `first_line_is_the_fixed_sentence` true | **`turn-empty` pass** (`retrieval_state` `empty`, `found_n` 0, `content_sources` 0) |
+
+Closed at 20:36:10Z: the test runner stopped and removed, the network `bb2dash-wt24_workspace-net`
+removed, nothing of the project left; the live Workspace started at 20:36:20Z, healthy by 20:37:10Z,
+`workspace@9a02c3ccd37b` with a fresh heartbeat. Read again: the sync container the same; the four live
+ids the same; the store 0, 0, 0, 0; conversations not archived 1; no request open. On the plan: three
+Haiku lookups (840, 841, 842). With this every step of pack 24 has passed on the branch at least once,
+step 8 on the floor the branch now holds, and **the walk is done**; what it changed in the product is D-1
+alone.
+
+**What waits:** the bb2dash-stack suite's verdict (the harness stopped it; Stack's word to run it), the
+two PRs' merge, the cut-over and `just accept 24`, each on his word.
