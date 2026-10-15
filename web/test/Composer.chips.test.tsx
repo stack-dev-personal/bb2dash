@@ -22,6 +22,7 @@ vi.mock('@/lib/supabase/client', async () => (await import('./composer-fake')).s
 
 const labels = await import('@/lib/workspace-labels');
 const { Composer } = await import('@/components/workspace/Composer');
+const { setComposerDepth } = await import('@/components/workspace/depth-store');
 
 const A = '6f1c2a54-9b1e-4c0d-8a55-0d2f3b7c9e11';
 const FILE_ROUTINE = routine('explain', { title: 'Explain a file', needs: 'file' });
@@ -99,6 +100,7 @@ function askCalls() {
 
 beforeEach(() => {
   resetDb();
+  setComposerDepth('auto');
   db.state.rows = {
     v_course_display: COURSES,
     workspace_routines: [FILE_ROUTINE, routine('plan', { title: 'Plan my week', grp: 'plan', sort: 2 })],
@@ -234,10 +236,13 @@ describe('a routine', () => {
     fireEvent.keyDown(box(), { key: 'Enter' });
     await settle();
     expect(askCalls()).toEqual([]);
-    expect(askButton()).toHaveAttribute('aria-disabled', 'true');
+    // W-4: Ask takes the disabled look while the need is unmet, and names the line as its description.
+    expect(askButton()).toBeDisabled();
+    expect(askButton()).toHaveAccessibleDescription(line);
 
     await attachFile('Week 11 slides.pptx');
     expect(screen.queryByText(line)).toBeNull();
+    expect(askButton()).toBeEnabled();
     fireEvent.click(askButton());
     await waitFor(() => expect(onAsked).toHaveBeenCalled());
     expect(askCalls()[0].args.p_options).toMatchObject({ routine: 'explain', files: [11] });
@@ -465,5 +470,84 @@ describe('the routine list at the phone step', () => {
     fireEvent.keyDown(first, { key: 'Escape' });
     expect(screen.queryByRole('searchbox')).toBeNull();
     expect(screen.getByRole('button', { name: labels.ADD_MENU_LABEL })).toHaveFocus();
+  });
+});
+
+describe('the depth across a remount (R2-1)', () => {
+  it('keeps Standard when the composer mounts again, as the lobby hands over to the thread', async () => {
+    const lobby = mount({ conversationId: null });
+    await pickDepth(lobby.container, 'Standard');
+    lobby.unmount();
+    const thread = mount({ conversationId: A });
+    expect(depthButton(thread.container)).toHaveAttribute('data-depth', 'standard');
+  });
+
+  it('reads Auto after a Deep question, in the next mount too', async () => {
+    const lobby = mount({ conversationId: null });
+    await pickDepth(lobby.container, 'Deep');
+    type('Go deep');
+    fireEvent.click(askButton());
+    await waitFor(() => expect(lobby.onAsked).toHaveBeenCalled());
+    expect((askCalls()[0].args.p_options as { depth: string }).depth).toBe('deep');
+    lobby.unmount();
+    const thread = mount({ conversationId: A });
+    expect(depthButton(thread.container)).toHaveAttribute('data-depth', 'auto');
+  });
+});
+
+describe('the routine sheet and focus (R2-3)', () => {
+  it('focuses its search field after the sheet opens, and Close hands focus back to Add', async () => {
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query === '(max-width: 720px)',
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    })) as unknown as typeof window.matchMedia;
+    try {
+      mount();
+      fireEvent.click(screen.getByRole('button', { name: labels.ADD_MENU_LABEL }));
+      fireEvent.click(screen.getByRole('menuitem', { name: labels.USE_ROUTINE_LABEL }));
+      const sheet = screen.getByRole('dialog', { name: labels.USE_ROUTINE_LABEL });
+      const search = within(sheet).getByRole('searchbox', { name: labels.ROUTINE_FILTER_PLACEHOLDER });
+      await waitFor(() => expect(search).toHaveFocus());
+      fireEvent.click(within(sheet).getByRole('button', { name: 'Close' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(screen.getByRole('button', { name: labels.ADD_MENU_LABEL })).toHaveFocus();
+    } finally {
+      window.matchMedia = original;
+    }
+  });
+});
+
+describe('the menus open by the room there is (W-2)', () => {
+  function placeButton(button: HTMLElement, top: number): void {
+    button.getBoundingClientRect = () =>
+      ({ top, bottom: top + 32, left: 0, right: 40, width: 40, height: 32, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+  }
+
+  it('opens the depth menu down near the top of the window and up near its foot', async () => {
+    const menuStyles = (await import('@/components/workspace/Menu.module.css')).default;
+    const { container } = mount();
+    placeButton(depthButton(container), 100);
+    fireEvent.click(depthButton(container));
+    expect(screen.getByRole('menu', { name: labels.DEPTH_MENU_LABEL })).toHaveClass(menuStyles.down);
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+
+    placeButton(depthButton(container), window.innerHeight - 40);
+    fireEvent.click(depthButton(container));
+    expect(screen.getByRole('menu', { name: labels.DEPTH_MENU_LABEL })).not.toHaveClass(menuStyles.down);
+  });
+
+  it('opens the plus menu and its routine list down near the top of the window', async () => {
+    const menuStyles = (await import('@/components/workspace/Menu.module.css')).default;
+    mount();
+    const add = screen.getByRole('button', { name: labels.ADD_MENU_LABEL });
+    placeButton(add, 100);
+    fireEvent.click(add);
+    expect(screen.getByRole('menu', { name: labels.ADD_MENU_LABEL })).toHaveClass(menuStyles.down);
+    fireEvent.click(screen.getByRole('menuitem', { name: labels.USE_ROUTINE_LABEL }));
+    const search = await screen.findByRole('searchbox', { name: labels.ROUTINE_FILTER_PLACEHOLDER });
+    expect(search.closest(`.${menuStyles.down}`)).not.toBeNull();
   });
 });

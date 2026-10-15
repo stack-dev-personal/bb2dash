@@ -258,3 +258,70 @@ scrolling class (`Menu.module.css .list`, `RoutineList.module.css .scroll`, `Mat
 renders `<Lobby>`, the 100 screen failures should close; W-88's layout rewrite closes the expected one.
 The lobby mounted inside the page is not tested here (the page is W-88's); `Workspace.lobby.test.tsx`
 mounts `Lobby` alone.
+
+## Round 2 (the PM's review and walk, 2026-10-15: R2-1, R2-3, R2-7, W-2, W-4)
+
+First `git merge origin/feat/workspace-page-24b-thread` (a fast-forward to `de4a194`: W-88's branch already
+held my two commits and the wiring of `Workspace.tsx`), so the typecheck and the whole suite start clean.
+Then one item at a time, test first, a commit and a push each. Only my files changed.
+
+| item | commit | red | green |
+|---|---|---|---|
+| R2-1 (HIGH) the depth kept across the lobby-to-thread remount | `45645ab` | `Composer.chips.test.tsx` against a stub store: 1 failed, 25 passed (26): "keeps Standard when the composer mounts again" (the Deep case already held) | 26 passed (26) |
+| R2-3 the routine sheet's focus | `4bbe76d` | `Composer.chips.test.tsx`: 1 failed, 26 passed (27): the field never had focus in the sheet | 27 passed (27) |
+| R2-7 a sixth file dropped before a re-render | `bb6ffe8` | `Composer.uploads.test.tsx`: 1 failed, 11 passed (12): `uploadFile` called 6 times, not 5 | 12 passed (12) |
+| W-2 menus open by the room there is | `c0bb39f` | `menu-placement.test.ts` + `Composer.chips.test.tsx`: 2 files failed; 2 failed, 27 passed (29), the new module unresolved | 3 files, 45 passed (45) with `Composer.uploads` |
+| W-4 Ask disabled while gated | `f594798` | `Composer.chips` + `Composer.uploads`: 2 failed, 39 passed (41): the button was enabled | 41 passed; 56 passed (56) with the two lobby files |
+
+What each does:
+
+* **R2-1.** `depth-store.ts`: one module-level depth read through `useSyncExternalStore` (server snapshot
+  Auto), written by each pick and, after an accepted question, by `depthAfterAsk` (Deep → Auto, the rest
+  stay). `ComposerChoices` no longer holds a depth; `askOptionsOf(choices, depth, routines)` takes it. The
+  dead `useConversationReset` is removed. Tests: Standard picked, the composer unmounted and mounted for
+  another conversation, the menu reads Standard; Deep asked, remounted, Auto. Each composer test file's
+  `beforeEach` sets the store back to Auto (`setComposerDepth('auto')`).
+* **R2-3.** `RoutineList` takes `inSheet`; in the sheet the field is focused by a `setTimeout(0)` after mount,
+  after `PopoutShell` has recorded the opener and focused its panel. The pop-down form focuses at once, as
+  before. Test: at the phone step the field takes focus, and Close hands focus back to Add.
+* **R2-7.** `use-composer-uploads.ts` counts the room from a ref (`useTakenCount`) raised by each upload it
+  starts and set back to the chips' count by an effect after each commit, so two drops in one tick cannot
+  both see room for the fifth. The files past the room are not started, and the limit line shows. Test: two
+  drops of three files inside one `act`: five uploads, five chips, the limit line.
+* **W-2.** `menu-placement.ts`: `menuPlacement(box, windowHeight)` opens down when the room below the
+  button is at least the room above it (a box with no size opens down), up otherwise; `useMenuButton`
+  measures it with `getBoundingClientRect` and `innerHeight` when the menu opens. `Menu.module.css` gains one
+  placement class, `.down` (`top: calc(100% + var(--space-1)); bottom: auto`), on the plus, course and depth
+  menus and the routine list's panel. Tests: the rule as a pure function (four cases), and the depth and plus
+  menus mounted with the button placed near the top and the foot of the window.
+* **W-4.** Ask is `disabled` (Phase 22's flat grey pill) while a routine's need is unmet or an attached
+  upload is not indexed, and the line under the box stays its `aria-describedby`; while a request is open
+  the button is Stop and the gate does not apply. After a Stop and after an answer it is enabled, as
+  amendment (h) says (that case is unchanged and green).
+
+Defaults superseded or taken in Round 2:
+
+23. **Default 2 is withdrawn** by the PM's reading (W-4): the gate disables Ask; `aria-disabled` is gone.
+24. **Default 18 is withdrawn** (W-2): the menus open by the room there is, measured on opening; a tie
+    opens down.
+25. **The depth store lives for the page's module lifetime**, not in storage: a reload starts on Auto.
+26. **R2-7 keeps the limit line** for a file left out of a drop, whichever drop it was in.
+
+The gates, from `web/`, on `f594798`:
+
+    $ npm run typecheck                      exit 0
+    $ npx eslint . --max-warnings 0          exit 0
+    $ npx vitest run                         exit 0
+     Test Files  209 passed (209)
+          Tests  3844 passed (3844)
+    $ npx vitest run test/token-audit.test.ts test/raw-html.audit.test.ts test/audits.test.ts \
+        test/status-vocabulary.test.ts
+     Test Files  4 passed (4)
+          Tests  107 passed (107)
+
+Files changed in Round 2 (`git diff --name-only de4a194..HEAD`, before this record): `Composer.tsx`,
+`CourseMenu.tsx`, `DepthMenu.tsx`, `Menu.module.css`, `PlusMenu.tsx`, `RoutineList.tsx`, `composer-choices.ts`,
+`depth-store.ts` (new), `menu-keys.ts`, `menu-placement.ts` (new), `use-composer-model.ts`,
+`use-composer-uploads.ts`, and the tests `Composer.chips.test.tsx`, `Composer.uploads.test.tsx`,
+`menu-placement.test.ts` (new). No labels change, no token, no data attribute; every function of mine stays
+under 50 lines.

@@ -127,13 +127,16 @@ describe('an upload', () => {
     fireEvent.click(askButton());
     await settle();
     expect(askCalls()).toEqual([]);
-    expect(askButton()).toBeEnabled();
+    // W-4: the disabled look while an attached upload is not indexed.
+    expect(askButton()).toBeDisabled();
+    expect(askButton()).toHaveAccessibleDescription(labels.UPLOAD_NOT_READY_LINE);
 
     db.state.rows = { ...db.state.rows, workspace_documents: [upload(31, 'indexed', { title: 'notes.md' })] };
     // The query re-reads every 5 s while a row settles; the test re-reads at once.
     await act(() => client.invalidateQueries({ queryKey: workspaceFileKeys.uploads() }));
     await waitFor(() => expect(uploadChip(container)).toHaveAttribute('data-upload-state', 'indexed'));
     expect(screen.queryByText(labels.UPLOAD_NOT_READY_LINE)).toBeNull();
+    expect(askButton()).toBeEnabled();
     fireEvent.click(askButton());
     await waitFor(() => expect(onAsked).toHaveBeenCalled());
     expect(askCalls()[0].args.p_options).toMatchObject({ uploads: [31], files: [] });
@@ -229,5 +232,30 @@ describe('the material picker', () => {
     fireEvent.keyDown(window, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(screen.getByRole('button', { name: labels.ADD_MENU_LABEL })).toHaveFocus();
+  });
+});
+
+describe('the limit of five, for files dropped before a re-render (R2-7)', () => {
+  it('uploads no sixth file and says the limit line', async () => {
+    flow.uploadFile.mockImplementation(async (file: File) => ({
+      kind: 'registered',
+      id: Number(file.name.replace(/\D/g, '')),
+      state: 'stored',
+    }));
+    const { container } = mount();
+    const target = screen.getByRole('textbox').closest('[data-drop-target]');
+    if (!(target instanceof HTMLElement)) throw new Error('no drop target');
+    const drop = (names: string[]) => {
+      const files = names.map((name) => new File(['x'], name, { type: 'text/plain' }));
+      fireEvent.drop(target, { dataTransfer: { files, types: ['Files'] } });
+    };
+    act(() => {
+      drop(['f1.txt', 'f2.txt', 'f3.txt']);
+      drop(['f4.txt', 'f5.txt', 'f6.txt']);
+    });
+    await waitFor(() => expect(container.querySelectorAll('[data-chip="upload"][data-upload-state]')).toHaveLength(5));
+    await settle();
+    expect(flow.uploadFile).toHaveBeenCalledTimes(5);
+    expect(screen.getByText(labels.ATTACHMENTS_LIMIT_LINE)).toBeInTheDocument();
   });
 });

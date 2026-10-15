@@ -18,7 +18,7 @@
  */
 
 import { useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { workspaceErrorReason } from '@/lib/queries.workspace';
 import { WORKSPACE_ATTACHMENTS_MAX } from '@/lib/queries.workspace-ask';
 import {
@@ -70,10 +70,24 @@ function settledChoices(choices: ComposerChoices, key: string, title: string, ou
   }
 }
 
+/**
+ * How many chips are attached, counting the uploads started since the last render (R2-7): two drops in one
+ * tick both read the same `attached`, so the room is taken from this count, which each start raises and each
+ * committed render sets back to what the chips hold.
+ */
+function useTakenCount(attached: number): RefObject<number> {
+  const taken = useRef(attached);
+  useEffect(() => {
+    taken.current = attached;
+  }, [attached]);
+  return taken;
+}
+
 export function useComposerUploads({ course, attached, update, onLimit }: ComposerUploadsInput) {
   const queryClient = useQueryClient();
   const [problem, setProblem] = useState<string | null>(null);
   const counter = useRef(0);
+  const takenRef = useTakenCount(attached);
 
   function refreshRows() {
     void queryClient.invalidateQueries({ queryKey: workspaceFileKeys.uploads() });
@@ -98,9 +112,11 @@ export function useComposerUploads({ course, attached, update, onLimit }: Compos
   function addFiles(files: readonly File[]) {
     if (files.length === 0) return;
     setProblem(null);
-    const room = Math.max(0, WORKSPACE_ATTACHMENTS_MAX - attached);
+    const room = Math.max(0, WORKSPACE_ATTACHMENTS_MAX - takenRef.current);
     if (files.length > room) onLimit();
-    for (const file of files.slice(0, room)) void uploadOne(file);
+    const started = files.slice(0, room);
+    takenRef.current += started.length;
+    for (const file of started) void uploadOne(file);
   }
 
   async function retry(row: WorkspaceDocument) {

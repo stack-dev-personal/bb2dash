@@ -21,6 +21,7 @@ import {
   coursesProblemLine,
 } from '@/lib/workspace-labels';
 import { useMenuButton } from './menu-keys';
+import { placedClass } from './menu-placement';
 import menuStyles from './Menu.module.css';
 import styles from './CourseMenu.module.css';
 
@@ -81,7 +82,7 @@ export function CourseMenu({ course, onPick, disabled }: CourseMenuProps) {
         {shown}
       </button>
       {menu.open && (
-        <div ref={menuRef} role="menu" aria-label={COURSE_MENU_LABEL} className={menuStyles.panel} onKeyDown={menu.onMenuKeyDown}>
+        <div ref={menuRef} role="menu" aria-label={COURSE_MENU_LABEL} className={placedClass(menuStyles.panel, menuStyles.down, menu.placement)} onKeyDown={menu.onMenuKeyDown}>
           <CourseItems
             course={course}
             rows={rows}
