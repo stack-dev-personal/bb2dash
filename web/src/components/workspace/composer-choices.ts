@@ -17,7 +17,7 @@ import {
 } from '@/lib/queries.workspace-ask';
 import type { WorkspaceDocument, WorkspaceDocumentState } from '@/lib/queries.workspace-files';
 import { routineNeedLine, type WorkspaceRoutine } from '@/lib/queries.workspace-routines';
-import { UPLOAD_NOT_READY_LINE } from '@/lib/workspace-labels';
+import { UPLOAD_ERROR_SENTENCES, UPLOAD_NOT_READY_LINE, uploadFailedAttachedLine } from '@/lib/workspace-labels';
 
 export type ComposerAttachment =
   | { kind: 'file'; key: string; id: number; title: string }
@@ -117,7 +117,8 @@ export function uploadStateOf(
 
 /**
  * Why Ask sends nothing, or null: the routine's need first (its line names the
- * routine), then an attached upload that is not yet indexed.
+ * routine), then an attached upload that failed (with its reason), then one that
+ * is not yet indexed.
  */
 export function askGateLine(
   choices: ComposerChoices,
@@ -128,8 +129,24 @@ export function askGateLine(
     const need = routineNeedLine(routine, { attachments: choices.attachments.length, course: choices.course });
     if (need !== null) return need;
   }
+  const failed = failedUploadOf(choices, uploads);
+  if (failed !== undefined) return failedLineOf(failed);
   const notReady = choices.attachments.some(
     (item) => item.kind === 'upload' && uploadStateOf(item, uploads) !== 'indexed',
   );
   return notReady ? UPLOAD_NOT_READY_LINE : null;
+}
+
+/** The first attached upload whose row is `failed`, as last read. */
+function failedUploadOf(
+  choices: ComposerChoices,
+  uploads: readonly WorkspaceDocument[] | undefined,
+): WorkspaceDocument | undefined {
+  const ids = choices.attachments.flatMap((item) => (item.kind === 'upload' && item.id !== null ? [item.id] : []));
+  return uploads?.find((row) => row.state === 'failed' && ids.includes(row.id));
+}
+
+/** A failed upload says so with its reason (Round 3, W-6), never that it is still being read. */
+function failedLineOf(row: WorkspaceDocument): string {
+  return uploadFailedAttachedLine(row.error_code === null ? null : UPLOAD_ERROR_SENTENCES[row.error_code]);
 }
