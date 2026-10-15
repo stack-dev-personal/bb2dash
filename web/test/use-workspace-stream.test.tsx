@@ -18,6 +18,11 @@
  *   * `done` invalidates the messages key;
  *   * the channel is left on unmount.
  *
+ * Phase 24b (brief 111, task 6) adds a third event, `sources` `{request_id,
+ * state, found_n}` (`sources-event.json`): it is read by its named keys, shown
+ * on the view, and it and `done` invalidate the turns and the request's
+ * sources. The stop guard has its own file, `use-workspace-stream.stop.test.tsx`.
+ *
  * Its siblings: `use-workspace-stream.screen.test.tsx` mounts the screen over
  * the same fake, and `use-workspace-stream.realtime.test.tsx` runs the hook
  * over the real supabase-js Realtime client.
@@ -30,6 +35,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { newQueryClient } from './hydration-harness';
 import { fake, gate, joined, openTopics, resetFake, settle, wrapperFor } from './workspace-harness';
+import sourcesEvent from '../../workspace/test/fixtures/contract24/sources-event.json';
 
 vi.mock('@/lib/supabase/client', async () =>
   (await import('./workspace-harness')).supabaseClientMock(),
@@ -40,12 +46,14 @@ const {
   initialStreamState,
   parseDelta,
   parseDone,
+  parseSources,
   streamReducer,
   streamView,
   useWorkspaceStream,
   workspaceTopic,
 } = await import('@/lib/use-workspace-stream');
 const { workspaceKeys } = await import('@/lib/queries.workspace');
+const { workspaceSourceKeys } = await import('@/lib/queries.workspace-sources');
 
 type StreamEvent = Parameters<typeof streamReducer>[1];
 /** `Omit` applied to each member of the union, so every event keeps its own keys. */
@@ -213,6 +221,8 @@ describe('the stream rule: a contiguous run from seq 1', () => {
       text: '',
       late: false,
       done: false,
+      sources: null,
+      stopped: false,
     });
   });
 
@@ -270,7 +280,11 @@ describe('useWorkspaceStream: the one private channel', () => {
 
     expect(fake.state.log).toEqual(['setAuth', `channel:${TOPIC_A}`, `subscribe:${TOPIC_A}`]);
     expect(channel.params).toEqual({ config: { private: true } });
-    expect([...channel.handlers.keys()].sort()).toEqual(['broadcast:delta', 'broadcast:done']);
+    expect([...channel.handlers.keys()].sort()).toEqual([
+      'broadcast:delta',
+      'broadcast:done',
+      'broadcast:sources',
+    ]);
   });
 
   it('holds the lobby when no conversation is selected', async () => {
@@ -550,5 +564,96 @@ describe('useWorkspaceStream: the one private channel', () => {
 
     expect(fake.state.channels).toHaveLength(1);
     expect(fake.state.log.filter((entry) => entry.startsWith('remove:'))).toEqual([]);
+  });
+});
+
+describe('the sources event (Phase 24b): {request_id, state, found_n}', () => {
+  it('reads the fixture`s payload, and ignores the id key and any other unknown key', () => {
+    expect(parseSources(sourcesEvent)).toEqual({ requestId: 4812, state: 'found', foundN: 3 });
+    expect(parseSources({ ...sourcesEvent, id: 'added-by-realtime', extra: [1] })).toEqual({
+      requestId: 4812,
+      state: 'found',
+      foundN: 3,
+    });
+    expect(parseSources({ request_id: '42', state: 'attached_only', found_n: 0 })).toEqual({
+      requestId: 42,
+      state: 'attached_only',
+      foundN: 0,
+    });
+  });
+
+  it.each([
+    ['no payload', undefined],
+    ['no request id', { state: 'found', found_n: 1 }],
+    ['an unknown state', { request_id: 42, state: 'maybe', found_n: 1 }],
+    ['a count below 0', { request_id: 42, state: 'found', found_n: -1 }],
+    ['a count that is not whole', { request_id: 42, state: 'found', found_n: 1.5 }],
+    ['a count sent as text', { request_id: 42, state: 'found', found_n: '1' }],
+  ])('drops a sources payload with %s', (_label, payload) => {
+    expect(parseSources(payload)).toBeNull();
+  });
+
+  it('records the request`s sources on its view, and only its own', () => {
+    const state = fold(TOPIC_A, [
+      delta(1, 'a'),
+      { type: 'sources', requestId: REQUEST, state: 'empty', foundN: 0 },
+    ]);
+    expect(streamView(state, TOPIC_A, REQUEST)).toMatchObject({
+      text: 'a',
+      sources: { requestId: REQUEST, state: 'empty', foundN: 0 },
+      stopped: false,
+    });
+    expect(streamView(state, TOPIC_A, 43).sources).toBeNull();
+  });
+
+  it('keeps the same state for a repeated sources event, so nothing re-renders', () => {
+    const event = { type: 'sources' as const, topic: TOPIC_A, requestId: REQUEST, state: 'found' as const, foundN: 2 };
+    const once = streamReducer(initialStreamState(TOPIC_A), event);
+    expect(streamReducer(once, event)).toBe(once);
+    expect(streamReducer(once, { ...event, foundN: 3 })).not.toBe(once);
+  });
+});
+
+describe('useWorkspaceStream: the sources event and done move the provenance', () => {
+  function mountOn(conversationId: string) {
+    const client = newQueryClient();
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    const hook = renderHook(() => useWorkspaceStream(conversationId, REQUEST), { wrapper: wrapperFor(client) });
+    return { ...hook, invalidate };
+  }
+
+  it('shows the sources event on the view, then invalidates the turns and that request`s sources', async () => {
+    const { result, invalidate } = mountOn(A);
+    const channel = await joined(TOPIC_A);
+
+    act(() => channel.emit('sources', { request_id: REQUEST, state: 'found', found_n: 3, id: 'x' }));
+
+    expect(result.current.sources).toEqual({ requestId: REQUEST, state: 'found', foundN: 3 });
+    const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey);
+    expect(keys).toEqual([workspaceSourceKeys.turns(A), workspaceSourceKeys.sources(REQUEST)]);
+  });
+
+  it('does nothing on a sources event it cannot read', async () => {
+    const { result, invalidate } = mountOn(A);
+    const channel = await joined(TOPIC_A);
+    const before = result.current;
+
+    act(() => channel.emit('sources', { state: 'found' }));
+
+    expect(result.current.sources).toBeNull();
+    expect(result.current.text).toBe(before.text);
+    expect(invalidate).not.toHaveBeenCalled();
+  });
+
+  it('invalidates the provenance on done as well as the conversation', async () => {
+    const { invalidate } = mountOn(A);
+    const channel = await joined(TOPIC_A);
+
+    act(() => channel.emit('done', { request_id: REQUEST, message_id: USER_MESSAGE, state: 'done' }));
+
+    const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey);
+    expect(keys).toContainEqual(workspaceKeys.messages(A));
+    expect(keys).toContainEqual(workspaceSourceKeys.turns(A));
+    expect(keys).toContainEqual(workspaceSourceKeys.sources(REQUEST));
   });
 });

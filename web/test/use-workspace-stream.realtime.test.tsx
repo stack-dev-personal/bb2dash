@@ -165,6 +165,30 @@ describe('useWorkspaceStream over the real supabase-js Realtime client', () => {
     await waitFor(() => expect(sentEvents()).toContain(`phx_leave ${wireTopic(A)}`));
   });
 
+  it('reads a pushed sources frame onto the view (Phase 24b), by its named keys', async () => {
+    const { result, unmount } = mount(A);
+    await waitFor(() => expect(result.current.channel).toBe('joined'));
+
+    act(() => {
+      wire.state.sockets.at(-1)?.receive([
+        null,
+        null,
+        wireTopic(A),
+        'broadcast',
+        {
+          type: 'broadcast',
+          event: 'sources',
+          payload: { id: 'added-by-realtime', request_id: REQUEST, state: 'empty', found_n: 0 },
+        },
+      ]);
+    });
+
+    await waitFor(() => expect(result.current.sources).toEqual({ requestId: REQUEST, state: 'empty', foundN: 0 }));
+    expect(result.current).toMatchObject({ text: '', stopped: false });
+    unmount();
+    await waitFor(() => expect(sentEvents()).toContain(`phx_leave ${wireTopic(A)}`));
+  });
+
   it('moves between conversations as join, leave, join', async () => {
     const { result, rerender, unmount } = mount(A);
     await waitFor(() => expect(result.current.channel).toBe('joined'));

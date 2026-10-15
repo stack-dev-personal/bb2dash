@@ -536,7 +536,7 @@ it. Nobody answers a running worker by message (ruling W-S).
 
 | worker | stream | branch | worktree | owns (disjoint) | tasks |
 |---|---|---|---|---|---|
-| W-86 | data layer | `feat/workspace-page-24b-data` | `bb2dash-wt-24b-data` | the nine new files under `web/src/lib/` and their tests; `use-workspace-stream.ts` and its three tests; `AnswerBody.tsx`, its module and its test | 2, 4 to 6 |
+| W-86 | data layer | `feat/workspace-page-24b-data` | `bb2dash-wt-24b-data` | the nine new files under `web/src/lib/` and their tests; `use-workspace-stream.ts` and its three tests (since 2026-10-14 `AnswerBody.tsx`, its module and its test are W-88's: "The data layer's frozen exports") | 2 (Q-4), 4 to 6 |
 | W-87 | composer and lobby | `feat/workspace-page-24b-composer` | `bb2dash-wt-24b-composer` | `Composer`, `PlusMenu`, `DepthMenu`, `MaterialPicker`, `Lobby`, `ExamplePrompts`, their modules and tests; `Workspace.empty.test.tsx` | 7, 8 |
 | W-88 | thread and panel | `feat/workspace-page-24b-thread` | `bb2dash-wt-24b-thread` | `page.tsx`, `Workspace.tsx`, `Workspace.module.css`, `Thread`, `MessageList`, `ConversationList`, `TierBadge`, `ServiceStatus`, `SidePanel` and its tabs, `thread.ts`, `route.ts`, their modules; both layout checks; `Workspace.test.tsx`, `Workspace.thread.test.ts`, `Workspace.failures.test.tsx`, `Workspace.rereads.test.tsx`, `Workspace.service.test.tsx`, `workspace-harness.tsx` | 9 to 11 |
 | PM | integration | `feat/workspace-page-24b` | `bb2dash-wt-24b` | `workspace-labels.ts` and its test; the pack and `accept24.spec.ts`; **the acceptance files pack 21 shares:** `web/e2e/accept.lib.ts`, `web/e2e/walk21.lib.ts` and `walk21.window.ts` (the lines that read the two changed attributes), `acceptance/21/playbook.md` (only a sentence the pack check would otherwise fail), `acceptance/README.md` (one line), and the other `walk21*` files with `accept21.spec.ts` and `workspace-acceptance-helpers.spec.ts` as read at the cut; Phase 22's fixture and phone cases; the token baseline if a count moves; `compose.yaml`'s one value; state docs; 111a | 1 to 3, 12 to 16 |
@@ -630,8 +630,386 @@ under `web/src/` is the generated types file.
 * **Its gates:** `cd web && npm run typecheck && npx eslint . --max-warnings 0 && npx vitest run`, the
   new tests' coverage at least 80 %, and `git diff --name-only origin/feat/workspace-24...HEAD` lists
   only W-86's files, the labels file and its test, this brief and `111a`. It opens no PR: 24b is one PR,
-  opened at the end of the whole phase. It stops at "the data layer is on the phase branch" and says
+  opened at the end of the whole phase (amended 2026-10-15: on Stack's word "merge to main" the data layer went to
+  `main` on its own as PR #108, 24b's part 1, the one exception to one PR per phase, DECISIONS 2026-10-15; the page is
+  part 2, from the same branch). It stops at "the data layer is on the phase branch" and says
   what the page's streams can start from.
+
+## The data layer's frozen exports (PM, 2026-10-14, before W-86 was cut)
+
+What W-86 builds now, and what W-87 and W-88 type against at the gate. The names and signatures below
+are frozen; a body, a private helper or a test is the worker's. Where this section and the Workers
+table or a Contract paragraph differ, this section is current. Conventions are `queries.workspace.ts`'s:
+a key object, an `xOptions()` returning `queryOptions`, a `useX()` hook, throw on error, every row
+through a pure normaliser, nothing fabricated. 24a's objects are in the regenerated `database.types.ts`
+on this branch, so a module may use the typed client or `untypedClient()`; either way every row and
+every `Json` return goes through its normaliser. No module imports from `web/src/components/`, and no
+module reads `workspace_document_text` or `workspace_text_embeddings` (task 5's grep). The wording a
+module needs is imported from `workspace-labels.ts`, frozen by task 3 (commit f20843c): each record
+there keyed by a database vocabulary (`DOCUMENT_STATE_LABELS`, `UPLOAD_ERROR_SENTENCES`, `DEPTH_LABELS`,
+`SOURCE_KIND_LABELS`, `ROUTINE_GROUP_HEADINGS`, `PANEL_TABS`, `RETRIEVAL_LINES`) spells the vocabulary
+inline, and the module that owns the type pins the two equal in its test
+(`const _: Record<WorkspaceDocumentState, string> = DOCUMENT_STATE_LABELS`).
+
+**What W-86 does now** (his answer 3): tasks 4, 5 and 6 as narrowed here, and probe Q-4. Task 4 is the
+parser alone: `answer-format.ts` and its test. `AnswerBody.tsx`, its module and its test are W-88's
+at the gate, built on this parser. Tasks 5 and 6 are whole. The worker's record is
+`verification/111_W86_VERIFICATION.md` (a red run and a green run per task, Q-4's line, every default
+taken). The worker may add a string the page turns out to need to `workspace-labels.ts` and its test
+only in a section headed "W-86 additions (for the PM to accept)" at the end of each file; nothing above
+that heading changes. It touches no other file outside the list below.
+
+### `queries.workspace-ask.ts` (task 5): `workspace_ask_with` and the options rows
+
+```ts
+export type WorkspaceDepth = 'auto' | 'quick' | 'standard' | 'deep';
+export const WORKSPACE_DEPTHS: readonly WorkspaceDepth[];           // in that order
+export type WorkspaceFormat = 'plain' | 'rich';
+export const WORKSPACE_ATTACHMENTS_MAX = 5;
+export interface WorkspaceAskOptions {
+  course: string | null;      // a `v_course_display.display_id`, or null for all courses
+  depth: WorkspaceDepth;
+  routine: string | null;     // a `workspace_routines.id`
+  format: WorkspaceFormat;    // the composer always sends 'rich'
+  files: readonly number[];   // `bb_files.id`, in chip order
+  uploads: readonly number[]; // `workspace_documents.id`, in chip order
+}
+export const DEFAULT_ASK_OPTIONS: WorkspaceAskOptions;              // all courses, auto, no routine, rich, none
+export function toAskOptionsJson(options: WorkspaceAskOptions): Record<string, unknown>;
+  // the six keys of ask-options.json, nulls kept, arrays as given; throws
+  // WorkspaceOptionsRefusal('options_rejected') for a depth or format outside the lists, an id that is
+  // not a positive safe integer, or more than five attachments in all (the database's own rules, first)
+export interface AskWorkspaceWithInput { conversationId: string | null; text: string; options: WorkspaceAskOptions }
+export function askWorkspaceWith(input: AskWorkspaceWithInput): Promise<WorkspaceAskResult>;
+  // parseQuestion first (22023's rule), then rpc workspace_ask_with(p_conversation_id, p_text, p_options);
+  // on error: throw askWithRefusalFor(error) ?? error
+export type WorkspaceOptionsRefusalReason = 'reference_gone' | 'options_rejected' | 'not_owner';
+export class WorkspaceOptionsRefusal extends Error { readonly reason: WorkspaceOptionsRefusalReason }
+  // message = REFUSAL_REFERENCE_GONE | REFUSAL_OPTIONS_REJECTED | NOT_OWNER_LINE
+export function askWithRefusalFor(error: unknown): WorkspaceRefusal | WorkspaceOptionsRefusal | null;
+  // 22023, 23505 → refusalFor(); 23514 → options_rejected; 42501 → not_owner; 23503 whose message starts
+  // with "workspace_ask_with:" → reference_gone; any other 23503 → null (isMissingConversation stays the
+  // caller's: the conversation was not found)
+export function useAskWorkspaceWith();                              // useMutation; onSettled invalidates as useAskWorkspace
+export interface WorkspaceRequestOptions {
+  request_id: number; depth: WorkspaceDepth; format: WorkspaceFormat;
+  routine_id: string | null; course_display_id: string | null; course_ids: string[] | null;
+}
+export function normalizeRequestOptions(row: unknown): WorkspaceRequestOptions | null;
+export const workspaceAskKeys = { options: (conversationId: string) => ['workspace', 'request-options', conversationId] as const };
+export function requestOptionsOptions(conversationId: string | null, requestIds: readonly number[]);
+  // select from workspace_request_options where request_id in (requestIds); enabled when the id is a
+  // uuid and the list is not empty; the ids are the conversation's requests as the page has them;
+  // (R2-1, 2026-10-14) a sorted copy of the ids is the key's suffix, so a new request is a new key and
+  // a prefix invalidation of options(conversationId) still reaches it
+export function useWorkspaceRequestOptions(conversationId: string | null, requestIds: readonly number[]);
+export function lastRequestOptionsOf(rows: readonly WorkspaceRequestOptions[]): WorkspaceRequestOptions | null;
+  // the highest request_id: the row the composer restores its routine and course chips from
+```
+
+### `queries.workspace-sources.ts` (task 5): one answer's provenance
+
+```ts
+export type WorkspaceRetrievalState = 'found' | 'attached_only' | 'empty' | 'failed';
+export type WorkspacePlanState = 'skipped' | 'planned' | 'fallback';
+export type WorkspaceAttachmentState = 'read' | 'cut' | 'not_ready' | 'failed' | 'missing' | 'no_text';
+export type WorkspaceSourceKind = 'material' | 'upload' | 'memory' | 'feed';
+export type WorkspaceSourceOrigin = 'auto' | 'attached' | 'tool';
+export interface WorkspaceTurnAttachment { kind: 'file' | 'upload'; id: number; state: WorkspaceAttachmentState }
+export interface WorkspaceTurn {
+  request_id: number; depth: WorkspaceDepth; tier: WorkspaceTier; plan_state: WorkspacePlanState;
+  retrieval_state: WorkspaceRetrievalState; found_n: number; passages_n: number; memory_n: number;
+  feed_rows: number; attachments: WorkspaceTurnAttachment[]; created_at: string | null;
+}   // never plan_cost_usd, prompt_bytes, plan_ms or retrieval_ms: costs and timings are not shown
+export interface WorkspaceSource {
+  request_id: number; ord: number; kind: WorkspaceSourceKind; origin: WorkspaceSourceOrigin;
+  file_id: number | null; text_id: number | null; document_id: number | null; doc_text_id: number | null;
+  course_id: string | null; title: string | null; unit_kind: string | null; unit_no: number | null;
+}   // never similarity: a score is not shown
+export const WORKSPACE_SOURCES_MAX = 40;
+export function normalizeTurn(row: unknown): WorkspaceTurn | null;
+export function normalizeSource(row: unknown): WorkspaceSource | null;
+export const workspaceSourceKeys = {
+  turns: (conversationId: string) => ['workspace', 'turns', conversationId] as const,
+  sources: (requestId: number) => ['workspace', 'sources', requestId] as const,
+};
+export function turnsOptions(conversationId: string | null, requestIds: readonly number[]);  // workspace_turns, request_id in (...); the sorted ids are the key's suffix (R2-1)
+export function sourcesOptions(requestId: number | null);   // workspace_sources where request_id = …, order ord asc, limit 40
+export function useWorkspaceTurns(conversationId: string | null, requestIds: readonly number[]);
+export function useWorkspaceSources(requestId: number | null);
+export function turnOf(turns: readonly WorkspaceTurn[] | undefined, requestId: number): WorkspaceTurn | null;
+export function retrievalLineOf(turn: WorkspaceTurn | null): string | null;
+  // RETRIEVAL_LINES.empty for `empty`, RETRIEVAL_LINES.failed for `failed`, null otherwise (found, attached_only, no row)
+export function invalidateWorkspaceProvenance(queryClient: QueryClient, conversationId: string | null, requestId: number | null): void;
+  // turns(conversationId) and sources(requestId); the stream calls it on `sources` and on `done`
+```
+
+### `queries.workspace-files.ts` (task 5): uploads, the bucket, the two-step delete
+
+```ts
+export const WORKSPACE_UPLOADS_BUCKET = 'workspace-uploads';
+export const WORKSPACE_UPLOAD_LINK_SECONDS = 604_800;        // 7 days, the registered link
+export const WORKSPACE_UPLOAD_OPEN_LINK_SECONDS = 3_600;     // Open on a source row
+export const WORKSPACE_UPLOADS_REFETCH_MS = 5_000;
+export type WorkspaceDocumentKind = 'upload' | 'memory';
+export type WorkspaceDocumentState = 'stored' | 'reading' | 'text_ready' | 'indexed' | 'failed' | 'deleting';
+export type WorkspaceUploadErrorCode = 'too_large' | 'bad_type' | 'bad_bytes' | 'no_text' | 'extract_timeout'
+  | 'extract_failed' | 'too_many_units' | 'link_expired' | 'download_failed' | 'embed_failed';
+export const WORKSPACE_DOCUMENT_STATES: readonly WorkspaceDocumentState[];
+export const WORKSPACE_UPLOAD_ERROR_CODES: readonly WorkspaceUploadErrorCode[];
+export interface WorkspaceDocument {
+  id: number; kind: WorkspaceDocumentKind; title: string; state: WorkspaceDocumentState;
+  error_code: WorkspaceUploadErrorCode | null; mime: string | null; byte_size: number | null;
+  sha256: string | null; storage_key: string | null; course_id: string | null;
+  conversation_id: string | null; attempts: number; created_at: string | null; updated_at: string | null;
+}   // never signed_url or signed_url_expires_at: the select list names its columns
+export function normalizeDocument(row: unknown): WorkspaceDocument | null;
+export const workspaceFileKeys = { uploads: () => ['workspace', 'uploads'] as const };
+export function uploadsOptions();   // workspace_documents where kind = 'upload', newest first; refetchInterval 5 s while uploadsSettling()
+export function uploadsSettling(rows: readonly WorkspaceDocument[] | undefined): boolean;  // any row not indexed and not failed
+export function useWorkspaceUploads();
+export function filterByTitle<T extends { title: string }>(rows: readonly T[], filter: string): T[];
+  // pure; case-insensitive substring; '' or blank gives every row (the Files tab and the Memory tab)
+export function findUploadBySha256(sha256: string): Promise<WorkspaceDocument | null>;   // any state
+export interface RegisterUploadInput { sha256: string; title: string; mime: string; byteSize: number; signedUrl: string; signedUrlExpiresAt: string; courseId: string | null }
+export interface RegisterUploadResult { id: number; state: WorkspaceDocumentState; existing: boolean }
+export function registerUpload(input: RegisterUploadInput): Promise<RegisterUploadResult>;     // rpc workspace_upload_register
+export function retryUpload(input: { documentId: number; signedUrl: string; signedUrlExpiresAt: string }): Promise<{ id: number; state: WorkspaceDocumentState }>;
+export interface DeleteDocumentResult { id: number; kind: WorkspaceDocumentKind; state: 'deleting' | 'deleted'; storageKey: string | null }
+export function deleteDocument(documentId: number, objectRemoved: boolean): Promise<DeleteDocumentResult>;  // rpc workspace_document_delete
+export function setUploadCourse(documentId: number, courseId: string | null): Promise<void>;   // update course_id
+export function setUploadTitle(documentId: number, title: string): Promise<void>;              // update title, 1–200 characters
+export function refusalForDocumentCall(error: unknown): WorkspaceOptionsRefusal | null;         // 42501 → not_owner
+export function sha256Hex(blob: Blob, subtle?: SubtleCrypto): Promise<string>;                 // 64 lower-case hex
+export interface UploadStore {
+  putObject(key: string, blob: Blob, contentType: string): Promise<void>;   // an object already there under the key is not an error
+  signUrl(key: string, seconds: number): Promise<{ url: string; expiresAt: string }>;
+  removeObject(key: string): Promise<void>;
+}
+export function browserUploadStore(): UploadStore;   // supabase.storage.from(WORKSPACE_UPLOADS_BUCKET)
+export interface UploadFlowPorts {
+  store: UploadStore; digest: (blob: Blob) => Promise<string>;
+  findBySha256: typeof findUploadBySha256; register: typeof registerUpload; retry: typeof retryUpload;
+  remove: typeof deleteDocument;
+}
+export function browserUploadPorts(): UploadFlowPorts;
+export type UploadOutcome =
+  | { kind: 'refused'; reason: 'too_large' | 'bad_type'; sentence: string }
+  | { kind: 'existing'; document: WorkspaceDocument }          // the row that already holds the hash, in any state
+  | { kind: 'registered'; id: number; state: WorkspaceDocumentState };
+export function uploadFile(file: File, courseId: string | null, ports?: UploadFlowPorts): Promise<UploadOutcome>;
+  // checkUploadRules → digest → findBySha256 (a hit uploads nothing) → putObject(storageKeyFor(sha), file, mime)
+  // → signUrl(key, 7 days) → register; the content type is the rules' mime, never the browser's
+export function retryUploadLink(document: WorkspaceDocument, ports?: UploadFlowPorts): Promise<{ id: number; state: WorkspaceDocumentState }>;
+  // signUrl(storage_key, 7 days) → retry; only a `failed` row
+export function removeUpload(document: WorkspaceDocument, ports?: UploadFlowPorts): Promise<DeleteDocumentResult>;
+  // remove(id, false) → store.removeObject(storageKey) → remove(id, true); a failed removeObject throws and
+  // makes no second call, so the row stays `deleting` with Try again, which runs the same three steps
+export function createSignedUploadUrl(storageKey: string, expiresInSeconds?: number): Promise<string>;   // Open on an upload source
+```
+
+### `queries.workspace-memory.ts` (task 5): what is remembered, the About me note, the index status
+
+```ts
+export interface WorkspaceMemoryItem {
+  document_id: number; conversation_id: string | null; title: string; state: WorkspaceDocumentState;
+  summary: string | null; created_at: string | null; updated_at: string | null;
+}
+export interface WorkspaceProfile { id: number; about_me: string; memory_since: string | null; updated_at: string | null }
+export interface WorkspaceIndexStatus {
+  course_units_indexed: number; course_units_waiting: number; course_last_embedded: string | null;
+  course_files_text_pending: number; uploads_indexed: number; uploads_waiting: number; uploads_failed: number;
+  upload_links_expired: number; uploads_deleting: number; memory_indexed: number; memory_waiting: number;
+  memory_failed: number; ingest_polled_age_seconds: number | null;
+}   // a count the row does not hold reads 0 and is not invented elsewhere
+export const WORKSPACE_ABOUT_ME_MAX = 2_000;
+export const WORKSPACE_INDEX_STATUS_REFETCH_MS = 30_000;
+export const workspaceMemoryKeys = {
+  memory: () => ['workspace', 'memory'] as const,
+  profile: () => ['workspace', 'profile'] as const,
+  indexStatus: () => ['workspace', 'index-status'] as const,
+};
+export function memoryOptions();
+  // two reads merged by document_id: workspace_documents where kind = 'memory' (title, state, conversation_id,
+  // created_at, updated_at) and v_workspace_memory (summary); newest updated_at first
+export function profileOptions();       // workspace_profile, the one row (id = 1)
+export function indexStatusOptions();   // v_workspace_index_status, maybeSingle, refetch 30 s
+export function useWorkspaceMemory(); export function useWorkspaceProfile(); export function useWorkspaceIndexStatus();
+export function parseAboutMe(text: unknown): string;   // trimmed; throws an Error whose message is ABOUT_ME_LIMIT_LINE past 2000 characters (char_length's count)
+export function setAboutMe(profileId: number, text: string): Promise<void>;   // update workspace_profile.about_me where id
+export function forgetMemoryItem(documentId: number): Promise<DeleteDocumentResult>;   // deleteDocument(id, false): a memory item goes whole, state 'deleted'
+export function indexStatusLines(status: WorkspaceIndexStatus, lastIndexedWords: string | null): readonly string[];
+  // indexCountsLine('course', {…, failed: null}), ('uploads', …), ('memory', …), then lastIndexedLine(words) or NEVER_INDEXED_LINE
+```
+
+### `queries.workspace-routines.ts` (task 5)
+
+```ts
+export type WorkspaceRoutineNeeds = 'nothing' | 'file' | 'course_or_file';
+export type WorkspaceRoutineGroup = 'study' | 'plan' | 'write';
+export interface WorkspaceRoutine { id: string; grp: WorkspaceRoutineGroup; title: string; description: string; needs: WorkspaceRoutineNeeds; sort: number; enabled: boolean }
+export const ROUTINE_COLUMNS = 'id, grp, title, description, needs, sort, enabled';   // never instructions
+export const workspaceRoutineKeys = { routines: () => ['workspace', 'routines'] as const };
+export function normalizeRoutine(row: unknown): WorkspaceRoutine | null;
+export function routinesOptions();        // enabled = true, order sort asc
+export function useWorkspaceRoutines();
+export function routineNeedsMet(needs: WorkspaceRoutineNeeds, chosen: { attachments: number; course: string | null }): boolean;
+export function routineNeedLine(routine: WorkspaceRoutine, chosen: { attachments: number; course: string | null }): string | null;
+  // routineNeedsFileLine / routineNeedsCourseOrFileLine when not met, else null
+export function routinesByGroup(rows: readonly WorkspaceRoutine[]): ReadonlyArray<{ group: WorkspaceRoutineGroup; heading: string; routines: WorkspaceRoutine[] }>;
+  // study, plan, write, in that order; an empty group is left out; headings from ROUTINE_GROUP_HEADINGS
+export function filterRoutines(rows: readonly WorkspaceRoutine[], filter: string): WorkspaceRoutine[];   // title or description, case-insensitive
+```
+
+### `answer-format.ts` (task 4, the parser alone)
+
+```ts
+export type AnswerInline =
+  | { type: 'text'; text: string }
+  | { type: 'strong'; children: readonly AnswerInline[] }
+  | { type: 'em'; children: readonly AnswerInline[] }
+  | { type: 'code'; text: string }                 // an inline code span, verbatim; a label inside it is text
+  | { type: 'label'; token: string };              // "[M12]", "[U3]", "[R7]" or "[P]", kept whole for workspace-citations
+export type AnswerBlock =
+  | { type: 'paragraph'; children: readonly AnswerInline[] }
+  | { type: 'heading'; level: 1 | 2 | 3; children: readonly AnswerInline[] }   // #### and deeper are level 3
+  | { type: 'list'; ordered: boolean; items: ReadonlyArray<readonly AnswerBlock[]> }   // an item holds blocks: its text, and a nested list when indented
+  | { type: 'table'; header: ReadonlyArray<readonly AnswerInline[]>; rows: ReadonlyArray<ReadonlyArray<readonly AnswerInline[]>> }
+  | { type: 'code'; language: string | null; text: string }
+  | { type: 'quote'; children: readonly AnswerBlock[] };
+export function parseAnswer(text: string): readonly AnswerBlock[];
+  // for every string: returns blocks and never throws; pure and deterministic over the text, so a flush that
+  // appends text leaves the finished blocks before it unchanged; an unclosed fence, table or emphasis at the
+  // end is a paragraph of text; a link form and an image form are not forms (their characters are text);
+  // raw HTML is text; nothing here yields an element, a URL or an attribute
+export function plainBlocks(text: string): readonly AnswerBlock[];
+  // format 'plain' and a stored answer with no options row: paragraphs split on blank lines, inlines are
+  // text and label tokens only, no markup read
+export function inlineText(inlines: readonly AnswerInline[]): string;   // the plain text of a run
+export function blocksText(blocks: readonly AnswerBlock[]): string;    // the plain text of the answer (data-answer-text)
+```
+
+### `workspace-citations.ts` (task 5)
+
+```ts
+export type SourceLabel =
+  | { kind: 'material'; textId: number } | { kind: 'upload'; docTextId: number }
+  | { kind: 'memory'; documentId: number } | { kind: 'feed' };
+export const LABEL_TOKEN: RegExp;   // one whole token: ^\[(?:[MUR][1-9]\d{0,15}|P)\]$
+export function findLabelTokens(text: string): ReadonlyArray<{ start: number; end: number; token: string }>;   // answer-format uses it
+export function parseLabel(token: string): SourceLabel | null;
+export function resolveLabel(label: SourceLabel, sources: readonly WorkspaceSource[]): WorkspaceSource | null;
+  // M: kind material and text_id; U: kind upload and doc_text_id; R: kind memory and document_id; P: kind feed;
+  // the first match by ord; null when the request has no such row (the token stays text)
+export interface Citation { token: string; source: WorkspaceSource; ord: number }   // ord is the chip's number
+export function citationFor(token: string, sources: readonly WorkspaceSource[]): Citation | null;
+export function citedOrdsOf(blocks: readonly AnswerBlock[], sources: readonly WorkspaceSource[]): readonly number[];   // in answer order, each once
+export function sourcesForPanel(sources: readonly WorkspaceSource[], citedOrds: readonly number[]): readonly WorkspaceSource[];
+  // the cited rows first, in cited order, then the rest by ord
+export type SourceTarget =
+  | { kind: 'file'; fileId: number }          // FileOpenAction; the row names the page unless Q-2 passes
+  | { kind: 'upload'; documentId: number }    // a short signed link, by the upload row's storage_key
+  | { kind: 'memory'; documentId: number }    // the Memory tab
+  | { kind: 'planner' };                      // /planner
+export function sourceTarget(source: WorkspaceSource): SourceTarget | null;   // null for a row with no id to open
+export function sourceLocationLine(source: WorkspaceSource): string | null;   // unitLocationLine(unit_kind, unit_no), or null
+```
+
+### `workspace-examples.ts` (task 5)
+
+```ts
+export const EXAMPLE_WINDOW_DAYS = 14; export const EXAMPLE_CANDIDATES_MAX = 9; export const EXAMPLES_SHOWN = 3;
+export type ExampleForm = 'exam' | 'reading' | 'work';
+export interface ExamplePrompt { key: string; form: ExampleForm; text: string; itemKind: 'assignment' | 'reading'; itemId: string; courseId: string; dueOn: string }
+export interface ExampleInput { items: readonly WorkItem[]; courses: readonly CourseDisplay[]; today: string }
+  // WorkItem and CourseDisplay from queries.today.ts; today is the New York date, YYYY-MM-DD
+export function exampleCandidates(input: ExampleInput): readonly ExamplePrompt[];
+  // dated items due in [today, today + 14 days], not in a finished status (progress-status.ts says which),
+  // by due date then title, the first nine; form: category exam or quiz → 'exam', reading → 'reading', else
+  // 'work'; text = examplePromptLine(form, { title, course: courseCodeOf(...), date: dateWords(...) });
+  // no rows → an empty list, never an invented example
+export function courseCodeOf(courseId: string, courses: readonly CourseDisplay[]): string;   // the display whose display_id or shell_ids holds it, else the id itself
+export function dateWords(dueOn: string): string;   // "Tue Oct 21": en-US, weekday short, month short, day, America/New_York
+export function examplePages(candidates: readonly ExamplePrompt[]): number;             // ceil(n / 3); 0 for none
+export function examplesShown(candidates: readonly ExamplePrompt[], page: number): readonly ExamplePrompt[];   // the page's three, wrapping
+```
+
+### `workspace-upload-rules.ts` (task 5)
+
+```ts
+export const WORKSPACE_UPLOAD_MAX_BYTES = 20_971_520;
+export const WORKSPACE_UPLOAD_TITLE_MAX = 200;
+export const WORKSPACE_UPLOAD_TYPES: ReadonlyArray<{ extension: 'pdf' | 'docx' | 'pptx' | 'xlsx' | 'txt' | 'md'; mime: string }>;   // the six of migration 190
+export type UploadRefusalReason = 'too_large' | 'bad_type';
+export type UploadRuleResult =
+  | { ok: true; mime: string; extension: string; title: string }
+  | { ok: false; reason: UploadRefusalReason; sentence: string };   // UPLOAD_REFUSALS[reason]
+export function checkUploadRules(file: { name: string; size: number }): UploadRuleResult;
+  // size 1 to the limit; the extension, case-insensitive, decides the type (a browser may report none for
+  // Markdown); 20,971,521 bytes is refused before any request
+export function mimeForExtension(extension: string): string | null;
+export function uploadTitleOf(fileName: string): string;   // trimmed, cut to 200 characters as char_length counts, "Untitled" when empty
+export function storageKeyFor(sha256: string): string;      // 'u/' + sha256; throws for a hash that is not 64 lower-case hex
+```
+
+### `use-workspace-stream.ts` (task 6): the `sources` event and the stop guard
+
+```ts
+export interface StreamSources { requestId: number; state: WorkspaceRetrievalState; foundN: number }
+export function parseSources(payload: unknown): StreamSources | null;   // {request_id, state, found_n}; unknown keys ignored
+export type StreamEvent = …
+  | { type: 'sources'; topic: string; requestId: number; state: WorkspaceRetrievalState; foundN: number }
+  | { type: 'stopped'; topic: string; requestId: number };
+// RequestStream gains `sources: StreamSources | null` and `stopped: boolean`. After `stopped`, a delta, a
+// sources event or a done for that request changes nothing. An event name the hook does not subscribe to
+// is never dispatched, so it changes nothing.
+export interface WorkspaceStreamView { …as today…; sources: StreamSources | null; stopped: boolean }
+export interface WorkspaceStreamControls { markStopped(requestId: number): void }   // stable; the page's Stop calls it
+export function useWorkspaceStream(conversationId: string | null, requestId: number | null): WorkspaceStreamView & WorkspaceStreamControls;
+// on `sources`: dispatch, then invalidateWorkspaceProvenance(queryClient, id, requestId)
+// on `done`: invalidateWorkspaceConversation (today) and invalidateWorkspaceProvenance
+// Today's callers keep working: every field they read is unchanged.
+```
+
+The searching line is derived by the thread (W-88): a request in `claimed` whose stream has no `sources`
+and no text shows `SEARCHING_LINE`; once the `sources` event or the first delta arrives it goes.
+
+### Tests, probe, gates for this stream
+
+* Tests, one file per module under `web/test/`: `answer-format.test.ts` (task 4's property test with
+  `fast-check`: for generated strings the blocks hold no element, URL or attribute, which here means no
+  inline or block type outside the unions above and no `href`/`src` text taken as markup; an unclosed form
+  is text; no input throws), `queries.workspace-ask.test.ts`, `queries.workspace-sources.test.ts`,
+  `queries.workspace-files.test.ts` (task 5's call-order cases through fake ports), `queries.workspace-memory.test.ts`,
+  `queries.workspace-routines.test.ts`, `workspace-citations.test.ts`, `workspace-examples.test.ts`,
+  `workspace-upload-rules.test.ts`; the three `use-workspace-stream*` tests extended and
+  `use-workspace-stream.stop.test.tsx` new (task 6). Each vocabulary record in the labels file is pinned to
+  its type in the owning module's test. Supabase is stubbed as the existing `queries.workspace.test.ts` does.
+* **Probe Q-4**, W-86's, recorded in `111_W86_VERIFICATION.md`: `parseAnswer` over a 100,000-character
+  answer (headings, lists, a table, a fence, labels) at least 20 times, the median under 16 ms on this laptop
+  (`node --test`-free: a vitest case that prints the figure, or a one-off script in the worktree's
+  scratch, not committed). PASS: the stream formats live text on each flush. FAIL: only the stored row is
+  formatted and streaming text stays plain; the worker says so in the record and `parseAnswer` is unchanged.
+* **Gates** for W-86's branch, before the PM merges it: from `web/`, `npm run typecheck`,
+  `npx eslint . --max-warnings 0`, `npx vitest run`; `npx vitest run --coverage` with every new module at
+  80 % lines or more; from the repo root,
+  `git grep -n -e "\.from(.workspace_document_text.)" -e "\.from(.workspace_text_embeddings.)" -- web/src` gives
+  no line; `git diff --name-only feat/workspace-page-24b...HEAD` lists only the nine modules, their tests,
+  `use-workspace-stream.ts` and its four tests, the two labels files (only below the "W-86 additions"
+  heading) and `docs/planning/sprint-2/verification/111_W86_VERIFICATION.md`.
+
+### What the page's streams start from, at the gate
+
+W-87 (composer, lobby) imports `WorkspaceAskOptions`, `DEFAULT_ASK_OPTIONS`, `useAskWorkspaceWith`,
+`askWithRefusalFor`, `useWorkspaceRequestOptions`, `lastRequestOptionsOf`, `useWorkspaceRoutines`,
+`routinesByGroup`, `filterRoutines`, `routineNeedLine`, `checkUploadRules`, `uploadFile`,
+`useWorkspaceUploads`, `exampleCandidates`, `examplesShown`, `examplePages` and the labels. W-88 (thread,
+panel) imports `parseAnswer`, `plainBlocks`, `blocksText`, `citationFor`, `citedOrdsOf`,
+`sourcesForPanel`, `sourceTarget`, `sourceLocationLine`, `useWorkspaceTurns`, `turnOf`,
+`retrievalLineOf`, `useWorkspaceSources`, `useWorkspaceUploads`, `removeUpload`, `retryUploadLink`,
+`createSignedUploadUrl`, `filterByTitle`, `useWorkspaceMemory`, `forgetMemoryItem`, `useWorkspaceProfile`,
+`parseAboutMe`, `setAboutMe`, `useWorkspaceIndexStatus`, `indexStatusLines`, the stream's `sources`,
+`stopped` and `markStopped`, and the labels. `AnswerBody.tsx` is W-88's, over `parseAnswer`'s blocks.
 
 ## Session prompt for the data layer, started early
 
