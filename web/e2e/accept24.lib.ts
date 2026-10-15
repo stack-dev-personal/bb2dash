@@ -409,14 +409,15 @@ async function pickFromMenu(page: Page, button: RegExp | string, entry: string):
   await page.getByText(entry, { exact: true }).last().click();
 }
 
-/** The dashed course chip: the menu named Course, or the chip once a course is picked. */
+/** The dashed course chip: its accessible name is "Course: All courses", or "Course: <code>" once a course is picked. */
 export async function pickCourse(page: Page, code: string): Promise<void> {
-  await pickFromMenu(page, new RegExp(`^${COURSE_MENU_LABEL}(: .+)?$`), code);
+  await pickFromMenu(page, new RegExp(`^${COURSE_MENU_LABEL}: `), code);
   await expect(page.locator('[data-chip="course"]')).toContainText(code);
 }
 
 export async function pickDepth(page: Page, label: string): Promise<void> {
-  await pickFromMenu(page, DEPTH_MENU_LABEL, label);
+  // The button's accessible name is its screen-reader label and its shown value ("Depth Auto").
+  await pickFromMenu(page, new RegExp(`^${DEPTH_MENU_LABEL}\\b`), label);
   await expect(page.locator('[data-depth]')).toHaveAttribute('data-depth', label.toLowerCase());
 }
 

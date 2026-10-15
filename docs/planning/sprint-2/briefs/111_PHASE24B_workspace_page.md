@@ -1251,6 +1251,122 @@ nothing a worker owns.
 * **D-J** The conversations rail under 720 px and the panel under 1024 px are `PopoutShell` sheets, so one
   component owns every modal surface on the page.
 
+## Round 2 (PM, 2026-10-15, after `/code-review main high`, `/security-review` and the PM's browser walk of the preview)
+
+The integrated branch (8a02fb2 and after) passed every SOP gate: typecheck, eslint, build, 3,834 tests in 208 files,
+93.79 % lines, the acceptance suite 103, the table grep empty. `/security-review` found nothing at its bar and one
+hardening note (S-1). `/code-review main high` found thirteen things; the walk of the preview in a headed browser
+(both themes, 1280 and 390 px) found three more. Each goes back to its stream below, numbered; the HIGH ones and
+the walk's are must-fix, the rest should-fix unless the fix costs a frozen export. Every fix: test first, the
+record extended ("Round 2"), commit and push per item, the gates green on the branch, a report under 300 words.
+Nobody answers a running worker.
+
+### W-87 (composer, lobby), on `feat/workspace-page-24b-composer`
+
+* **R2-1 (HIGH, code review 1 and 11).** The depth picked in the lobby is lost on the hop to the thread: the
+  Lobby and the Thread are different components, so the Composer remounts with `START_CHOICES` and reads Auto,
+  though the brief says Quick and Standard stay until he changes them (Deep alone returns to Auto); acceptance
+  step 17 asserts `data-depth="standard"` after its answer. `useConversationReset` can never fire for the same
+  reason and is dead. Fix inside the composer's own files: keep the depth in a page-lifetime store of W-87's
+  (`useSyncExternalStore` over a module-level value, as `routine-request.ts` keeps its seq; no prop joins
+  `ComposerProps`), read on mount, written on each pick and by the Deep-returns-to-Auto rule; remove the dead
+  hook. Test: pick Standard, remount the composer with another `conversationId`, the menu reads Standard; Deep,
+  ask, remount, Auto.
+* **R2-3 (MEDIUM, code review 4).** In the phone sheet `RoutineList` focuses its search field in a mount effect
+  before `PopoutShell`'s own open effect runs, so the shell finds focus already inside the panel, records no
+  opener and then focuses the panel: the field loses focus and Close hands focus to nothing. Fix: autofocus the
+  field only in the pop-down form, or in the sheet focus it after the shell's effect (a `requestAnimationFrame`
+  or a `setTimeout(0)` after mount), so the opener is recorded and focus returns to Add on Close.
+* **R2-7 (MEDIUM, code review 8).** `uploadOne` adds the chip through `withAttachment`, which silently returns
+  the same choices when five are attached, and then still runs `uploadFile`: a sixth file dropped before React
+  re-rendered is hashed, stored and registered with no chip and no limit line. Fix: decide fullness against the
+  choices the add returned (or make `withAttachment` report refusal) and skip `uploadFile`, saying
+  `ATTACHMENTS_LIMIT_LINE`.
+* **W-2 (walk).** The plus menu, the depth menu and the routine list open upwards (your default 18) because the
+  composer sits at the foot of a thread; in the lobby it sits at the top, and the routine list's first rows and
+  the menus' tops run past the window's top edge (clipped at 1280 by 900: "Quiz me" was above the viewport).
+  Fix: open by the room there is, down when the control is in the upper half of the pane (or when the space
+  below is the larger), up otherwise; measured at open time with `getBoundingClientRect` and `innerHeight`,
+  nothing new in CSS beyond a second placement class. Test the rule as a pure function.
+* **W-4 (walk, and the PM's reading of your default 2).** "Ask off" for an unmet routine need or an upload not
+  yet indexed is `aria-disabled` with the look unchanged. Amendment (h) was about the button after a Stop, not
+  about these; brief 111's Contract says "Ask off, one line" and check 4 "keeps Ask off". Fix: the button takes
+  the disabled look (`disabled`, Phase 22's flat grey pill) while a need is unmet or an attached upload is not
+  `indexed`; the line under the box stays and is still associated (`aria-describedby` may stay on the wrapper or
+  the line may simply be visible); after a Stop and after an answer the button is enabled, as (h) says. Adjust
+  `Composer.chips.test.tsx` accordingly.
+
+### W-88 (thread, panel, layout), on `feat/workspace-page-24b-thread`
+
+* **R2-2a (HIGH, code review 2).** Each new request changes the query keys of the options and the turn rows
+  (the sorted ids are the key's suffix, ruling R2-1 of part 1) and neither query keeps its previous data, so on
+  every ask `formats` collapses to empty and `turnRows` to undefined until the refetch lands: every earlier rich
+  answer re-renders as plain text for a few hundred milliseconds (raw `##`, `**`, `|` visible), the fixed lines
+  and `data-retrieval` blink off, and the Sources tab reads "Pick an answer". Fix at the query: `placeholderData:
+  keepPreviousData` on `requestOptionsOptions` and `turnsOptions` (as `queries.search.ts` does), which the PM
+  permits you to add inside `web/src/lib/queries.workspace-ask.ts` and `queries.workspace-sources.ts` with a
+  case each in their tests; no frozen signature changes. Test on the screen: after a new request id arrives the
+  rich answers stay formatted through the refetch.
+* **R2-2b (MEDIUM, code review 3).** `markStopped` is dispatched at the press, before the cancel answers, and the
+  reducer's `stopped` is terminal; when the cancel fails the turn and the button revert but the live text stays
+  frozen while the runner keeps answering (your default 9). Fix: mark the stream only when `workspace_cancel`
+  answers `true` (the page already shows the stopped sentence at the press through `stoppedRequestIds`); a
+  failed cancel marks nothing. Test the two paths in `Workspace.failures.test.tsx`.
+* **R2-4 (LOW, code review 5).** A failed read of `workspace_request_options` is said twice: folded into
+  `readError` ("Could not load this conversation") above the column and worded again under the box by the
+  composer. Fix: do not fold the options error (nor the turns error, if the thread words it elsewhere) into
+  `readError`; the thread keeps the turn rows' problem line where the brief puts it, once.
+* **R2-5 (MEDIUM, code review 6).** A chip's `ord` is discarded: `AnswerBody` calls `onCite(ord)` but the thread
+  opens the Sources tab at the answer only, while the brief says a chip opens the panel at its row. Fix: carry
+  the ord to `openSources(requestId, ord)`; the Sources tab scrolls that row into view and marks it (an
+  `aria-current="true"` or a focused row with `data-source-ref`), the picked row cleared on the next pick.
+* **R2-6 (MEDIUM, code review 7).** Removing `withoutBoldMarkers` drops Stack's ruling of 2026-10-07 for every
+  answer that is not `rich`: a request with no options row (every conversation before 24b) and a `plain` one go
+  through `plainBlocks`, which keeps `**…**` as literal asterisks on the page (W-3 comes back). Brief 111 said the
+  helper goes; Stack's ruling outranks that line, so: keep a bold-pair strip for the plain path only (in
+  `thread.ts`, before `plainBlocks`), with its test restored; rich answers are parsed as now. The PM amends the
+  brief.
+* **R2-8 (MEDIUM, code review 9).** Each finished turn issues its own `workspace_sources` select
+  (`useWorkspaceSources(requestId)` inside `Answer`): a 40-turn conversation fires 40 reads on open, and a
+  transient failure prints the sources problem line under every answer. Fix: one read for the conversation's
+  requests, `sourcesForRequestsOptions(conversationId, requestIds)` keyed like `turnsOptions` (the sorted ids as
+  the key's suffix, `keepPreviousData`), which the PM permits you to add to `queries.workspace-sources.ts` beside
+  the frozen exports (an addition, nothing renamed) with its test and its normaliser; the turns take their rows
+  by `request_id`; the panel keeps `sourcesOptions(requestId)` or reads the same map.
+* **R2-9 (MEDIUM, code review 10).** `answerBlocks(turn.text, turn.format)` runs for every turn on every render
+  of `Turns`, and `Turns` re-renders on each delta and each clock tick, so one flush re-parses the whole thread.
+  Fix: memoise per turn (`useMemo` on `[text, format]` inside `Answer`, or `React.memo(Answer)`), so only the
+  live turn pays. Test: a spy on the parser counts one call per changed text.
+* **W-1 (walk).** The rail's button (`CONVERSATIONS_HEADING`, your default 13) shows at every width: at 1280 px
+  it stands at the column's top beside the date line while the rail is visible on the left. `.railButton`
+  composes `btnSecondary`, whose `display: inline-flex` wins over the module's `display: none` by stylesheet
+  order in the built app. Fix: hide it through a wrapper that composes nothing (`.railSlot { display: none }`,
+  shown at ≤720 px), or any rule the composition order cannot undo; `Workspace.layout.test.tsx` gains a case
+  that reads the rule as written (the wrapper hidden above 720 px).
+* **W-3 (walk; D-F ruled by the PM).** With the course rail open at 1280 px and the panel docked, the column
+  measured 250 px; the date line wrapped and the thread was a narrow strip. The allowlist still refuses a
+  container query, but your docked-or-sheet decision is already script (`usePanelIsSheet` over `matchMedia`), so
+  decide by the pane: the panel docks when the content pane (`main`) is at least 1024 px wide (a
+  `ResizeObserver` on the pane, `useSyncExternalStore`), else it is a sheet; the rail open at 1280 px then gives
+  a sheet and at 1440 px and wider it docks. The 720 px rail rule stays `@media`. Test the decision as a pure
+  function of the pane's width; `Workspace.layout.test.tsx`'s mounted cases pass a wide pane.
+* **S-1 (LOW, security review).** In `SourcesTab.tsx` the tab an upload opens in is made with
+  `window.open('about:blank', '_blank')` and keeps `window.opener`. Set `tab.opener = null` before assigning
+  its address (and keep `noopener,noreferrer` on the fallback). The existing materials button is outside this
+  phase and stays as it is.
+* **Noted, no change asked:** code review 12 (two `matchMedia` stores: `usePanelIsSheet` and W-87's
+  `usePhoneWidth`) is recorded; a shared `useMediaQuery` is a later cleanup across the two streams.
+
+### PM
+
+* Code review 13: `USED_PREFIX` and `COLUMN_START_LINE` in `workspace-labels.ts` are no screen's any more; the
+  PM marks them retired in the file (kept, since the labels test pins every string and pack 21's playbook quotes
+  the latter).
+* The pack's helpers (`accept24.lib.ts`): the course chip is named `Course: All courses` and the depth button
+  `Depth Auto`, so `pickCourse` and `pickDepth` match by prefix (done, 2026-10-15).
+* Brief 111's Contract line "`withoutBoldMarkers` goes" is amended by R2-6: it goes for rich answers and stays
+  for plain ones.
+
 ## Session prompt for the data layer, started early
 
 Paste into a new Claude Code window started in `C:/Users/stack/projects/bb2dash`:
