@@ -107,3 +107,10 @@
     min-height: var(--size-44);
   }
 }
+
+/* A phone's press area: 44 px. Kept apart from the step above for clarity. */
+@media (max-width: 720px) {
+  .showPanel {
+    min-height: var(--size-44);
+  }
+}

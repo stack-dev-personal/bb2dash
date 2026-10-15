@@ -216,3 +216,15 @@
   box-shadow: none;
   padding: 0;
 }
+
+/* A phone's press area: 44 px, for the tabs, the fold and every row's buttons. */
+@media (max-width: 720px) {
+  .tab,
+  .hide,
+  .rowActions button,
+  .rowActions a,
+  .delete button,
+  .aboutBlock button {
+    min-height: var(--size-44);
+  }
+}

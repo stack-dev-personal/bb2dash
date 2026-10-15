@@ -126,6 +126,21 @@ h4.heading {
   vertical-align: baseline;
   cursor: pointer;
 }
+/* On a phone the chip keeps its size in the line and presses as 44 px: a box drawn around it, centred. */
+@media (max-width: 720px) {
+  .chip {
+    position: relative;
+  }
+  .chip::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: var(--size-44);
+    height: var(--size-44);
+    transform: translate(-50%, -50%);
+  }
+}
 .chip:hover {
   background: var(--color-hover);
 }

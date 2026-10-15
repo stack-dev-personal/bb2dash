@@ -241,6 +241,44 @@ describe('the message column', () => {
   });
 });
 
+/** The thread's cases of W-87's old `Workspace.empty.test.tsx`: the lobby took its `start` state. */
+describe('the empty column of a thread (ruling U1, less its start)', () => {
+  it('says it is loading while the conversation`s rows are read, and never "not found"', async () => {
+    const held = gate();
+    fake.state.readGate = held.promise;
+    const { container } = open();
+    await waitFor(() =>
+      expect(container.querySelector('[data-column-empty]')).toHaveAttribute('data-column-empty', 'loading'),
+    );
+    expect(screen.getByText(labels.COLUMN_LOADING_LINE)).toBeInTheDocument();
+    expect(screen.queryByText(labels.COLUMN_NOT_FOUND_LINE)).toBeNull();
+    await act(async () => {
+      held.release();
+      await held.promise;
+    });
+  });
+
+  it('says a uuid with no rows was not found, with the way back to the lobby, and asks nothing into it', async () => {
+    const { container } = open();
+    const line = await screen.findByText(labels.COLUMN_NOT_FOUND_LINE);
+    expect(line).toHaveAttribute('role', 'alert');
+    expect(container.querySelector('[data-column-empty]')).toHaveAttribute('data-column-empty', 'missing');
+    expect(container.querySelector('[data-column-empty] a')).toHaveTextContent(labels.NEW_CONVERSATION_LABEL);
+    expect(container.querySelector('[data-column-empty] a')).toHaveAttribute('href', '/workspace');
+    expect(container.querySelector('[data-column-empty="start"]')).toBeNull();
+    await waitFor(() => expect(fake.state.composer).toMatchObject({ disabled: true }));
+  });
+
+  it('shows the lobby, not an empty column, with no conversation or a ?c= that is not a uuid', async () => {
+    for (const search of ['', 'c=lobby']) {
+      const view = open(search);
+      await waitFor(() => expect(view.container.querySelector('[data-lobby]')).not.toBeNull());
+      expect(view.container.querySelector('[data-column-empty]')).toBeNull();
+      view.unmount();
+    }
+  });
+});
+
 describe('the composer, through its contract (ruling C-1)', () => {
   it('is told a request is open: the button reads "Ask", and "Stop" only while one is', async () => {
     seedAnswered();

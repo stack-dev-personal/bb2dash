@@ -94,3 +94,10 @@
 .emptyLink:active {
   opacity: 0.7;
 }
+
+/* A phone's press area: 44 px. */
+@media (max-width: 720px) {
+  .sources {
+    min-height: var(--size-44);
+  }
+}
