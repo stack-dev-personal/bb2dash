@@ -612,3 +612,17 @@ export const NO_MATERIAL_MATCH_LINE = 'No file matches.';
 export function materialsProblemLine(reason: string): string {
   return `Could not load your materials: ${reason}`;
 }
+
+/* ===========================================================================
+ * W-87 additions (for the PM to accept)
+ * ======================================================================== */
+
+/** The course menu's classes (`v_course_display`) could not be read; "All courses" still works. */
+export function coursesProblemLine(reason: string): string {
+  return `Could not load your courses: ${reason}`;
+}
+
+/** The lobby's example prompts: his upcoming work (`v_work_items`) could not be read. */
+export function examplesProblemLine(reason: string): string {
+  return `Could not load your upcoming work: ${reason}`;
+}
