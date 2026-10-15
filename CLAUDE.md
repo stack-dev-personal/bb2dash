@@ -60,7 +60,7 @@ Supabase project: `goultdzqcavefcgnifdy` (us-east-1, Postgres 17). Full access v
   Search UIs must scrub/label PPTX `[notes]` speaker-note markers and `Page N` headers.
 * GUI: layout spec = the Nocturne artboards; styling = direction D "Charcoal" (Phase 22, merged 2026-10-14): the tokens in `web/src/app/globals.css` (dark by default, a light block, the Dark / Light / Auto control in the account menu), the design system under `design-system/bb2dash/`, the token audit as a ratchet in `npm test` (`web/test/token-audit.*`, baselines at 0); CSS Modules + custom properties, no Tailwind.
   No fabricated numbers anywhere — no grade display until real gradebook data exists.
-* Workspace (Phase 21, rebuilt behind the page in Phase 24a): a chat page at `/workspace`. A container runner
+* Workspace (Phase 21, rebuilt behind the page in Phase 24a; live since the cut-over of 2026-10-15 and accepted the same day): a chat page at `/workspace`. A container runner
   answers each question with one or two `claude -p` turns of the pinned CLI (2.1.289) on Stack's Claude
   subscription: no API key, never `--bare`, never the Agent SDK. A heuristic router picks Haiku, Sonnet or
   Opus. On a middle or heavy question a cheap planning turn (Haiku, no tool, no MCP server, thinking off)
@@ -139,7 +139,7 @@ Supabase project: `goultdzqcavefcgnifdy` (us-east-1, Postgres 17). Full access v
 * Workspace services (Phase 21; Phase 24a): `workspace`, `workspace-ingest` and `workspace-extract` in
   `compose.yaml` sit behind `profiles: [workspace]`, so a plain `up` never starts them; bb2dash-stack's
   `.env` turns the profile on. From bb2dash-stack each is started, restarted and rebuilt alone, by name
-  (`docker compose up -d --build workspace`; `workspace-extract` before `workspace-ingest`); `just up`
+  (`docker compose up -d --build workspace`; `workspace-extract` before `workspace-ingest`; a machine's first start builds their one image by the worker's name first, `docker compose build workspace-ingest`, then `up -d workspace-extract`, then `up -d workspace-ingest`, since the parser has no build of its own, DECISIONS 2026-10-15); `just up`
   rebuilds every service and is never run while a sync is open (DECISIONS 2026-10-07). On a phase branch,
   before the merge, they run only as a test compose project from a phase worktree (`bb2dash-wt24` in Phase
   24a), built under test tags through a second compose file so that no live tag moves, the service named in
