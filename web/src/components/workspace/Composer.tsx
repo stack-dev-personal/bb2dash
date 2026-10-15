@@ -148,7 +148,7 @@ export function Composer(props: ComposerProps) {
         <CourseMenu course={model.choices.course} onPick={model.pickCourse} disabled={props.disabled} />
         <ChipRow model={model} />
         <span className={styles.end}>
-          <DepthMenu depth={model.choices.depth} onPick={model.pickDepth} disabled={props.disabled} />
+          <DepthMenu depth={model.depth} onPick={model.pickDepth} disabled={props.disabled} />
           <AskButton props={props} model={model} gateId={gateId} />
         </span>
       </div>

@@ -4,7 +4,8 @@
  *
  * The chips are the course, the routine and up to five attachments: files from
  * his materials (`bb_files.id`) and uploads from his device
- * (`workspace_documents.id`, null while the upload is on its way). Every update
+ * (`workspace_documents.id`, null while the upload is on its way). The depth is
+ * not a chip and lives in `depth-store.ts`, for the life of the page. Every update
  * returns a new object; nothing here mutates what it is given.
  */
 
@@ -25,7 +26,6 @@ export type ComposerAttachment =
 export interface ComposerChoices {
   /** A `v_course_display.display_id`, or null for all courses. */
   course: string | null;
-  depth: WorkspaceDepth;
   /** A `workspace_routines.id`. */
   routine: string | null;
   attachments: readonly ComposerAttachment[];
@@ -33,7 +33,6 @@ export interface ComposerChoices {
 
 export const START_CHOICES: ComposerChoices = Object.freeze({
   course: DEFAULT_ASK_OPTIONS.course,
-  depth: DEFAULT_ASK_OPTIONS.depth,
   routine: DEFAULT_ASK_OPTIONS.routine,
   attachments: Object.freeze([]) as readonly ComposerAttachment[],
 });
@@ -53,12 +52,13 @@ export function uploadKey(id: number): string {
  */
 export function askOptionsOf(
   choices: ComposerChoices,
+  depth: WorkspaceDepth,
   routines: readonly WorkspaceRoutine[] | undefined,
 ): WorkspaceAskOptions {
   const routineGone = routines !== undefined && !routines.some((row) => row.id === choices.routine);
   return {
     course: choices.course,
-    depth: choices.depth,
+    depth,
     routine: routineGone ? null : choices.routine,
     format: 'rich',
     files: choices.attachments.flatMap((item) => (item.kind === 'file' ? [item.id] : [])),
@@ -66,9 +66,9 @@ export function askOptionsOf(
   };
 }
 
-/** After an accepted question: the attachments go, Deep goes back to Auto; the course and routine stay. */
+/** After an accepted question the attachments go; the course and routine stay (the depth: `depth-store.ts`). */
 export function afterAsk(choices: ComposerChoices): ComposerChoices {
-  return { ...choices, attachments: [], depth: choices.depth === 'deep' ? 'auto' : choices.depth };
+  return { ...choices, attachments: [] };
 }
 
 /** Backspace in an empty box: the last attachment, else the routine, else the course. */

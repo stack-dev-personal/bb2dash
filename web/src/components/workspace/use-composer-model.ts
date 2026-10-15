@@ -29,6 +29,7 @@ import {
   type ComposerChoices,
 } from './composer-choices';
 import type { PickedFile } from './MaterialPicker';
+import { depthAfterAsk, setComposerDepth, useComposerDepth } from './depth-store';
 import { useComposerUploads } from './use-composer-uploads';
 import { useBoxText, useComposerAsk, useRestoredChoices, useRoutineRequestApplied } from './use-composer';
 
@@ -36,6 +37,8 @@ export interface ComposerModel {
   text: string;
   changeText: (text: string) => void;
   choices: ComposerChoices;
+  /** The depth menu's pick, kept for the life of the page (`depth-store.ts`). */
+  depth: WorkspaceDepth;
   /** The routine chip's row, once the routines are read; null with no routine or one the rows lack. */
   routineRow: WorkspaceRoutine | null;
   uploadRows: readonly WorkspaceDocument[] | undefined;
@@ -89,7 +92,7 @@ function useChipActions(choices: ComposerChoices, setChoices: SetChoices) {
     closePicker: () => setPickerOpen(false),
     pickFile,
     pickCourse: (course: string | null) => setChoices((current) => ({ ...current, course })),
-    pickDepth: (depth: WorkspaceDepth) => setChoices((current) => ({ ...current, depth })),
+    pickDepth: setComposerDepth,
     pickRoutine: (routine: string) => setChoices((current) => ({ ...current, routine })),
     removeRoutine: () => setChoices((current) => ({ ...current, routine: null })),
     removeAttachment: (key: string) => {
@@ -101,15 +104,6 @@ function useChipActions(choices: ComposerChoices, setChoices: SetChoices) {
       setChoices(withoutLastChip);
     },
   };
-}
-
-/** The chips belong to a conversation: another one starts from none, keeping the depth. */
-function useConversationReset(conversationId: string | null, setChoices: SetChoices): void {
-  const [seen, setSeen] = useState(conversationId);
-  if (seen !== conversationId) {
-    setSeen(conversationId);
-    setChoices((current) => ({ ...START_CHOICES, depth: current.depth }));
-  }
 }
 
 function problemsOf(input: {
@@ -146,7 +140,7 @@ export function useComposerModel(props: ComposerProps): ComposerModel {
   const hydrated = useHydrated();
   const [text, setText] = useBoxText(props.initialText);
   const [choices, setChoices] = useState<ComposerChoices>(START_CHOICES);
-  useConversationReset(props.conversationId, setChoices);
+  const depth = useComposerDepth();
   const optionsError = useRestoredChoices(props.conversationId, props.requestIds, hydrated, setChoices);
   useRoutineRequestApplied(setChoices);
   const rows = useChipRows(hydrated, choices);
@@ -160,9 +154,10 @@ export function useComposerModel(props: ComposerProps): ComposerModel {
   async function submit() {
     if (props.busy || props.disabled || asking.pending || gate !== null) return;
     chips.setLimitHit(false);
-    if (await asking.ask(text, askOptionsOf(choices, rows.routineRows))) {
+    if (await asking.ask(text, askOptionsOf(choices, depth, rows.routineRows))) {
       setText('');
       setChoices(afterAsk);
+      setComposerDepth(depthAfterAsk(depth));
     }
   }
 
@@ -179,6 +174,7 @@ export function useComposerModel(props: ComposerProps): ComposerModel {
     text,
     changeText,
     choices,
+    depth,
     gate,
     pending: asking.pending,
     refusal: asking.refusal?.message ?? null,
