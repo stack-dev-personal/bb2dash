@@ -19,15 +19,15 @@
  * stylesheets and on the screen, mounted twice: the lobby, and a thread with
  * the panel open. `e2e/workspace-layout.spec.ts` measures the same in a browser.
  *
- * THE LOBBY MOUNTED HERE is the stand-in of `workspace-harness.tsx` while
- * W-87's `Lobby.tsx` is not merged into this branch: it waits for integration
- * (W-88's record). The stylesheets case reads W-87's modules as they stand.
+ * THE SCREEN MOUNTED HERE IS THE REAL ONE: W-87's `Lobby.tsx` and `Composer.tsx`
+ * (merged into this branch at d495f32), not the harness's stand-ins, so the
+ * lobby's and the composer's own boxes are checked with the rest.
  */
 
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import screenStyles from '@/app/(app)/workspace/Workspace.module.css';
 import answerStyles from '@/components/workspace/AnswerBody.module.css';
@@ -40,8 +40,6 @@ vi.mock('@/lib/supabase/client', async () =>
   (await import('./workspace-harness')).supabaseClientMock(),
 );
 vi.mock('next/navigation', async () => (await import('./workspace-harness')).navigationMock());
-vi.mock('@/components/workspace/Composer', async () => (await import('./workspace-harness')).composerMock());
-vi.mock('@/components/workspace/Lobby', async () => (await import('./workspace-harness')).lobbyMock());
 
 const labels = await import('@/lib/workspace-labels');
 const { Workspace } = await import('@/app/(app)/workspace/Workspace');
@@ -317,7 +315,8 @@ describe('the mounted screen', () => {
   it('leaves none outside in the lobby', async () => {
     fake.state.rows = { workspace_conversations: CONVERSATION.workspace_conversations };
     const { container } = mount('');
-    await screen.findByRole('link', { name: /spike/ });
+    // The rail's link and the lobby's recent row, both.
+    await waitFor(() => expect(screen.getAllByRole('link', { name: /spike/ })).toHaveLength(2));
     expect(container.querySelector('[data-lobby]')).not.toBeNull();
 
     expect(leftOutside(container)).toEqual([]);

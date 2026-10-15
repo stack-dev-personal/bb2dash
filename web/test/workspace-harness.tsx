@@ -189,11 +189,21 @@ resetFake();
 function tableChain(table: string): Record<string, unknown> {
   const filters: [string, unknown][] = [];
   const inFilters: [string, readonly unknown[]][] = [];
+  /** `.neq()`, `.is()`, `.gte()`, `.lte()`, `.gt()`, `.lt()`: a test of one column. */
+  const tests: [string, (cell: unknown) => boolean][] = [];
   let limit: number | null = null;
   let patch: Row | null = null;
   const matches = (row: Row) =>
     filters.every(([column, value]) => row[column] === value) &&
-    inFilters.every(([column, values]) => values.includes(row[column]));
+    inFilters.every(([column, values]) => values.includes(row[column])) &&
+    tests.every(([column, test]) => test(row[column]));
+  const compare = (holds: (cell: string | number, value: string | number) => boolean) => (
+    column: string,
+    value: string | number,
+  ) => {
+    tests.push([column, (cell) => (typeof cell === 'string' || typeof cell === 'number') && holds(cell, value)]);
+    return chain;
+  };
 
   const settle = (): Answer => {
     const error = state.readErrors[table];
@@ -232,6 +242,18 @@ function tableChain(table: string): Record<string, unknown> {
       limit = count;
       return chain;
     },
+    neq: (column: string, value: unknown) => {
+      tests.push([column, (cell) => cell !== value]);
+      return chain;
+    },
+    is: (column: string, value: unknown) => {
+      tests.push([column, (cell) => (cell ?? null) === value]);
+      return chain;
+    },
+    gte: compare((cell, value) => cell >= value),
+    lte: compare((cell, value) => cell <= value),
+    gt: compare((cell, value) => cell > value),
+    lt: compare((cell, value) => cell < value),
     maybeSingle: async (): Promise<Answer> => {
       // The one-row read (the status) is held like any other read.
       if (state.readGate) await state.readGate;
