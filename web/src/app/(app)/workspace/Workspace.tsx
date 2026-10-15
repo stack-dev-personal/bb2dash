@@ -71,12 +71,13 @@ import {
   type WorkspaceMessage,
   type WorkspaceRequest,
 } from '@/lib/queries.workspace';
+import type { WorkspaceSource } from '@/lib/queries.workspace-sources';
 import {
   useWorkspaceRequestOptions,
   type WorkspaceFormat,
   type WorkspaceRequestOptions,
 } from '@/lib/queries.workspace-ask';
-import { useWorkspaceTurns } from '@/lib/queries.workspace-sources';
+import { sourcesByRequest, useWorkspaceSourcesFor, useWorkspaceTurns } from '@/lib/queries.workspace-sources';
 import { useHydrated } from '@/lib/use-hydrated';
 import { useNow } from '@/lib/use-now';
 import { useWorkspaceStream, type WorkspaceStreamView } from '@/lib/use-workspace-stream';
@@ -100,6 +101,7 @@ function ofRequests<T extends { request_id: number }>(rows: readonly T[] | undef
 }
 const NO_BLOCKS: readonly AnswerBlock[] = [];
 const NO_FORMATS: ReadonlyMap<number, WorkspaceFormat> = new Map();
+const NO_SOURCE_ROWS: ReadonlyMap<number, readonly WorkspaceSource[]> = new Map();
 
 /** The width under which the panel is a sheet: the shell's own drawer step (frozen (f)). */
 const PANEL_SHEET_QUERY = '(max-width: 1023.98px)';
@@ -168,6 +170,11 @@ function useConversation(conversationId: string | null, hydrated: boolean) {
   const turns = useWorkspaceTurns(conversationId, requestIds);
   const options = useWorkspaceRequestOptions(conversationId, requestIds);
   const turnRows = useMemo(() => ofRequests(turns.data, requestIds), [turns.data, requestIds]);
+  const sources = useWorkspaceSourcesFor(conversationId, requestIds);
+  const sourceRows = useMemo(
+    () => sourcesByRequest(ofRequests(sources.data, requestIds)),
+    [sources.data, requestIds],
+  );
   const formats = useMemo(
     () => formatsOf(ofRequests(options.data, requestIds) ?? NO_OPTIONS),
     [options.data, requestIds],
@@ -189,6 +196,8 @@ function useConversation(conversationId: string | null, hydrated: boolean) {
     stream,
     live,
     turnRows: hydrated ? turnRows : undefined,
+    sources: hydrated ? sourceRows : NO_SOURCE_ROWS,
+    sourcesError: hydrated ? sources.error : null,
     formats: hydrated ? formats : NO_FORMATS,
     // Until both have answered, an id with no rows is still being read, not "not found".
     loaded: hydrated && requests.data !== undefined && messages.data !== undefined,
@@ -327,6 +336,8 @@ function ThreadOf(props: { conversationId: string; conversation: Conversation; n
       live={conversation.live}
       markStopped={conversation.stream.markStopped}
       turnRows={conversation.turnRows}
+      sources={conversation.sources}
+      sourcesError={conversation.sourcesError}
       formats={conversation.formats}
       loaded={conversation.loaded}
       readError={conversation.readError}

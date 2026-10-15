@@ -215,6 +215,42 @@ describe('a label in an answer', () => {
   });
 });
 
+describe('one read of the sources for the whole conversation (round 2, R2-8)', () => {
+  /** Three finished questions, each with one source row. */
+  function seedThree(): void {
+    const ids = [41, 42, 43];
+    fake.state.rows = {
+      workspace_messages: ids.flatMap((id) => [
+        { id: `00000000-0000-4000-8000-0000000000${id}`, conversation_id: A, role: 'user', content: `Question ${id}`, finished: true },
+        { ...answerRow(`Answer ${id} [M${id}].`), id: `00000000-0000-4000-8000-0000000001${id}`, request_id: id },
+      ]),
+      workspace_requests: ids.map((id) => ({ ...requestRow('done'), id, user_message_id: `00000000-0000-4000-8000-0000000000${id}` })),
+      workspace_request_options: ids.map((id) => ({ ...optionsRow('rich'), request_id: id })),
+      workspace_sources: ids.map((id) => ({ ...sourceRow(1, { text_id: id }), request_id: id })),
+    };
+  }
+
+  it('reads them once, and each answer takes its own rows', async () => {
+    seedThree();
+    open();
+    await waitFor(() => expect(screen.getAllByRole('button', { name: labels.sourcesCountLine(1) })).toHaveLength(3));
+    expect(screen.getAllByRole('button', { name: labels.sourceChipLabel(1) })).toHaveLength(3);
+    expect(fake.state.log.filter((entry) => entry === 'from:workspace_sources')).toHaveLength(1);
+  });
+
+  it('says a failed read once, above the column', async () => {
+    seedThree();
+    fake.state.readErrors = { workspace_sources: { code: '42501', message: 'permission denied' } };
+    open();
+    await screen.findByText('Answer 43 [M43].');
+    await waitFor(() =>
+      expect(screen.getAllByRole('alert').map((alert) => alert.textContent)).toEqual([
+        'Could not load the sources: permission denied',
+      ]),
+    );
+  });
+});
+
 describe('the sources row under an answer', () => {
   it('counts the request`s rows, and opens the panel at them', async () => {
     seedDone('Two things.', {

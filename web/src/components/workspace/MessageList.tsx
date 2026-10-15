@@ -37,8 +37,7 @@
 
 import Link from 'next/link';
 import { useEffect, useRef } from 'react';
-import { useWorkspaceSources } from '@/lib/queries.workspace-sources';
-import { workspaceErrorReason } from '@/lib/queries.workspace';
+import type { WorkspaceSource } from '@/lib/queries.workspace-sources';
 import {
   ANSWER_ROLE_LABEL,
   COLUMN_LOADING_LINE,
@@ -48,7 +47,6 @@ import {
   QUESTION_ROLE_LABEL,
   STATUS_ROLE_LABEL,
   sourcesCountLine,
-  sourcesProblemLine,
 } from '@/lib/workspace-labels';
 import { AnswerBody } from './AnswerBody';
 import { TierBadge } from './TierBadge';
@@ -144,15 +142,20 @@ function SourcesRow(props: { count: number; onOpen: () => void }) {
   );
 }
 
+/** Each request's source rows, read once for the conversation (round 2, R2-8). */
+type SourcesByRequest = ReadonlyMap<number, readonly WorkspaceSource[]>;
+
+const NO_SOURCE_MAP: SourcesByRequest = new Map();
+
 interface AnswerProps {
   turn: WorkspaceTurn;
+  sources: SourcesByRequest;
   onOpenSources: (requestId: number, ord: number | null) => void;
 }
 
-function Answer({ turn, onOpenSources }: AnswerProps) {
+function Answer({ turn, sources, onOpenSources }: AnswerProps) {
   const requestId = finishedRequestOf(turn);
-  const sources = useWorkspaceSources(requestId);
-  const rows = requestId === null ? NO_SOURCES : (sources.data ?? NO_SOURCES);
+  const rows = requestId === null ? NO_SOURCES : (sources.get(requestId) ?? NO_SOURCES);
   const tier = turn.answer?.tier ?? null;
   const lines = [turn.retrievalLine, turn.line].filter((line): line is string => line !== null);
   if (tier === null && turn.text === '' && lines.length === 0 && rows.length === 0) return null;
@@ -176,9 +179,7 @@ function Answer({ turn, onOpenSources }: AnswerProps) {
         />
       )}
       <SourcesRow count={rows.length} onOpen={() => open(null)} />
-      {requestId !== null && sources.error && (
-        <p className={styles.line}>{sourcesProblemLine(workspaceErrorReason(sources.error))}</p>
-      )}
+
       {lines.map((line) => (
         <p key={line} className={styles.line} data-turn-line>
           {line}
@@ -190,6 +191,7 @@ function Answer({ turn, onOpenSources }: AnswerProps) {
 
 function Turns(props: {
   turns: readonly WorkspaceTurn[];
+  sources: SourcesByRequest;
   onOpenSources: (requestId: number, ord: number | null) => void;
 }) {
   return (
@@ -208,7 +210,7 @@ function Turns(props: {
               <p className={styles.text}>{turn.question.content}</p>
             </div>
           )}
-          <Answer turn={turn} onOpenSources={props.onOpenSources} />
+          <Answer turn={turn} sources={props.sources} onOpenSources={props.onOpenSources} />
         </li>
       ))}
     </ol>
@@ -243,11 +245,14 @@ export interface MessageListProps {
   askedQuestionId?: string | null;
   /** A chip (its ord) or a sources row (null) was pressed: open the panel's Sources tab at that request. */
   onOpenSources?: (requestId: number, ord: number | null) => void;
+  /** Each request's source rows, read once for the conversation; a finished turn shows its own. */
+  sources?: SourcesByRequest;
 }
 
 const NOWHERE = (): void => undefined;
 
-export function MessageList({ turns, empty, askedQuestionId = null, onOpenSources = NOWHERE }: MessageListProps) {
+export function MessageList(props: MessageListProps) {
+  const { turns, empty, askedQuestionId = null, onOpenSources = NOWHERE, sources = NO_SOURCE_MAP } = props;
   // The reader's own question, from the commit in which it is one of the turns.
   const ownQuestion =
     askedQuestionId !== null && turns.some((turn) => turn.question?.id === askedQuestionId)
@@ -257,7 +262,11 @@ export function MessageList({ turns, empty, askedQuestionId = null, onOpenSource
 
   return (
     <div ref={box} className={styles.column} onScroll={noteScroll}>
-      {empty === null ? <Turns turns={turns} onOpenSources={onOpenSources} /> : <EmptyLine state={empty} />}
+      {empty === null ? (
+        <Turns turns={turns} sources={sources} onOpenSources={onOpenSources} />
+      ) : (
+        <EmptyLine state={empty} />
+      )}
     </div>
   );
 }

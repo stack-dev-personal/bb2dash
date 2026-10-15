@@ -259,6 +259,52 @@ export function useWorkspaceSources(requestId: number | null) {
 }
 
 /* ---------------------------------------------------------------------------
+ * Round 2 (R2-8, the PM's addition beside the frozen exports): a conversation's
+ * source rows in one read, so a thread of forty answers makes one select and a
+ * failure is said once. The panel keeps `sourcesOptions(requestId)`.
+ * ------------------------------------------------------------------------ */
+
+/**
+ * Every source row of a conversation's requests (as the page has them), by
+ * request, then by ord; 40 a request at most. The key sits under the turns'
+ * prefix, `[...workspaceSourceKeys.turns(c), 'sources', sortedIds]`, so the
+ * stream's invalidation of a conversation's turns (on `sources` and on `done`)
+ * reaches it with no new key; the previous rows stay while a new id list is read.
+ */
+export function sourcesForRequestsOptions(conversationId: string | null, requestIds: readonly number[]) {
+  const id = parseConversationId(conversationId);
+  const sortedIds = sortedRequestIds(requestIds);
+  return queryOptions({
+    queryKey: [...workspaceSourceKeys.turns(id ?? NO_CONVERSATION), 'sources', sortedIds] as const,
+    enabled: id !== null && sortedIds.length > 0,
+    placeholderData: keepPreviousData,
+    queryFn: async (): Promise<WorkspaceSource[]> => {
+      const ids = sortedIds.map(assertRequestId);
+      const { data, error } = await untypedClient()
+        .from('workspace_sources')
+        .select(SOURCE_COLUMNS)
+        .in('request_id', ids)
+        .order('request_id', { ascending: true })
+        .order('ord', { ascending: true })
+        .limit(WORKSPACE_SOURCES_MAX * ids.length);
+      if (error) throw error;
+      return normalizeRows(data, normalizeSource);
+    },
+  });
+}
+
+export function useWorkspaceSourcesFor(conversationId: string | null, requestIds: readonly number[]) {
+  return useQuery(sourcesForRequestsOptions(conversationId, requestIds));
+}
+
+/** The rows by request id, each request's rows by ord; an empty map for none. */
+export function sourcesByRequest(rows: readonly WorkspaceSource[] | undefined): ReadonlyMap<number, WorkspaceSource[]> {
+  const grouped = new Map<number, WorkspaceSource[]>();
+  for (const row of rows ?? []) grouped.set(row.request_id, [...(grouped.get(row.request_id) ?? []), row]);
+  return new Map([...grouped].map(([requestId, list]) => [requestId, [...list].sort((a, b) => a.ord - b.ord)]));
+}
+
+/* ---------------------------------------------------------------------------
  * Reading a turn (pure)
  * ------------------------------------------------------------------------ */
 
