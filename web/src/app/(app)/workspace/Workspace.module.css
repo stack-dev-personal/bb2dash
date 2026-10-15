@@ -54,11 +54,17 @@
   color: var(--color-muted);
 }
 
-/* The rail's button: only where the rail is a sheet. */
-.railButton {
-  composes: btnSecondary from '@/styles/tokens.module.css';
+/* The rail's button, only where the rail is a sheet (under 720 px). It is
+   hidden through its slot, which composes nothing: the button composes
+   btnSecondary, whose display comes later in the built sheet and would win
+   over a display set here (the walk of the preview, round 2, W-1). */
+.railSlot {
   display: none;
   flex: none;
+}
+
+.railButton {
+  composes: btnSecondary from '@/styles/tokens.module.css';
 }
 
 .showPanel {
@@ -102,8 +108,10 @@
   .rail {
     display: none;
   }
+  .railSlot {
+    display: block;
+  }
   .railButton {
-    display: inline-flex;
     min-height: var(--size-44);
   }
 }

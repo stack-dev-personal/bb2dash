@@ -336,12 +336,34 @@ export function formatsOf(
 }
 
 /**
- * The answer as blocks: parsed for `rich`, paragraphs of text for `plain`.
- * Called on every render while an answer streams (probe Q-4 passed); nothing
- * is kept between renders.
+ * A pair of Markdown bold markers around a run of text on one line: `**like this**`.
+ * The opener stands at the start of a line or after a space, a bracket or a quote, and
+ * the closer before the end of a line, a space or punctuation, so `a**b**c`,
+ * `2 ** 3 ** 4` and `f(**kwargs)` are not pairs. The run holds no `*` and no line break.
+ */
+const BOLD_PAIR = /(^|[\s([“‘"'])\*\*(?=[^*\s])([^*\n]*?[^*\s])\*\*(?=$|[\s.,;:!?)\]”’"'])/gm;
+
+/**
+ * An answer as it is shown: the text as typed, less Markdown's bold markers.
+ *
+ * The page shows plain text (brief 102, O-5) and the system prompt asks for it, but a
+ * model sometimes writes `**bold**` all the same, and the asterisks then stood on the
+ * page (the PM's walk, W-3). Stack's ruling of 2026-10-07: strip them. Only a closed
+ * pair is dropped, so nothing is parsed into markup and the stored row is not changed;
+ * while an answer streams, an opener shows until its closer arrives.
+ */
+export function withoutBoldMarkers(text: string): string {
+  return text.replace(BOLD_PAIR, '$1$2');
+}
+
+/**
+ * The answer as blocks: parsed for `rich`; for `plain` (and a request with no
+ * options row, every conversation before 24b) paragraphs of text less the bold
+ * pairs, by Stack's ruling of 2026-10-07 (round 2, R2-6, which amends brief
+ * 111's "withoutBoldMarkers goes": it goes for rich answers only).
  */
 export function answerBlocks(text: string, format: WorkspaceFormat): readonly AnswerBlock[] {
-  return format === 'rich' ? parseAnswer(text) : plainBlocks(text);
+  return format === 'rich' ? parseAnswer(text) : plainBlocks(withoutBoldMarkers(text));
 }
 
 /**

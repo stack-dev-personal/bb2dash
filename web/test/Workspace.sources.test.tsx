@@ -33,8 +33,14 @@ vi.mock('@/lib/supabase/client', async () =>
 vi.mock('next/navigation', async () => (await import('./workspace-harness')).navigationMock());
 vi.mock('@/components/workspace/Composer', async () => (await import('./workspace-harness')).composerMock());
 vi.mock('@/components/workspace/Lobby', async () => (await import('./workspace-harness')).lobbyMock());
+// The parser, counted (round 2, R2-9): the real one, wrapped in a spy.
+vi.mock('@/lib/answer-format', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/lib/answer-format')>();
+  return { ...real, parseAnswer: vi.fn(real.parseAnswer) };
+});
 
 const labels = await import('@/lib/workspace-labels');
+const { parseAnswer } = await import('@/lib/answer-format');
 const { Workspace } = await import('@/app/(app)/workspace/Workspace');
 
 const A = '6f1c2a54-9b1e-4c0d-8a55-0d2f3b7c9e11';
@@ -169,6 +175,41 @@ describe('a label in an answer', () => {
     expect(await within(panel).findByText('Week 5 slides.pptx')).toBeInTheDocument();
   });
 
+  it('opens the Sources tab at its own row: the row is marked and scrolled into view (round 2, R2-5)', async () => {
+    const scrolled: Element[] = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function scrollIntoView(this: Element) {
+      scrolled.push(this);
+    };
+    try {
+      seedDone('The slides [M12] and your notes [U9].', {
+        sources: [
+          sourceRow(1, { text_id: 12 }),
+          sourceRow(2, { kind: 'upload', file_id: null, document_id: 5, doc_text_id: 9, title: 'My notes.pdf' }),
+        ],
+      });
+      open();
+
+      fireEvent.click(await screen.findByRole('button', { name: labels.sourceChipLabel(2) }));
+
+      const panel = await screen.findByRole('region', { name: labels.PANEL_REGION_LABEL });
+      const row = await waitFor(() => {
+        const found = panel.querySelector('li[data-source-ref="2"]');
+        if (found === null) throw new Error('no row 2 yet');
+        return found;
+      });
+      await waitFor(() => expect(row).toHaveAttribute('aria-current', 'true'));
+      expect(panel.querySelector('li[data-source-ref="1"]')).not.toHaveAttribute('aria-current');
+      expect(scrolled).toContain(row);
+
+      // The sources row picks the answer and no row: the mark goes.
+      fireEvent.click(screen.getByRole('button', { name: '2 sources' }));
+      await waitFor(() => expect(panel.querySelector('li[aria-current]')).toBeNull());
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
   it('stays text when the request has no such row', async () => {
     seedDone('Something else [M99] and [U4].', { sources: [sourceRow(1, { text_id: 12 })] });
     const { container } = open();
@@ -177,6 +218,42 @@ describe('a label in an answer', () => {
     await screen.findByRole('button', { name: labels.sourcesCountLine(1) });
     expect(within(body).queryAllByRole('button')).toHaveLength(0);
     expect(body).toHaveTextContent('Something else [M99] and [U4].');
+  });
+});
+
+describe('one read of the sources for the whole conversation (round 2, R2-8)', () => {
+  /** Three finished questions, each with one source row. */
+  function seedThree(): void {
+    const ids = [41, 42, 43];
+    fake.state.rows = {
+      workspace_messages: ids.flatMap((id) => [
+        { id: `00000000-0000-4000-8000-0000000000${id}`, conversation_id: A, role: 'user', content: `Question ${id}`, finished: true },
+        { ...answerRow(`Answer ${id} [M${id}].`), id: `00000000-0000-4000-8000-0000000001${id}`, request_id: id },
+      ]),
+      workspace_requests: ids.map((id) => ({ ...requestRow('done'), id, user_message_id: `00000000-0000-4000-8000-0000000000${id}` })),
+      workspace_request_options: ids.map((id) => ({ ...optionsRow('rich'), request_id: id })),
+      workspace_sources: ids.map((id) => ({ ...sourceRow(1, { text_id: id }), request_id: id })),
+    };
+  }
+
+  it('reads them once, and each answer takes its own rows', async () => {
+    seedThree();
+    open();
+    await waitFor(() => expect(screen.getAllByRole('button', { name: labels.sourcesCountLine(1) })).toHaveLength(3));
+    expect(screen.getAllByRole('button', { name: labels.sourceChipLabel(1) })).toHaveLength(3);
+    expect(fake.state.log.filter((entry) => entry === 'from:workspace_sources')).toHaveLength(1);
+  });
+
+  it('says a failed read once, above the column', async () => {
+    seedThree();
+    fake.state.readErrors = { workspace_sources: { code: '42501', message: 'permission denied' } };
+    open();
+    await screen.findByText('Answer 43 [M43].');
+    await waitFor(() =>
+      expect(screen.getAllByRole('alert').map((alert) => alert.textContent)).toEqual([
+        'Could not load the sources: permission denied',
+      ]),
+    );
   });
 });
 
@@ -220,8 +297,39 @@ describe('the answer`s format', () => {
     const { container } = open();
     const body = await answerBody(container);
     await waitFor(() => expect(fake.state.log).toContain('from:workspace_request_options'));
-    expect(body).toHaveTextContent('# Plan **Quiz 2** on Friday');
+    // The bold pair goes (Stack, 2026-10-07; round 2, R2-6); nothing else is read as markup.
+    expect(body).toHaveTextContent('# Plan Quiz 2 on Friday');
+    expect(body).not.toHaveTextContent('**');
     expect(body.querySelector('h2, h3, h4, strong, ul')).toBeNull();
+  });
+});
+
+describe('a new question does not unformat the answers before it (round 2, R2-2a)', () => {
+  it('keeps a rich answer formatted, and its fixed line, while the new ids` rows are read', async () => {
+    seedDone('# Plan\n\n- **Quiz 2** on Friday', { retrieval: 'empty' });
+    const { container } = open();
+    const body = await answerBody(container);
+    await waitFor(() => expect(body.querySelector('h2')).toHaveTextContent('Plan'));
+    await waitFor(() => expect(turn(container)).toHaveAttribute('data-retrieval', 'empty'));
+    // The options and turn rows of the new id list are held: only the requests and messages answer.
+    const held = gate();
+    fake.state.tableGates = { workspace_request_options: held.promise, workspace_turns: held.promise };
+
+    fireEvent.change(screen.getByRole('textbox', { name: labels.QUESTION_FIELD_LABEL }), {
+      target: { value: 'And the reading?' },
+    });
+    fireEvent.keyDown(screen.getByRole('textbox', { name: labels.QUESTION_FIELD_LABEL }), { key: 'Enter' });
+    await screen.findByText('And the reading?', { selector: 'p' });
+    await waitFor(() => expect(container.querySelectorAll('li[data-turn]')).toHaveLength(2));
+
+    expect(turn(container).querySelector('[data-answer-text] h2')).toHaveTextContent('Plan');
+    expect(turn(container).querySelector('[data-answer-text]')).not.toHaveTextContent('**');
+    expect(turn(container)).toHaveAttribute('data-retrieval', 'empty');
+    expect(turn(container).querySelector('[data-turn-line]')).toHaveTextContent(labels.RETRIEVAL_LINES.empty);
+    await act(async () => {
+      held.release();
+      await held.promise;
+    });
   });
 });
 
@@ -297,7 +405,7 @@ describe('the searching line', () => {
 });
 
 describe('Stop', () => {
-  it('leaves the page as it was for a delta that arrives after the press', async () => {
+  it('leaves the page as it was for a delta that arrives after the cancel answered (R2-2b)', async () => {
     fake.state.rows = {
       workspace_messages: [questionRow('Draft a plan'), answerRow('', { finished: false })],
       workspace_requests: [requestRow('claimed')],
@@ -311,15 +419,47 @@ describe('Stop', () => {
     fake.state.rpcGate = held.promise;
 
     fireEvent.click(screen.getByRole('button', { name: labels.STOP_LABEL }));
+    // The stopped sentence at the press, before the database has answered.
+    expect(turn(container)).toHaveAttribute('data-turn', 'stopped');
+    await act(async () => {
+      held.release();
+      await held.promise;
+    });
+    await waitFor(() => expect(fake.state.rows.workspace_requests[0]).toMatchObject({ state: 'cancelled' }));
+    await waitFor(() => expect(fake.state.composer).toMatchObject({ busy: false }));
+
     act(() => channel.emit('delta', { request_id: 42, seq: 2, delta: ' Week two: the quiz.' }));
 
     expect(turn(container)).toHaveAttribute('data-turn', 'stopped');
     expect(turn(container).querySelector('[data-answer-text]')).toHaveTextContent('Week one: reading.');
     expect(container.textContent).not.toContain('Week two');
-    await act(async () => {
-      held.release();
-      await held.promise;
-    });
+  });
+});
+
+describe('a delta parses the live answer only (round 2, R2-9)', () => {
+  it('parses the text that changed, once, and none of the finished answers', async () => {
+    fake.state.rows = {
+      workspace_messages: [
+        questionRow('First'),
+        { ...answerRow('# One\n\nThe first answer.'), request_id: 41, id: 'a7c1d2e3-55aa-4f10-b1d2-000000000041' },
+        { ...questionRow('Second'), id: 'c9a7d3e2-55aa-4f10-b1d2-000000000042' },
+      ],
+      workspace_requests: [
+        { ...requestRow('done'), id: 41 },
+        { ...requestRow('claimed'), user_message_id: 'c9a7d3e2-55aa-4f10-b1d2-000000000042' },
+      ],
+      workspace_request_options: [{ ...optionsRow('rich'), request_id: 41 }, optionsRow('rich')],
+    };
+    const { container } = open();
+    const channel = await joined(TOPIC_A);
+    await waitFor(() => expect(container.querySelector('[data-answer-text] h2')).toHaveTextContent('One'));
+    const parse = vi.mocked(parseAnswer);
+    parse.mockClear();
+
+    act(() => channel.emit('delta', { request_id: 42, seq: 1, delta: '**Week** two' }));
+    await waitFor(() => expect(turn(container).querySelector('strong')).toHaveTextContent('Week'));
+
+    expect(parse.mock.calls.map(([text]) => text)).toEqual(['**Week** two']);
   });
 });
 

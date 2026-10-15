@@ -26,11 +26,13 @@
  * `onStop` and `onEdit` (which clears that failure).
  *
  * STOP. The request is marked at the press, so the stopped sentence shows at
- * once, and the stream is told (`markStopped`), so a later delta for it
- * changes nothing on the page (brief 111, "Stop"). The mark on the turn comes
- * off again if the database says the request had already finished (false) or
- * the cancel failed (it is still open). `busy` is the cancel's own pending
- * state, false the moment it settles, either way (amendment (h)).
+ * once. The stream is told (`markStopped`) only when `workspace_cancel`
+ * answers true, so from then a later delta for it changes nothing on the page
+ * (brief 111, "Stop"; round 2, R2-2b: the stream's mark cannot be taken back).
+ * The mark on the turn comes off again if the database says the request had
+ * already finished (false) or the cancel failed (it is still open), and the
+ * answer the runner keeps writing still arrives. `busy` is the cancel's own
+ * pending state, false the moment it settles, either way (amendment (h)).
  *
  * THE DOCK. The composer and the service line sit in a wrapper that is sticky
  * at the bottom of the pane on the pane's ground, so a long thread never pushes
@@ -47,8 +49,8 @@ import {
   type WorkspaceRequest,
 } from '@/lib/queries.workspace';
 import type { WorkspaceFormat } from '@/lib/queries.workspace-ask';
-import type { WorkspaceTurn as WorkspaceTurnRow } from '@/lib/queries.workspace-sources';
-import { askProblemLine, conversationProblemLine, stopProblemLine } from '@/lib/workspace-labels';
+import type { WorkspaceSource, WorkspaceTurn as WorkspaceTurnRow } from '@/lib/queries.workspace-sources';
+import { askProblemLine, conversationProblemLine, sourcesProblemLine, stopProblemLine } from '@/lib/workspace-labels';
 import { MessageList } from './MessageList';
 import { ServiceStatus } from './ServiceStatus';
 import { buildTurns, emptyColumnOf, type LiveStream } from './thread';
@@ -62,18 +64,21 @@ const NONE_STOPPED: ReadonlySet<number> = new Set();
  * the column's not-found line: the database's sentence about the foreign key is
  * never shown.
  */
-function problemLines(failed: { read: unknown; ask: unknown; stop: unknown }): string[] {
-  const { read, ask, stop } = failed;
+function problemLines(failed: { read: unknown; sources: unknown; ask: unknown; stop: unknown }): string[] {
+  const { read, sources, ask, stop } = failed;
   const lines: string[] = [];
   if (read) lines.push(conversationProblemLine(workspaceErrorReason(read)));
+  // The conversation's sources are read once, so a failure is said once (round 2, R2-8).
+  if (sources) lines.push(sourcesProblemLine(workspaceErrorReason(sources)));
   if (ask && !isMissingConversation(ask)) lines.push(askProblemLine(workspaceErrorReason(ask)));
   if (stop) lines.push(stopProblemLine(workspaceErrorReason(stop)));
   return lines;
 }
 
 /**
- * Stop. The request is marked the moment the button is pressed, and the stream
- * is told, so nothing it sends for that request moves the page any more.
+ * Stop. The request is marked the moment the button is pressed; the stream is
+ * told once the cancel answers true, so nothing it sends for that request
+ * moves the page any more. A cancel that fails or comes too late marks nothing.
  *
  * A Stop that failed is reported only while the request it was pressed on is
  * the open one (`openRequest`, as the rows have it): once that request has
@@ -92,10 +97,10 @@ function useStop(
   function stop(requestId: number) {
     const unmark = () => setStopped((ids) => new Set([...ids].filter((id) => id !== requestId)));
     setStopped((ids) => new Set([...ids, requestId]));
-    markStopped(requestId);
     cancel.mutate(requestId, {
       onSuccess: (changed) => {
-        if (!changed) unmark();
+        if (changed) markStopped(requestId);
+        else unmark();
       },
       onError: unmark,
     });
@@ -126,9 +131,13 @@ export interface ThreadProps {
   loaded: boolean;
   /** The conversation could not be read. */
   readError: unknown;
+  /** Each request's source rows, read once for the conversation (round 2, R2-8). */
+  sources: ReadonlyMap<number, readonly WorkspaceSource[]>;
+  /** That read failed: said once, above the column. */
+  sourcesError: unknown;
   now: number;
   /** A chip or a sources row was pressed: open the panel's Sources tab at that request. */
-  onOpenSources: (requestId: number) => void;
+  onOpenSources: (requestId: number, ord: number | null) => void;
 }
 
 export function Thread(props: ThreadProps) {
@@ -155,7 +164,12 @@ export function Thread(props: ThreadProps) {
     askedIntoMissing: isMissingConversation(askError),
     turns: turns.length,
   });
-  const problems = problemLines({ read: props.readError, ask: askError, stop: stopper.error });
+  const problems = problemLines({
+    read: props.readError,
+    sources: props.sourcesError,
+    ask: askError,
+    stop: stopper.error,
+  });
 
   return (
     <section className={styles.thread}>
@@ -169,6 +183,7 @@ export function Thread(props: ThreadProps) {
         empty={empty}
         askedQuestionId={askedQuestionId}
         onOpenSources={props.onOpenSources}
+        sources={props.sources}
       />
       <div className={styles.dock} data-composer-dock>
         <Composer

@@ -5,12 +5,14 @@
  *
  * The page lays itself out in the pane the shell gives it (frozen (f)): the
  * conversations rail, a column at a reading measure, and the side panel while
- * `?panel=<tab>` names one. At 1024 px and wider the panel is the grid's third
- * track; under that it is a sheet from the right; under 720 px the rail is a
- * sheet too, opened by one button at the top of the column (D-J). The column
+ * `?panel=<tab>` names one. While the content pane is at least 1024 px wide the
+ * panel is the grid's third track; in a narrower pane it is a sheet from the
+ * right (round 2, W-3: the pane, not the window, `use-workspace-panel.ts`);
+ * under 720 px the rail is a sheet too, opened by one button at the top of the
+ * column (D-J). The column
  * starts with today's New York date and its weekday (amendment (g)) and holds
  * the lobby when no conversation is selected (`Lobby`, W-87's) or the thread
- * (`Thread.tsx`).
+ * (`ThreadView.tsx`).
  *
  * WHERE AN ANSWER COMES FROM. Live, as Realtime Broadcast deltas on the page's
  * one private channel (`use-workspace-stream.ts`), and once more as the stored
@@ -42,7 +44,7 @@
  * `data-request-id` (the open request, when there is one).
  */
 
-import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { PopoutShell } from '@/components/popout/PopoutShell';
@@ -54,12 +56,10 @@ import {
   CONVERSATION_PARAM,
   PANEL_PARAM,
   conversationHref,
-  panelHref,
   parsePanelTab,
   type PanelTab,
 } from '@/components/workspace/route';
-import { answerBlocks, formatsOf, liveRequestOf, newestKnownRequestOf } from '@/components/workspace/thread';
-import type { AnswerBlock } from '@/lib/answer-format';
+import { formatsOf, liveRequestOf } from '@/components/workspace/thread';
 import { courseToday } from '@/lib/course-dimension';
 import {
   WORKSPACE_STATUS_REFETCH_MS,
@@ -71,25 +71,37 @@ import {
   type WorkspaceMessage,
   type WorkspaceRequest,
 } from '@/lib/queries.workspace';
-import { useWorkspaceRequestOptions, type WorkspaceRequestOptions } from '@/lib/queries.workspace-ask';
-import { useWorkspaceTurns } from '@/lib/queries.workspace-sources';
+import type { WorkspaceSource } from '@/lib/queries.workspace-sources';
+import {
+  useWorkspaceRequestOptions,
+  type WorkspaceFormat,
+  type WorkspaceRequestOptions,
+} from '@/lib/queries.workspace-ask';
+import { sourcesByRequest, useWorkspaceSourcesFor, useWorkspaceTurns } from '@/lib/queries.workspace-sources';
 import { useHydrated } from '@/lib/use-hydrated';
 import { useNow } from '@/lib/use-now';
 import { useWorkspaceStream, type WorkspaceStreamView } from '@/lib/use-workspace-stream';
 import { todayWords } from '@/lib/workspace-examples';
 import { CONVERSATIONS_HEADING, SHOW_PANEL_LABEL, todayLine } from '@/lib/workspace-labels';
+import { panelDocks, usePaneWidth, usePanel, type Panel } from './use-workspace-panel';
 import styles from './Workspace.module.css';
 
 const NO_REQUESTS: readonly WorkspaceRequest[] = [];
 const NO_MESSAGES: readonly WorkspaceMessage[] = [];
 const NO_OPTIONS: readonly WorkspaceRequestOptions[] = [];
-const NO_BLOCKS: readonly AnswerBlock[] = [];
 
-/** The width under which the panel is a sheet: the shell's own drawer step (frozen (f)). */
-const PANEL_SHEET_QUERY = '(max-width: 1023.98px)';
-
-/** The tab Show panel opens on a first visit. */
-const FIRST_TAB: PanelTab = 'sources';
+/**
+ * Rows of this conversation's requests only. The turn and options reads keep their previous rows while a new
+ * id list is read (round 2, R2-2a), and a disabled read (the lobby, another conversation) can still hold the
+ * last conversation's: those never reach this one.
+ */
+function ofRequests<T extends { request_id: number }>(rows: readonly T[] | undefined, requestIds: readonly number[]) {
+  if (rows === undefined) return undefined;
+  const known = new Set(requestIds);
+  return rows.filter((row) => known.has(row.request_id));
+}
+const NO_FORMATS: ReadonlyMap<number, WorkspaceFormat> = new Map();
+const NO_SOURCE_ROWS: ReadonlyMap<number, readonly WorkspaceSource[]> = new Map();
 
 /* ---------------------------------------------------------------------------
  * The rows of one conversation, and its channel
@@ -151,6 +163,16 @@ function useConversation(conversationId: string | null, hydrated: boolean) {
   const requestIds = useMemo(() => requestRows.map((request) => request.id), [requestRows]);
   const turns = useWorkspaceTurns(conversationId, requestIds);
   const options = useWorkspaceRequestOptions(conversationId, requestIds);
+  const turnRows = useMemo(() => ofRequests(turns.data, requestIds), [turns.data, requestIds]);
+  const sources = useWorkspaceSourcesFor(conversationId, requestIds);
+  const sourceRows = useMemo(
+    () => sourcesByRequest(ofRequests(sources.data, requestIds)),
+    [sources.data, requestIds],
+  );
+  const formats = useMemo(
+    () => formatsOf(ofRequests(options.data, requestIds) ?? NO_OPTIONS),
+    [options.data, requestIds],
+  );
 
   // The newest request is followed until its stored answer has landed.
   const followed = liveRequestOf(requestRows, messageRows);
@@ -167,77 +189,18 @@ function useConversation(conversationId: string | null, hydrated: boolean) {
     openRequest,
     stream,
     live,
-    turnRows: hydrated ? turns.data : undefined,
-    formats: formatsOf(hydrated ? (options.data ?? NO_OPTIONS) : NO_OPTIONS),
+    turnRows: hydrated ? turnRows : undefined,
+    sources: hydrated ? sourceRows : NO_SOURCE_ROWS,
+    sourcesError: hydrated ? sources.error : null,
+    formats: hydrated ? formats : NO_FORMATS,
     // Until both have answered, an id with no rows is still being read, not "not found".
     loaded: hydrated && requests.data !== undefined && messages.data !== undefined,
-    readError: hydrated ? (requests.error ?? messages.error ?? turns.error ?? options.error) : null,
+    // The options rows' failure is the composer's to say, under the box (round 2, R2-4): not said twice.
+    readError: hydrated ? (requests.error ?? messages.error ?? turns.error) : null,
   };
 }
 
 type Conversation = ReturnType<typeof useConversation>;
-
-/* ---------------------------------------------------------------------------
- * The panel: its tab is route state, its answer page state
- * ------------------------------------------------------------------------ */
-
-function subscribeToWidth(onChange: () => void): () => void {
-  if (typeof window.matchMedia !== 'function') return () => undefined;
-  const query = window.matchMedia(PANEL_SHEET_QUERY);
-  query.addEventListener('change', onChange);
-  return () => query.removeEventListener('change', onChange);
-}
-
-/** Whether the pane is under the panel's step. The server, and a window with no `matchMedia`, read as wide. */
-function usePanelIsSheet(): boolean {
-  return useSyncExternalStore(
-    subscribeToWidth,
-    () => typeof window.matchMedia === 'function' && window.matchMedia(PANEL_SHEET_QUERY).matches,
-    () => false,
-  );
-}
-
-/** The blocks of one request's stored answer, for the Sources tab's cited order. */
-function blocksOf(conversation: Conversation, requestId: number | null): readonly AnswerBlock[] {
-  if (requestId === null) return NO_BLOCKS;
-  const answer = conversation.messageRows.find(
-    (message) => message.role === 'assistant' && message.request_id === requestId && message.finished,
-  );
-  if (answer === undefined) return NO_BLOCKS;
-  return answerBlocks(answer.content, conversation.formats.get(requestId) ?? 'plain');
-}
-
-function usePanel(conversationId: string | null, tab: PanelTab | null, conversation: Conversation) {
-  const router = useRouter();
-  const [lastTab, setLastTab] = useState<PanelTab>(FIRST_TAB);
-  const [picked, setPicked] = useState<{ conversationId: string | null; requestId: number } | null>(null);
-  const go = (next: PanelTab | null) => {
-    if (next !== null) setLastTab(next);
-    router.replace(panelHref(conversationId, next), { scroll: false });
-  };
-  const requestId =
-    picked !== null && picked.conversationId === conversationId
-      ? picked.requestId
-      : newestKnownRequestOf(conversation.turnRows);
-
-  return {
-    tab,
-    requestId,
-    blocks: tab === 'sources' ? blocksOf(conversation, requestId) : NO_BLOCKS,
-    open: (next: PanelTab) => go(next),
-    hide: () => {
-      if (tab !== null) setLastTab(tab);
-      go(null);
-    },
-    show: () => go(lastTab),
-    openSources: (id: number) => {
-      setPicked({ conversationId, requestId: id });
-      go('sources');
-    },
-  };
-}
-
-type Panel = ReturnType<typeof usePanel>;
 
 /* ---------------------------------------------------------------------------
  * The parts of the screen
@@ -275,9 +238,11 @@ function DateLine({ now, hydrated }: { now: number; hydrated: boolean }) {
 function ColumnBar(props: { now: number; hydrated: boolean; panel: Panel; onRail: () => void }) {
   return (
     <div className={styles.bar}>
-      <button type="button" className={styles.railButton} onClick={props.onRail}>
-        {CONVERSATIONS_HEADING}
-      </button>
+      <span className={styles.railSlot}>
+        <button type="button" className={styles.railButton} onClick={props.onRail}>
+          {CONVERSATIONS_HEADING}
+        </button>
+      </span>
       <DateLine now={props.now} hydrated={props.hydrated} />
       {props.panel.tab === null && (
         <button type="button" className={styles.showPanel} onClick={props.panel.show}>
@@ -301,6 +266,8 @@ function ThreadOf(props: { conversationId: string; conversation: Conversation; n
       live={conversation.live}
       markStopped={conversation.stream.markStopped}
       turnRows={conversation.turnRows}
+      sources={conversation.sources}
+      sourcesError={conversation.sourcesError}
       formats={conversation.formats}
       loaded={conversation.loaded}
       readError={conversation.readError}
@@ -316,6 +283,7 @@ function PanelOf(props: { panel: Panel; now: number; sheet: boolean }) {
   const shared = {
     tab: panel.tab,
     sourcesRequestId: panel.requestId,
+    sourcesOrd: panel.ord,
     sourcesBlocks: panel.blocks,
     now: props.now,
     onTab: panel.open,
@@ -337,7 +305,9 @@ export function Workspace() {
   const now = useNow(WORKSPACE_STATUS_REFETCH_MS);
   const conversation = useConversation(conversationId, hydrated);
   const panel = usePanel(conversationId, parsePanelTab(searchParams.get(PANEL_PARAM)), conversation);
-  const sheet = usePanelIsSheet();
+  // Docked or a sheet, by the content pane's width (round 2, W-3).
+  const [root, setRoot] = useState<HTMLDivElement | null>(null);
+  const sheet = !panelDocks(usePaneWidth(root));
   // The rail's sheet belongs to the route it was opened on: a pick closes it.
   const route = searchParams.toString();
   const [railOpenOn, setRailOpenOn] = useState<string | null>(null);
@@ -352,7 +322,11 @@ export function Workspace() {
 
   return (
     <>
-      <div className={styles.workspace} data-panel-docked={panel.tab !== null && !sheet ? '' : undefined}>
+      <div
+        ref={setRoot}
+        className={styles.workspace}
+        data-panel-docked={panel.tab !== null && !sheet ? '' : undefined}
+      >
         <div className={styles.rail}>{list}</div>
         <div className={styles.pageColumn}>
           <ColumnBar now={now} hydrated={hydrated} panel={panel} onRail={() => setRailOpenOn(route)} />
