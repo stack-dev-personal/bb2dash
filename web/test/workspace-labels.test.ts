@@ -69,6 +69,9 @@ function builtStrings(): string[] {
     labels.examplePromptLine('exam', { title: 'Quiz 3', course: 'IST 323', date: 'Tue Oct 21' }),
     labels.todayLine('Thursday, October 15, 2026'),
     labels.materialsProblemLine(reason),
+    // W-87 additions (for the PM to accept)
+    labels.coursesProblemLine(reason),
+    labels.examplesProblemLine(reason),
     // W-88 addition (for the PM to accept): see the heading at the end of this file.
     labels.openProblemLine(reason),
   ];
@@ -583,6 +586,17 @@ describe('rules every string keeps', () => {
       .filter(([name]) => name !== 'STOPPED_SENTENCE')
       .map(([, value]) => value as string);
     expect(new Set(own).size).toBe(own.length);
+  });
+});
+
+/* ===========================================================================
+ * W-87 additions (for the PM to accept)
+ * ======================================================================== */
+
+describe('W-87 additions: the two problem lines the composer and the lobby need', () => {
+  it('words a failed read of the courses and of the upcoming work in the app form', () => {
+    expect(labels.coursesProblemLine('x')).toBe('Could not load your courses: x');
+    expect(labels.examplesProblemLine('x')).toBe('Could not load your upcoming work: x');
   });
 });
 
