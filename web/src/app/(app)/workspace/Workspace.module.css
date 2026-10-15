@@ -4,14 +4,27 @@
    It lays itself out in the pane the shell gives it: the conversations rail,
    the column at a reading measure, and while the panel is open and docked a
    third track for it. Under 1024 px the panel is a sheet (two tracks); under
-   720 px the rail is a sheet too (one track). */
+   720 px the rail is a sheet too (one track).
+
+   Round 4 (Stack's look at the preview, 2026-10-15): the screen fills the
+   pane's height and no more. The shell's pane (`Shell.module.css` `.main`) is
+   a flex column of its own height, so the screen asks for the room under the
+   page's header (`flex: 1 0 0%`, and `min-height: 0` so its content cannot
+   push it taller) and lays its one row to that height (`minmax(0, 1fr)`). The
+   message column, the rail and the panel then scroll inside themselves, and
+   the composer's dock sits at the pane's foot whatever the thread's length.
+   Where no pane sizes the screen the row is its content, and the column's own
+   bound holds (MessageList.module.css). */
 
 .workspace {
   display: grid;
   grid-template-columns: minmax(var(--size-conversations-min), var(--size-conversations-max)) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: var(--space-8);
   align-items: start;
+  flex: 1 0 0%;
   min-width: 0;
+  min-height: 0;
 }
 .workspace[data-panel-docked] {
   grid-template-columns:
@@ -19,23 +32,45 @@
     minmax(var(--size-280), var(--size-panel-max));
 }
 
+/* The rail: a square card with a clear edge, the pane's full height, its rows
+   scrolling inside it (round 4: "the outlines and borders of the side bars
+   more clearly defined"). It is positioned because it scrolls. */
 .rail {
+  position: relative;
+  align-self: stretch;
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-4);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
 }
 
-/* The column: the date line, then the lobby or the thread, at 80ch at most.
-   Named apart from MessageList's `.column`, so the layout spec can set the
-   sheets side by side as written. */
+/* The column: the date line, then the lobby or the thread, at 80ch at most and
+   centred in its track (round 4: "the chat centred in the middle of the
+   screen"); it takes the row's full height so the thread can. Named apart
+   from MessageList's `.column`, so the layout spec can set the sheets side by
+   side as written. */
 .pageColumn {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  min-width: 0;
+  justify-self: center;
+  align-self: stretch;
+  width: 100%;
   max-width: 80ch;
+  min-width: 0;
+  min-height: 0;
 }
 
+/* The lobby or the thread: the rest of the column under the date line. */
 .stream {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
 }
 
 .bar {
@@ -73,8 +108,14 @@
   font-size: var(--text-xs);
 }
 
+/* The docked panel's track: the pane's full height, so the panel's rows scroll
+   inside it (SidePanel.module.css `.body`). */
 .panelTrack {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
   min-width: 0;
+  min-height: 0;
 }
 
 /* The rail as a sheet from the reading edge, through PopoutShell: the frame's

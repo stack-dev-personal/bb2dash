@@ -97,9 +97,21 @@ function wideTableMarkup(): string {
     </li>`;
 }
 
-function threadMarkup(problems: number): string {
+/**
+ * How the thread is set. `pane`: `none`, the document is the thread's only
+ * container; `block`, a pane that scrolls inside itself; `flex`, the shell's
+ * content pane as `Shell.module.css` writes `.main` (a flex column of its own
+ * height whose children keep their height), which sizes the screen (round 4).
+ */
+interface ThreadOptions {
+  readonly pane: 'none' | 'block' | 'flex';
+  readonly problems: number;
+  readonly turns?: number;
+}
+
+function threadMarkup(problems: number, turnCount: number): string {
   const lines = Array.from({ length: problems }, (_, index) => `<p class="problem">Could not load this conversation: line ${index + 1}</p>`).join('');
-  const turns = Array.from({ length: TURNS }, (_, index) => turnMarkup(index)).join('') + wideTableMarkup();
+  const turns = Array.from({ length: turnCount }, (_, index) => turnMarkup(index)).join('') + wideTableMarkup();
   return `
     <section class="thread">
       ${lines}
@@ -113,33 +125,39 @@ function threadMarkup(problems: number): string {
  * `.main`: it scrolls inside itself), or is left out so the document is the
  * thread's only container.
  */
-function pageMarkup(options: { pane: boolean; problems: number }): string {
+function pageMarkup(options: ThreadOptions): string {
   const css = STYLESHEETS.map((file) => readFileSync(join(SRC, file), 'utf8')).join('\n');
   const screen = `
     <div class="workspace">
+      <div class="rail"></div>
       <div class="pageColumn">
         <div class="bar"><p class="today" data-today="2026-10-15">Today is Thursday, October 15, 2026.</p></div>
-        <div class="stream" data-workspace-stream>${threadMarkup(options.problems)}</div>
+        <div class="stream" data-workspace-stream>${threadMarkup(options.problems, options.turns ?? TURNS)}</div>
       </div>
     </div>`;
-  const body = options.pane
-    ? `<div data-pane style="position: relative; height: 100vh; overflow-y: auto">${screen}</div>`
-    : screen;
+  // The flex pane is `.main` as written: its padding and gap, and the page's header before the screen.
+  const paneStyle =
+    options.pane === 'flex'
+      ? 'position: relative; box-sizing: border-box; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-8); padding: var(--space-8) var(--space-12) var(--space-12)'
+      : 'position: relative; height: 100vh; overflow-y: auto';
+  const header = options.pane === 'flex' ? '<header style="height: 4.25rem"></header>' : '';
+  const body = options.pane === 'none' ? screen : `<div data-pane style="${paneStyle}">${header}${screen}</div>`;
+  // `[data-pane] > *`: the shell's own rule for its pane's children (`.main > *`).
   return `<!doctype html>
 <html lang="en">
-  <head><meta charset="utf-8"><title>The Workspace thread</title><style>${css}</style><style>body { margin: 0; }</style></head>
+  <head><meta charset="utf-8"><title>The Workspace thread</title><style>${css}</style><style>body { margin: 0; } [data-pane] > * { flex-shrink: 0; }</style></head>
   <body>${body}</body>
 </html>`;
 }
 
-async function openThread(page: Page, options: { pane: boolean; problems: number }): Promise<void> {
+async function openThread(page: Page, options: ThreadOptions): Promise<void> {
   // globals.css imports a web font. Nothing here may reach the network.
   await page.route('**/*', (route) => route.abort());
   await page.setContent(pageMarkup(options), { waitUntil: 'load' });
 }
 
 test('a long conversation does not make the page taller than its window', async ({ page }) => {
-  await openThread(page, { pane: false, problems: 0 });
+  await openThread(page, { pane: 'none', problems: 0 });
 
   const measured = await page.evaluate(() => {
     const column = document.querySelector('[data-column]');
@@ -162,7 +180,7 @@ test('a long conversation does not make the page taller than its window', async 
 });
 
 test('a screen-reader label is contained by the column, and scrolls with what it names', async ({ page }) => {
-  await openThread(page, { pane: false, problems: 0 });
+  await openThread(page, { pane: 'none', problems: 0 });
 
   const measured = await page.evaluate(() => {
     const column = document.querySelector('[data-column]');
@@ -195,7 +213,7 @@ test('a screen-reader label is contained by the column, and scrolls with what it
 });
 
 test('the sources row under an answer is the column`s, and scrolls with it', async ({ page }) => {
-  await openThread(page, { pane: false, problems: 0 });
+  await openThread(page, { pane: 'none', problems: 0 });
 
   const measured = await page.evaluate(() => {
     const column = document.querySelector<HTMLElement>('[data-column]');
@@ -220,7 +238,7 @@ test('the sources row under an answer is the column`s, and scrolls with it', asy
 
 test('at 390 px the composer stays docked at the bottom of the pane', async ({ page }) => {
   await page.setViewportSize(PHONE);
-  await openThread(page, { pane: true, problems: PROBLEM_LINES });
+  await openThread(page, { pane: 'block', problems: PROBLEM_LINES });
 
   const measured = await page.evaluate(() => {
     const pane = document.querySelector<HTMLElement>('[data-pane]');
@@ -254,7 +272,7 @@ test('at 390 px the composer stays docked at the bottom of the pane', async ({ p
 
 test('at 390 px a wide table scrolls inside its own box, and the page does not scroll sideways', async ({ page }) => {
   await page.setViewportSize(PHONE);
-  await openThread(page, { pane: false, problems: 0 });
+  await openThread(page, { pane: 'none', problems: 0 });
 
   const measured = await page.evaluate(() => {
     const box = document.querySelector<HTMLElement>('[data-table-box]');
@@ -272,4 +290,47 @@ test('at 390 px a wide table scrolls inside its own box, and the page does not s
   expect(measured.position).toBe('relative');
   expect(measured.overflowX).toBe('auto');
   expect(measured.pageWidth).toBeLessThanOrEqual(PHONE.width);
+});
+
+/** The dock's bottom edge against the pane's, in whole pixels. */
+async function dockGap(page: Page): Promise<{ gap: number; paneScrolls: boolean; columnScrolls: boolean; roomUnderTurns: number }> {
+  return page.evaluate(() => {
+    const pane = document.querySelector<HTMLElement>('[data-pane]');
+    const column = document.querySelector<HTMLElement>('[data-column]');
+    const dock = document.querySelector<HTMLElement>('[data-composer-dock]');
+    const turns = column?.querySelector<HTMLElement>('ol');
+    if (pane === null || column === null || dock === null || !turns) throw new Error('no pane, column, turns or dock');
+    const paneFoot = pane.getBoundingClientRect().bottom - parseFloat(getComputedStyle(pane).paddingBottom);
+    return {
+      gap: Math.round(paneFoot - dock.getBoundingClientRect().bottom),
+      paneScrolls: pane.scrollHeight > pane.clientHeight,
+      columnScrolls: column.scrollHeight > column.clientHeight,
+      roomUnderTurns: Math.round(column.getBoundingClientRect().bottom - turns.getBoundingClientRect().bottom),
+    };
+  });
+}
+
+test('in the pane that sizes it, a short conversation fills the pane and the dock sits at its foot', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  // One answer, the table: a conversation far shorter than the pane.
+  await openThread(page, { pane: 'flex', problems: 0, turns: 0 });
+
+  const measured = await dockGap(page);
+
+  // Nothing scrolls: the column is taller than its one turn, and the dock ends where the pane's content ends.
+  expect(measured.paneScrolls).toBe(false);
+  expect(measured.columnScrolls).toBe(false);
+  expect(measured.roomUnderTurns).toBeGreaterThan(0);
+  expect(Math.abs(measured.gap)).toBeLessThanOrEqual(1);
+});
+
+test('in the pane that sizes it, a long conversation scrolls inside its column and the pane does not', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openThread(page, { pane: 'flex', problems: 0 });
+
+  const measured = await dockGap(page);
+
+  expect(measured.paneScrolls).toBe(false);
+  expect(measured.columnScrolls).toBe(true);
+  expect(Math.abs(measured.gap)).toBeLessThanOrEqual(1);
 });

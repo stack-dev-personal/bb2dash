@@ -1,11 +1,16 @@
 /* The thread (Phase 24b): what went wrong, the message column, and the dock
    that holds the composer and the service line. Tokens only. */
 
+/* It takes the column's full height where the pane sizes the screen (round
+   4, Workspace.module.css), so the message column fills the room over the
+   dock; where nothing sizes it, it is its content. */
 .thread {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
   gap: var(--space-4);
   min-width: 0;
+  min-height: 0;
 }
 
 /* A read or a write that failed, in the app's own words for it (the Inbox's form). */

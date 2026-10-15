@@ -8,11 +8,19 @@
    contains, and each turn's screen-reader label is an absolute box
    (`.sr-only`, globals.css). Left to the page, the labels stayed where the
    unscrolled column would have put them, and the document grew as tall as
-   the whole conversation (W-1). */
+   the whole conversation (W-1).
+
+   Its height (round 4, Stack's look at the preview): in the shell it grows to
+   the room the thread has over the dock (`flex: 1 1 auto` in ThreadView's
+   flex column, which the pane sizes), so a short conversation still sets the
+   composer at the pane's foot and a long one scrolls here. The bound below
+   holds where nothing sizes the thread (the layout spec's document cases): the
+   window less the room the date line and the dock take. */
 .column {
   position: relative;
+  flex: 1 1 auto;
   min-height: calc(var(--space-12) * 3);
-  max-height: 62dvh;
+  max-height: calc(100dvh - var(--size-220));
   overflow-y: auto;
   padding: var(--space-6);
   border-radius: var(--radius-lg);

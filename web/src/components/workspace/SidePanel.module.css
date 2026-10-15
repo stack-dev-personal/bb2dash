@@ -3,13 +3,20 @@
    view's one primary). The picked tab carries the page's red mark of where he
    is, an underline in --color-accent-500 (D-I); its words stay ink. */
 
+/* Round 4 (Stack's look at the preview, 2026-10-15): the card's edge is the
+   divider, not the faint ring, and a rule runs under the tab row; docked, the
+   panel is its track's full height and its body scrolls inside it. */
 .panel {
   composes: card from '@/styles/tokens.module.css';
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
   gap: var(--space-4);
   min-width: 0;
+  min-height: 0;
   padding: var(--space-4);
+  border: 1px solid var(--color-divider);
+  box-shadow: none;
 }
 
 .head {
@@ -18,6 +25,8 @@
   justify-content: space-between;
   gap: var(--space-3);
   flex-wrap: wrap;
+  padding-bottom: var(--space-1);
+  border-bottom: 1px solid var(--color-divider);
 }
 
 .tabs {
@@ -44,8 +53,14 @@
   font-size: var(--text-xs);
 }
 
+/* The picked tab's rows: they scroll inside the body when the docked panel is
+   shorter than they are. Positioned because it scrolls. */
 .body {
+  position: relative;
+  flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .tabBody {
