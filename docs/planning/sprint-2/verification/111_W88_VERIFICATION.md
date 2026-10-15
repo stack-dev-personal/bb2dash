@@ -230,3 +230,82 @@ W-87's files and record (from the merge), and the two labels files (both workers
 screen test all pass with the wiring (the 100 screen failures W-87 recorded are closed). The walk box of
 the layout spec, Q-2 (whether an opened PDF lands on the page), and the column's width at 1280 px with the
 course rail open (D-F) are the PM's at the walk.
+
+## Round 2
+
+The items of brief 111's "Round 2" under "W-88", on the same branch, from `de4a194`; the phase branch's
+own round-2 docs were not merged in (none of my files moved there). One commit per item, pushed after
+each. Each red below is the new case run before the fix; each green is the same file after it.
+
+| item | commit | red | green |
+|---|---|---|---|
+| R2-2a: the options and turn rows keep their previous rows | `5af7ad6` | `queries.workspace-ask`, `queries.workspace-sources`, `Workspace.sources`: 3 failed, 66 passed (69) | 69 passed (69) |
+| R2-2b: the stream is marked stopped only on a cancel that answers true | `5586582` | `Workspace.failures` + `Workspace.sources`: 2 failed, 47 passed (49) | 96 passed over four screen files |
+| R2-4: a failed options read is not said twice | `9af5e99` | `Workspace.failures`: 1 failed, 32 passed (33) | 33 passed (33) |
+| R2-5: a chip opens the Sources tab at its row | `44ea332` | `Workspace.sources -t R2-5`: 1 failed ("no row 2 yet") | 95 passed over four files |
+| R2-6: a plain answer loses its bold pairs (Stack, 2026-10-07) | `83ec8f7` | `Workspace.thread`: 15 failed, 59 passed (74) | 159 passed over five files |
+| R2-8: one `workspace_sources` read for the conversation | `60b9157` | `queries.workspace-sources` + `Workspace.sources`: 5 failed, 35 passed (40) | 153 passed over six files |
+| R2-9: each answer parsed when its text or format changes | `861dea4` | `Workspace.sources -t R2-9`: 1 failed (the finished "# One" re-parsed) | 55 passed over two files |
+| W-1: the rail's button hidden above 720 px through a slot | `8ada26e` | `Workspace.layout`: 2 failed, 6 passed (8) | 97 passed with the token audit |
+| W-3: the panel docks by the content pane's width | `110ba68` | `SidePanel`: 2 failed, 44 passed (46) over it and `Workspace.layout` | 124 passed over five files |
+| S-1: the upload's tab loses its opener first | `4f1aeb2` | `SidePanel`: 1 failed, 39 passed (40) | 40 passed (40) |
+
+What each holds:
+
+* **R2-2a.** `placeholderData: keepPreviousData` on `requestOptionsOptions` and `turnsOptions` (the PM's
+  permission; one case each in their tests). The screen case holds the options and turn reads of the new
+  id list open while a question is asked: the earlier rich answer keeps its `h2`, no `**`, its
+  `data-retrieval` and its fixed line. **Default R2-a:** the screen keeps only the rows of the
+  conversation's own requests (`ofRequests` in `Workspace.tsx`), because a disabled read (the lobby) or a
+  read held across a change of conversation also keeps the last rows; the harness gained per-table read
+  gates (`fake.state.tableGates`).
+* **R2-2b.** `markStopped` is called in the cancel's `onSuccess` when it answers true. Three cases in
+  `Workspace.failures.test.tsx`: true (a later delta changes nothing), a failed cancel and a cancel that
+  answers false (the later delta arrives). `Workspace.sources.test.tsx`'s Stop case now emits its delta
+  after the cancel has answered. This retires my round-1 default 9.
+* **R2-4.** `readError` holds the requests', the messages' and the turn rows' failures; the options rows'
+  is the composer's alone. A turn rows' failure is still said once, above the column.
+* **R2-5.** `onOpenSources(requestId, ord)`: a chip passes its ord, the sources row passes null (the
+  answer picked as a whole, the mark cleared). The Sources tab's row carries `data-source-ref`,
+  `aria-current="true"` and the active fill (never red), and is scrolled into view (`block: 'nearest'`).
+* **R2-6.** `withoutBoldMarkers` is back in `thread.ts` with its eleven-case test, and `answerBlocks` runs
+  it before `plainBlocks` for `plain` and for a request with no options row; `rich` is parsed as before.
+  `Workspace.sources`' plain case now reads "# Plan Quiz 2 on Friday".
+* **R2-8.** Added to `queries.workspace-sources.ts` beside the frozen exports: `sourcesForRequestsOptions`,
+  `useWorkspaceSourcesFor`, `sourcesByRequest`. **Default R2-b:** the key is
+  `[...workspaceSourceKeys.turns(c), 'sources', sortedIds]`, under the turns' prefix, so the stream's
+  existing invalidation of a conversation's turns (on `sources` and `done`) reaches it and
+  `invalidateWorkspaceProvenance` and its pinned keys stay as they are; it keeps its previous rows; 40 rows
+  a request at most. The thread says a failed read once (`sourcesProblemLine`, above the column); the
+  panel keeps `sourcesOptions(requestId)`. Three turns make one select.
+* **R2-9.** `useMemo` on `[turn.text, turn.format]` inside `Answer`; a spy on the real `parseAnswer`
+  counts one call, the live text, for a delta beside a finished rich answer.
+* **W-1.** `.railSlot` composes nothing and is `display: none`, `display: block` at 720 px; `.railButton`
+  sets no display. The layout test reads the rule as written and finds the button in its slot.
+* **W-3.** `use-workspace-panel.ts` (new, split out of `Workspace.tsx`, which is 354 lines now):
+  `PANEL_DOCK_MIN_WIDTH = 1024`, `panelDocks(width)`, `usePaneWidth(root)` (a `ResizeObserver` on the
+  shell's `main`, else the root's parent, through `useSyncExternalStore`), and the panel's state.
+  **Default R2-c:** an unmeasured pane (the server, hydration, no `ResizeObserver`) reads as docked, as the
+  server drew it, so a page loaded with the course rail open at 1280 px shows the panel docked for the
+  frame before it is measured. The `matchMedia` store is gone, so code review 12's two stores are one
+  (W-87's `usePhoneWidth`). The 1023.98 px `@media` step stays as a floor (a window that narrow has a
+  pane that narrow). Tests: the decision as a pure function; a pane resized from 1440 to 1020 and to 1180
+  (docked, sheet, docked); the sheet's Esc, Close and scrim; the layout test's mounts in a 1440 px pane.
+* **S-1.** `tab.opener = null` before `tab.location.href`; the fallback keeps `noopener,noreferrer`. Two
+  cases: the opener is null when the address is set, and the blocked-tab fallback's arguments.
+
+### Round 2 gates
+
+From `web/`, after `4f1aeb2`:
+
+    $ npm run typecheck                                    clean
+    $ npx eslint . --max-warnings 0                        clean
+    $ npx playwright test -c e2e/playwright.config.ts workspace-layout
+                                                           5 passed, exit 0
+    $ npx vitest run                                       Test Files 208 passed (208); Tests 3870 passed (3870)
+    $ npx vitest run test/token-audit.test.ts test/raw-html.audit.test.ts test/audits.test.ts test/status-vocabulary.test.ts
+                                                           Test Files 4 passed (4); Tests 107 passed (107)
+
+The red token still names eleven files. No string was added in round 2. The PM may permit the two lib
+modules' changes as written: `placeholderData` on the two frozen options, and three exports added beside
+the frozen ones in `queries.workspace-sources.ts`; no frozen name or signature changed.
