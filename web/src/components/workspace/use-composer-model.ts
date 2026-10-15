@@ -149,7 +149,6 @@ export function useComposerModel(props: ComposerProps): ComposerModel {
   const onLimit = () => chips.setLimitHit(true);
   const uploading = useComposerUploads({ course: choices.course, attached: choices.attachments.length, update: setChoices, onLimit });
   const gate = askGateLine(choices, rows.routineRow, rows.uploadRows);
-  const hasUploads = choices.attachments.some((item) => item.kind === 'upload');
 
   async function submit() {
     if (props.busy || props.disabled || asking.pending || gate !== null) return;
@@ -178,7 +177,7 @@ export function useComposerModel(props: ComposerProps): ComposerModel {
     gate,
     pending: asking.pending,
     refusal: asking.refusal?.message ?? null,
-    problems: problemsOf({ hydrated, optionsError, uploadsError: rows.uploadsError, uploadProblem: uploading.problem, hasUploads }),
+    problems: problemsOf({ hydrated, optionsError, uploadsError: rows.uploadsError, uploadProblem: uploading.problem, hasUploads: choices.attachments.some((item) => item.kind === 'upload') }),
     full: isFull(choices),
     fileIds: choices.attachments.flatMap((item) => (item.kind === 'file' ? [item.id] : [])),
     addFiles: uploading.addFiles,
