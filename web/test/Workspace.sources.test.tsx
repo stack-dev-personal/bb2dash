@@ -33,8 +33,14 @@ vi.mock('@/lib/supabase/client', async () =>
 vi.mock('next/navigation', async () => (await import('./workspace-harness')).navigationMock());
 vi.mock('@/components/workspace/Composer', async () => (await import('./workspace-harness')).composerMock());
 vi.mock('@/components/workspace/Lobby', async () => (await import('./workspace-harness')).lobbyMock());
+// The parser, counted (round 2, R2-9): the real one, wrapped in a spy.
+vi.mock('@/lib/answer-format', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/lib/answer-format')>();
+  return { ...real, parseAnswer: vi.fn(real.parseAnswer) };
+});
 
 const labels = await import('@/lib/workspace-labels');
+const { parseAnswer } = await import('@/lib/answer-format');
 const { Workspace } = await import('@/app/(app)/workspace/Workspace');
 
 const A = '6f1c2a54-9b1e-4c0d-8a55-0d2f3b7c9e11';
@@ -427,6 +433,33 @@ describe('Stop', () => {
     expect(turn(container)).toHaveAttribute('data-turn', 'stopped');
     expect(turn(container).querySelector('[data-answer-text]')).toHaveTextContent('Week one: reading.');
     expect(container.textContent).not.toContain('Week two');
+  });
+});
+
+describe('a delta parses the live answer only (round 2, R2-9)', () => {
+  it('parses the text that changed, once, and none of the finished answers', async () => {
+    fake.state.rows = {
+      workspace_messages: [
+        questionRow('First'),
+        { ...answerRow('# One\n\nThe first answer.'), request_id: 41, id: 'a7c1d2e3-55aa-4f10-b1d2-000000000041' },
+        { ...questionRow('Second'), id: 'c9a7d3e2-55aa-4f10-b1d2-000000000042' },
+      ],
+      workspace_requests: [
+        { ...requestRow('done'), id: 41 },
+        { ...requestRow('claimed'), user_message_id: 'c9a7d3e2-55aa-4f10-b1d2-000000000042' },
+      ],
+      workspace_request_options: [{ ...optionsRow('rich'), request_id: 41 }, optionsRow('rich')],
+    };
+    const { container } = open();
+    const channel = await joined(TOPIC_A);
+    await waitFor(() => expect(container.querySelector('[data-answer-text] h2')).toHaveTextContent('One'));
+    const parse = vi.mocked(parseAnswer);
+    parse.mockClear();
+
+    act(() => channel.emit('delta', { request_id: 42, seq: 1, delta: '**Week** two' }));
+    await waitFor(() => expect(turn(container).querySelector('strong')).toHaveTextContent('Week'));
+
+    expect(parse.mock.calls.map(([text]) => text)).toEqual(['**Week** two']);
   });
 });
 

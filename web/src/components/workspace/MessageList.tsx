@@ -36,7 +36,7 @@
  */
 
 import Link from 'next/link';
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import type { WorkspaceSource } from '@/lib/queries.workspace-sources';
 import {
   ANSWER_ROLE_LABEL,
@@ -156,6 +156,9 @@ interface AnswerProps {
 function Answer({ turn, sources, onOpenSources }: AnswerProps) {
   const requestId = finishedRequestOf(turn);
   const rows = requestId === null ? NO_SOURCES : (sources.get(requestId) ?? NO_SOURCES);
+  // Parsed when its text or format changes, not on every render of the column: a delta re-renders
+  // every turn, and only the live one has new text (round 2, R2-9).
+  const blocks = useMemo(() => answerBlocks(turn.text, turn.format), [turn.text, turn.format]);
   const tier = turn.answer?.tier ?? null;
   const lines = [turn.retrievalLine, turn.line].filter((line): line is string => line !== null);
   if (tier === null && turn.text === '' && lines.length === 0 && rows.length === 0) return null;
@@ -173,7 +176,7 @@ function Answer({ turn, sources, onOpenSources }: AnswerProps) {
       {tier !== null && <TierBadge tier={tier} />}
       {turn.text !== '' && (
         <AnswerBody
-          blocks={answerBlocks(turn.text, turn.format)}
+          blocks={blocks}
           sources={rows}
           onCite={(ord) => open(ord)}
         />
