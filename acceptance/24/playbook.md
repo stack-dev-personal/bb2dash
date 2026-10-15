@@ -323,18 +323,22 @@ Pass when all of this is true:
 
 - In `18.json`: `state` is `done`, `line` is null, `answer_chars` is 1 or more, `badge` reads
   `Haiku · lookup`; `sources_row` is a text of the form `N sources` or `1 source` with N above 0;
-  `forbidden_elements_in_answer` is 0; `panel_open_controls` is 1 or more; `panel_folded` is true;
+  `forbidden_elements_in_answer` is 0; `panel_rows` is 1 or more and `panel_open_controls` is 1 or more; `panel_folded` is true;
   `archived_ids` holds `conversation_id`, and `archive_writes` equals the number of ids in
   `archived_ids`.
 - `18-end.png` shows the last lines of the answer's text and, under them, the sources row.
 - `18-panel.png` shows, on the right of the page, a panel whose picked tab reads `Sources`, with at
-  least one row in it, and each row has a button that reads `Open`. The answer's text is still on
-  the page, to the left of the panel.
+  least one row in it, and each row has a control that reads `Open`. A row may be a course file
+  (`Course file`), an upload, a remembered conversation (`Remembered`: an earlier conversation the
+  assistant's memory kept, an earlier run of this pack's among them) or the planner (`Planner`);
+  each kind is a source and none is a fault. The answer's text is still on the page, to the left of
+  the panel.
 - The answer's text in `18-end.png` is laid out as text: headings, lists or paragraphs. It holds no
   picture and nothing drawn as a link.
 
 `chips_in_answer` in `18.json` may be 0 or more: whether the answer cites a source by a numbered
-chip is the model's choice, and neither count is a fault. Write the number in `notes`.
+chip is the model's choice, and neither count is a fault; an answer that names its sources as file
+names in brackets, or not at all, is the model's choice too. Write the number in `notes`.
 
 ## Stage: page-upload
 
