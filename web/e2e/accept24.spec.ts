@@ -125,6 +125,12 @@ const MEMORY_STEP = '17';
 
 /** The fixed sentence of an answer whose retrieval found nothing (`workspace/test/fixtures/contract24/lines.txt`, key `empty`). */
 const EMPTY_LINE = 'No passage of your course files or uploads matched this question, so this answer comes from general knowledge.';
+/** The kind a course file's source row shows ("Course file · IST.352 · part 1"). */
+const COURSE_FILE_ROW_KIND = 'Course file';
+/** The current-files list a course file's Open waits on is 1,000 rows and more: a cold read takes seconds. */
+const FILES_READ_MS = 60_000;
+/** After the first course-file Open, the rest of them. */
+const OPEN_SETTLE_MS = 1_500;
 
 /** The words step 9 fails with when the answer was over before Stop could be pressed. */
 const FINISHED_BEFORE_STOP = 'inconclusive: the answer finished before Stop could be pressed';
@@ -383,9 +389,16 @@ acceptStep('18 sources and panel', { shots: ['start', 'end', 'panel'] }, async (
     await expect(page.locator('[data-panel]')).toHaveAttribute('data-panel', 'sources');
     const openButtons = panel(page).getByRole('button', { name: OPEN_SOURCE_LABEL, exact: true });
     await expect(openButtons.first(), 'the Sources tab lists at least one row with Open').toBeVisible();
-    // Counted after the wait: `count()` reads the page as it is, and the rows come after the tab's
-    // attribute (the counting run 20261015T222036Z read 0 here and the operator rightly failed the step).
-    rec.note({ panel_open_controls: await openButtons.count() });
+    // A course file's Open renders once the current-files list has loaded (SourcesTab's OpenFile), a
+    // remembered item's and the planner's at once: so the picture and the count wait for a course-file
+    // row's Open, then a settle. Read before that, the count was a false fact (runs 20261015T222036Z
+    // and 20261015T230406Z, the second with two remembered rows whose Open came first).
+    const fileRows = panel(page).locator('li').filter({ hasText: COURSE_FILE_ROW_KIND });
+    if ((await fileRows.count()) > 0) {
+      await expect(fileRows.first().getByRole('button', { name: OPEN_SOURCE_LABEL, exact: true }), 'a course-file row shows Open once the files are read').toBeVisible({ timeout: FILES_READ_MS });
+    }
+    await page.waitForTimeout(OPEN_SETTLE_MS);
+    rec.note({ panel_rows: await panel(page).locator('li').count(), panel_open_controls: await openButtons.count() });
     await rec.shot(page, 'panel');
     await hidePanel(page);
     rec.note({ panel_folded: true });
