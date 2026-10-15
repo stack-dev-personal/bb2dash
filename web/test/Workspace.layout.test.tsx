@@ -227,17 +227,32 @@ const CONVERSATION: Record<string, Row[]> = {
   ],
 };
 
+/** The screen in a wide content pane (1440 px), measured as the shell's `main` is (round 2, W-3). */
 function mount(search: string) {
   fake.state.search = search;
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe(): void {}
+      disconnect(): void {}
+    },
+  );
   return render(
-    <QueryClientProvider client={newQueryClient()}>
-      <Workspace />
-    </QueryClientProvider>,
+    <main
+      ref={(node) => {
+        if (node) Object.defineProperty(node, 'clientWidth', { configurable: true, value: 1440 });
+      }}
+    >
+      <QueryClientProvider client={newQueryClient()}>
+        <Workspace />
+      </QueryClientProvider>
+    </main>,
   );
 }
 
 beforeEach(() => {
   resetFake();
+  vi.unstubAllGlobals();
 });
 
 describe('what the stylesheets say', () => {
@@ -324,6 +339,9 @@ describe('the mounted screen', () => {
       labels.QUESTION_ROLE_LABEL,
       labels.STATUS_ROLE_LABEL,
     ]);
+    // A wide pane: the panel is docked, the grid's third track, and no sheet.
+    expect(container.querySelector('[data-panel-docked]')).not.toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
     // The wide table is inside its own box that scrolls sideways.
     expect(container.querySelector(`.${answerStyles.tableBox} > table`)).not.toBeNull();
 

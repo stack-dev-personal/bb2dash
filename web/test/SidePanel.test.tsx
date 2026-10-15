@@ -37,6 +37,7 @@ const { SidePanel, tabForKey } = await import('@/components/workspace/SidePanel'
 const { panelHref, parsePanelTab } = await import('@/components/workspace/route');
 const { parseAnswer } = await import('@/lib/answer-format');
 const { Workspace } = await import('@/app/(app)/workspace/Workspace');
+const { panelDocks } = await import('@/app/(app)/workspace/use-workspace-panel');
 
 type PanelTab = 'sources' | 'files' | 'memory';
 
@@ -572,28 +573,73 @@ describe('the Memory tab', () => {
 describe('the fold, on the mounted screen (the route)', () => {
   const C = '6f1c2a54-9b1e-4c0d-8a55-0d2f3b7c9e11';
 
-  function openScreen(search: string) {
-    fake.state.search = search;
-    return render(
-      <QueryClientProvider client={newQueryClient()}>
-        <Workspace />
-      </QueryClientProvider>,
+  /** The shell's content pane, as wide as `pane.width`; a stand-in observer reports its resizes. */
+  const pane = { width: 1440, observers: [] as (() => void)[] };
+
+  function measurablePane(width: number): void {
+    pane.width = width;
+    pane.observers = [];
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: () => void) {
+          pane.observers.push(callback);
+        }
+        observe(): void {}
+        disconnect(): void {}
+      },
     );
   }
 
-  /** A window under 1024 px: the panel is a sheet. */
-  function narrowWindow(): void {
-    vi.stubGlobal(
-      'matchMedia',
-      (query: string) =>
-        ({
-          matches: query === '(max-width: 1023.98px)',
-          media: query,
-          addEventListener: () => undefined,
-          removeEventListener: () => undefined,
-        }) as unknown as MediaQueryList,
+  function resizePane(width: number): void {
+    pane.width = width;
+    act(() => pane.observers.forEach((callback) => callback()));
+  }
+
+  function openScreen(search: string) {
+    fake.state.search = search;
+    return render(
+      <main
+        ref={(node) => {
+          if (node) Object.defineProperty(node, 'clientWidth', { configurable: true, get: () => pane.width });
+        }}
+      >
+        <QueryClientProvider client={newQueryClient()}>
+          <Workspace />
+        </QueryClientProvider>
+      </main>,
     );
   }
+
+  /** A content pane under 1024 px (the course rail open at 1280 px): the panel is a sheet. */
+  function narrowWindow(): void {
+    measurablePane(1020);
+  }
+
+  it('docks by the content pane`s width, not the window`s (round 2, W-3)', () => {
+    expect(panelDocks(1440 - 260)).toBe(true);
+    expect(panelDocks(1280 - 260)).toBe(false);
+    expect(panelDocks(1023)).toBe(false);
+    expect(panelDocks(1024)).toBe(true);
+    // Unmeasured (the server's render, hydration, no ResizeObserver): docked, as the server drew it.
+    expect(panelDocks(null)).toBe(true);
+  });
+
+  it('turns the docked panel into a sheet when the pane narrows, and back when it widens (W-3)', async () => {
+    measurablePane(1440);
+    const { container } = openScreen(`c=${C}&panel=files`);
+    await screen.findByRole('region', { name: labels.PANEL_REGION_LABEL });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(container.querySelector('[data-panel-docked]')).not.toBeNull();
+
+    resizePane(1020);
+    expect(await screen.findByRole('dialog', { name: labels.PANEL_REGION_LABEL })).toBeInTheDocument();
+    expect(container.querySelector('[data-panel-docked]')).toBeNull();
+
+    resizePane(1180);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByRole('region', { name: labels.PANEL_REGION_LABEL })).toBeInTheDocument();
+  });
 
   it('folds the panel away by dropping the parameter, and the same button brings its tab back', async () => {
     openScreen(`c=${C}&panel=memory`);
