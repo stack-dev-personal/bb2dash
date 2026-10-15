@@ -630,7 +630,9 @@ under `web/src/` is the generated types file.
 * **Its gates:** `cd web && npm run typecheck && npx eslint . --max-warnings 0 && npx vitest run`, the
   new tests' coverage at least 80 %, and `git diff --name-only origin/feat/workspace-24...HEAD` lists
   only W-86's files, the labels file and its test, this brief and `111a`. It opens no PR: 24b is one PR,
-  opened at the end of the whole phase. It stops at "the data layer is on the phase branch" and says
+  opened at the end of the whole phase (amended 2026-10-15: on Stack's word "merge to main" the data layer went to
+  `main` on its own as PR #108, 24b's part 1, the one exception to one PR per phase, DECISIONS 2026-10-15; the page is
+  part 2, from the same branch). It stops at "the data layer is on the phase branch" and says
   what the page's streams can start from.
 
 ## The data layer's frozen exports (PM, 2026-10-14, before W-86 was cut)
