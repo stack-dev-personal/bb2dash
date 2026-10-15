@@ -491,3 +491,28 @@ describe('the depth across a remount (R2-1)', () => {
     expect(depthButton(thread.container)).toHaveAttribute('data-depth', 'auto');
   });
 });
+
+describe('the routine sheet and focus (R2-3)', () => {
+  it('focuses its search field after the sheet opens, and Close hands focus back to Add', async () => {
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query === '(max-width: 720px)',
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    })) as unknown as typeof window.matchMedia;
+    try {
+      mount();
+      fireEvent.click(screen.getByRole('button', { name: labels.ADD_MENU_LABEL }));
+      fireEvent.click(screen.getByRole('menuitem', { name: labels.USE_ROUTINE_LABEL }));
+      const sheet = screen.getByRole('dialog', { name: labels.USE_ROUTINE_LABEL });
+      const search = within(sheet).getByRole('searchbox', { name: labels.ROUTINE_FILTER_PLACEHOLDER });
+      await waitFor(() => expect(search).toHaveFocus());
+      fireEvent.click(within(sheet).getByRole('button', { name: 'Close' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(screen.getByRole('button', { name: labels.ADD_MENU_LABEL })).toHaveFocus();
+    } finally {
+      window.matchMedia = original;
+    }
+  });
+});

@@ -139,7 +139,7 @@ export function PlusMenu({ onAttachFromMaterials, onUploadFromDevice, onPickRout
       )}
       {routines.sheet && (
         <PopoutShell label={USE_ROUTINE_LABEL} onClose={routines.closeSheet}>
-          <RoutineList onPick={pick} />
+          <RoutineList onPick={pick} inSheet />
         </PopoutShell>
       )}
     </span>
