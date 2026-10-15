@@ -23,6 +23,9 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { newQueryClient } from './hydration-harness';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import sidePanelStyles from '@/components/workspace/SidePanel.module.css';
 import { fake, gate, resetFake, settle, type Row } from './workspace-harness';
 
 vi.mock('@/lib/supabase/client', async () =>
@@ -728,5 +731,60 @@ describe('the fold, on the mounted screen (the route)', () => {
     openScreen('panel=sources');
     const panel = await screen.findByRole('region', { name: labels.PANEL_REGION_LABEL });
     expect(within(panel).getByText(labels.NO_ANSWER_PICKED_LINE)).toBeInTheDocument();
+  });
+});
+
+/**
+ * Round 3, W-5 (the walk's step 19 and probe Q-1): in the docked panel a Files row's title and a failed
+ * row's reason broke mid-word, one fragment a line, because Delete, Try again and the note took the row's
+ * right half. A Files row and a Memory row now stack: the text over the row's full width, the actions and
+ * the note under it. The stylesheet is read as written, as `Workspace.layout.test.tsx` reads its rules.
+ */
+describe('a Files row and a Memory row lay their text over the full width (round 3, W-5)', () => {
+  const css = readFileSync(join(process.cwd(), 'src/components/workspace/SidePanel.module.css'), 'utf8').replace(
+    /\/\*[\s\S]*?\*\//g,
+    '',
+  );
+
+  /** The body of the rule whose whole selector is `selector`, outside any @media. */
+  function ruleOf(selector: string): string {
+    for (const [, selectors, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      if (selectors.trim() === selector) return body;
+    }
+    return '';
+  }
+
+  it('stacks the row: text first at full width, the actions and the note under it, all to the reading edge', () => {
+    expect(ruleOf('.stacked')).toMatch(/flex-direction:\s*column/);
+    expect(ruleOf('.stacked')).toMatch(/align-items:\s*stretch/);
+    expect(ruleOf('.stacked .rowActions')).toMatch(/flex-direction:\s*row/);
+    expect(ruleOf('.stacked .rowActions')).toMatch(/flex-wrap:\s*wrap/);
+    expect(ruleOf('.stacked .rowActions')).toMatch(/align-items:\s*flex-start/);
+    expect(ruleOf('.stacked .delete')).toMatch(/align-items:\s*flex-start/);
+    expect(ruleOf('.stacked .note')).toMatch(/text-align:\s*left/);
+    // The note keeps its cap.
+    expect(ruleOf('.note')).toMatch(/max-width:\s*var\(--size-280\)/);
+    // A word breaks only when it is longer than the row.
+    expect(ruleOf('.rowTitle')).toMatch(/overflow-wrap:\s*anywhere/);
+  });
+
+  it('gives every Files row and every Memory row that shape, and leaves a Sources row as it was', async () => {
+    const files = mount({ tab: 'files' });
+    await screen.findByText('Scan.pdf');
+    const uploads = [...document.querySelectorAll('[data-upload-state]')];
+    expect(uploads.length).toBeGreaterThan(0);
+    for (const row of uploads) expect(row).toHaveClass(sidePanelStyles.stacked);
+    files.unmount();
+
+    const memory = mount({ tab: 'memory' });
+    await screen.findByText('Quiz plan');
+    for (const row of document.querySelectorAll('[data-memory-state]')) expect(row).toHaveClass(sidePanelStyles.stacked);
+    memory.unmount();
+
+    mount({ tab: 'sources' });
+    await screen.findByText('Week 5 slides.pptx');
+    for (const row of document.querySelectorAll('[data-source-row]')) {
+      expect(row).not.toHaveClass(sidePanelStyles.stacked);
+    }
   });
 });

@@ -92,6 +92,30 @@
   font-size: var(--text-xs);
 }
 
+/* A Files row and a Memory row stack (round 3, W-5): the text over the row's
+   full width, the actions and the note under it. Beside the text they took the
+   row's right half in the docked panel, and a title broke mid-word, a few
+   characters a line. */
+.stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+}
+
+.stacked .rowActions {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.stacked .delete {
+  align-items: flex-start;
+}
+
+.stacked .note {
+  text-align: left;
+}
+
 .rowText {
   flex: 1;
   min-width: 0;

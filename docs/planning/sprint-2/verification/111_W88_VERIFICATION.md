@@ -309,3 +309,13 @@ From `web/`, after `4f1aeb2`:
 The red token still names eleven files. No string was added in round 2. The PM may permit the two lib
 modules' changes as written: `placeholderData` on the two frozen options, and three exports added beside
 the frozen ones in `queries.workspace-sources.ts`; no frozen name or signature changed.
+
+## Round 3
+
+W-5 (the walk's step 19 and probe Q-1): a Files row and a Memory row now carry `.stacked` (`SidePanel.module.css`):
+the row is a column, its text over the full width, the actions and the note under it at the reading edge
+(`flex-wrap`, `align-items: flex-start`, the note left-aligned, its `--size-280` cap kept); a title still
+breaks inside a word only when the word is longer than the row (`overflow-wrap: anywhere`, unchanged). A
+Sources row keeps its shape. Red: `SidePanel.test.tsx` 2 failed, 40 passed (42) (the rule read as written,
+and the class on every Files and Memory row); green 42 passed. Gates from `web/`: typecheck and eslint
+clean; vitest 208 files, 3872 passed; the four audits 107 passed; the Playwright layout spec 5 passed.
