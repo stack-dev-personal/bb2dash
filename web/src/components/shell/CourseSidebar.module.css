@@ -55,16 +55,28 @@
   padding: var(--space-4) 0 var(--space-8);
 }
 
+/* The list (2026-10-15): the grouped side nav Stack chose, a Zenkit settings nav. One heading
+   in sentence case; the rows in one card on the panel; each row a subject tile, the title over
+   the code and section, and a chevron; the current course a solid ink row in the ground colour,
+   with the red mark of "where you are" on its leading edge. Tokens only. */
+
 .head {
   margin: 0;
-  padding: var(--size-6) var(--size-14) var(--size-8);
+  padding: var(--size-6) var(--size-12) var(--size-8);
   font-family: var(--font-body);
-  font-weight: var(--font-weight-medium);
-  font-size: var(--text-2xs);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--color-neutral-500);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--text-14);
+  color: var(--color-text);
   user-select: none;
+}
+
+/* The card the rows sit in: inset from the panel's edges, the large radius, the resting edge. */
+.group {
+  margin: 0 var(--size-12);
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
 }
 
 .list {
@@ -76,11 +88,11 @@
 }
 
 .row {
+  position: relative;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--size-10);
-  padding: var(--size-8) var(--size-14);
-  font-size: var(--text-13);
+  padding: var(--size-8) var(--size-10);
   color: var(--color-text);
   text-decoration: none;
   user-select: none;
@@ -99,33 +111,103 @@
   outline-offset: calc(var(--size-focus-gap) * -1);
 }
 
+/* The hairline between rows starts past the tile, as the reference's does. */
+.list li + li .row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: calc(var(--size-10) + var(--size-28) + var(--size-10));
+  right: 0;
+  height: 1px;
+  background: var(--color-divider);
+}
+
+/* The current course: the primary button's fill, the ground colour for its words, the red mark. */
 .rowCurrent {
   composes: row;
-  background: var(--color-surface);
-  color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-bg);
+  border-radius: var(--radius-lg);
   box-shadow: inset var(--size-underline-mark) 0 0 var(--color-accent-500);
 }
 .rowCurrent:hover {
-  background: var(--color-surface);
+  background: var(--color-neutral-200);
+  color: var(--color-bg);
+}
+.rowCurrent:active {
+  background: var(--color-neutral-300);
+}
+/* The ring is the ink, so on the ink row it is drawn in the ground colour instead. */
+.rowCurrent:focus-visible {
+  outline-color: var(--color-bg);
+}
+/* A solid row has no hairline over it. */
+.list li + li .rowCurrent::before {
+  display: none;
+}
+
+/* The subject on a small square: the course's identity, in the figures' face. */
+.tile {
+  flex: none;
+  width: var(--size-28);
+  height: var(--size-28);
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-md);
+  background: var(--color-accent-tint-12);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--font-weight-medium);
+}
+/* On the current row the tile turns round and inverts, as the reference's avatar does. */
+.rowCurrent .tile {
+  border-radius: 50%;
+  background: var(--color-bg);
   color: var(--color-accent);
 }
 
-.code {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--color-neutral-400);
-  width: var(--size-58);
-  flex: none;
-}
-.rowCurrent .code {
-  color: var(--color-accent-2);
+.text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-underline-mark);
 }
 
 .title {
-  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: var(--text-14);
+  line-height: 1.2;
+}
+
+/* The code line may wrap: a kind and a section together are longer than the rail, and clipping
+   the word that tells two rows apart would be worse than a third line on a recitation. */
+.sub {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.2;
+  color: var(--color-neutral-500);
+}
+.rowCurrent .sub {
+  color: var(--color-bg);
+}
+
+/* The chevron, at the bar's icon size, muted; on the current row, in the ground colour. */
+.caret {
+  flex: none;
+  margin-inline-start: auto;
+  display: inline-flex;
+  color: var(--color-neutral-500);
+}
+.caret svg {
+  width: var(--size-16);
+  height: var(--size-16);
+}
+.rowCurrent .caret {
+  color: var(--color-bg);
 }
 
 .note {

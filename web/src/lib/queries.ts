@@ -137,6 +137,21 @@ export function courseCode(course: Pick<Course, 'subject' | 'number'>): string {
   return `${course.subject} ${course.number}`;
 }
 
+/** The word the course rail shows after a course's code and section, by its kind. */
+const COURSE_KIND_LABEL: Readonly<Record<Enums<'course_kind'>, string>> = {
+  lecture: '',
+  recitation: 'Recitation',
+  lab: 'Lab',
+  seminar: 'Seminar',
+  internship: 'Internship',
+  online: 'Online',
+};
+
+/** 'recitation' -> 'Recitation'. A lecture is the common case and says nothing. */
+export function courseKindLabel(kind: Enums<'course_kind'>): string {
+  return COURSE_KIND_LABEL[kind];
+}
+
 /**
  * The five tracker categories the artboards use, collapsed from the 19-value
  * `assignment_type` enum. Glyphs: R · A · Q · P · E (spec T-15).
