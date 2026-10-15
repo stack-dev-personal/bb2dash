@@ -205,11 +205,12 @@ acceptStep('7 follow-up', { shots: ['start', 'end'] }, async ({ page, context },
 acceptStep('8 nothing matches', { shots: ['start', 'end'] }, async ({ page, context }, rec) => {
   const opened: string[] = [];
   await archiveAfter(page, context, rec, opened, async () => {
-    const { turn } = await askAndSettle(page, rec, { conversation: null, question: QUESTION_NOTHING, badge: BADGE_LOW }, opened);
-    const lines = (await turn.locator('[data-answer-text]').innerText()).split(/\r?\n/).map((line) => line.trim());
-    const first = lines.find((line) => line !== '') ?? '';
-    rec.note({ first_line_is_the_fixed_sentence: first === EMPTY_LINE });
-    expect(first, 'the answer starts with the fixed sentence of an empty retrieval').toBe(EMPTY_LINE);
+    const { turn } = await askAndSettle(page, rec, { conversation: null, question: QUESTION_NOTHING, badge: BADGE_LOW, line: EMPTY_LINE }, opened);
+    // The fixed sentence is the turn's one line under the answer (asserted in settleAsked), shown once:
+    // the answer's own text does not carry it (Phase 24b, R-1).
+    const text = await turn.locator('[data-answer-text]').innerText();
+    rec.note({ fixed_sentence_is_the_turn_line: true, fixed_sentence_in_answer_text: text.includes(EMPTY_LINE) });
+    expect(text, 'the answer text does not repeat the fixed sentence').not.toContain(EMPTY_LINE);
   });
 });
 

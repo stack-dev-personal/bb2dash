@@ -334,7 +334,7 @@
     {
       "id": "8",
       "kind": "auto",
-      "text": "A question nothing matches stores retrieval empty, and the answer's first line is the fixed sentence.",
+      "text": "A question nothing matches stores retrieval empty, and the fixed sentence is the turn's one line under the answer, shown once.",
       "stage": "walk",
       "test": "8 nothing matches",
       "evidence": [
