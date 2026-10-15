@@ -81,9 +81,10 @@ function turnMarkup(index: number): string {
     </li>`;
 }
 
-/** A table no phone can hold: its cells are words that do not break. */
+/** A table no phone can hold: each cell is one word with no space or hyphen, so no font folds it. (A hyphen
+ * is a break point: the walk box's Linux Chromium folded the hyphenated cells, and the table fit 356 px.) */
 function wideTableMarkup(): string {
-  const cell = 'IST.323-week-five-reading-response-draft';
+  const cell = 'IST323WeekFiveReadingResponseDraftUnbroken';
   const row = (tag: string) => `<tr>${Array.from({ length: 5 }, () => `<${tag}>${cell}</${tag}>`).join('')}</tr>`;
   return `
     <li class="turn" data-turn="done" data-request-id="99">
