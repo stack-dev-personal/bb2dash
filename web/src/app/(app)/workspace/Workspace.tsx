@@ -310,9 +310,11 @@ function DateLine({ now, hydrated }: { now: number; hydrated: boolean }) {
 function ColumnBar(props: { now: number; hydrated: boolean; panel: Panel; onRail: () => void }) {
   return (
     <div className={styles.bar}>
-      <button type="button" className={styles.railButton} onClick={props.onRail}>
-        {CONVERSATIONS_HEADING}
-      </button>
+      <span className={styles.railSlot}>
+        <button type="button" className={styles.railButton} onClick={props.onRail}>
+          {CONVERSATIONS_HEADING}
+        </button>
+      </span>
       <DateLine now={props.now} hydrated={props.hydrated} />
       {props.panel.tab === null && (
         <button type="button" className={styles.showPanel} onClick={props.panel.show}>

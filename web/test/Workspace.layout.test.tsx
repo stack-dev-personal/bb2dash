@@ -280,6 +280,24 @@ describe('what the stylesheets say', () => {
     expect(FACTS.get(answerStyles.tableBox)?.positioned).toBe(true);
   });
 
+  /**
+   * The walk of the preview (round 2, W-1): the rail's button showed at 1280 px, because `.railButton`
+   * composes `btnSecondary`, whose `display: inline-flex` comes later in the built sheet and wins over the
+   * module's own `display: none`. The button now sits in a slot that composes nothing and is the one
+   * hidden; the button itself sets no display.
+   */
+  it('hides the rail`s button above 720 px through a slot no composition can show (round 2, W-1)', () => {
+    const css = readFileSync(join(SRC, 'app/(app)/workspace/Workspace.module.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const [outside, ...steps] = css.split(/@media\s*\(max-width:\s*720px\)\s*\{/);
+    const slot = /\.railSlot\s*\{([^}]*)\}/.exec(outside)?.[1] ?? '';
+    expect(slot).toMatch(/display:\s*none/);
+    expect(slot).not.toMatch(/composes/);
+    const phone = steps.join('');
+    expect(/\.railSlot\s*\{([^}]*)\}/.exec(phone)?.[1] ?? '').toMatch(/display:\s*(?!none)\w+/);
+    const button = [...css.matchAll(/\.railButton\s*\{([^}]*)\}/g)].map((match) => match[1]).join('');
+    expect(button).not.toMatch(/display\s*:/);
+  });
+
   it('folds only on the two steps the audit allows, 1023.98 px and 720 px', () => {
     const widths = SCREEN_SHEETS.filter((sheet) => !sheet.file.includes('Composer') && !sheet.file.includes('Lobby'))
       .flatMap((sheet) => [...readFileSync(join(SRC, sheet.file), 'utf8').matchAll(/@media[^{]*\(\s*max-width:\s*([\d.]+px)\s*\)/g)])
@@ -310,6 +328,9 @@ describe('the mounted screen', () => {
     expect(container.querySelector(`.${answerStyles.tableBox} > table`)).not.toBeNull();
 
     expect(leftOutside(container)).toEqual([]);
+    // The rail's button sits in its slot (W-1).
+    const railButton = screen.getByRole('button', { name: labels.CONVERSATIONS_HEADING, hidden: true });
+    expect(railButton.parentElement).toHaveClass(screenStyles.railSlot);
   });
 
   it('leaves none outside in the lobby', async () => {
