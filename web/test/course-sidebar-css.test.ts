@@ -24,15 +24,22 @@ function rule(source: string, selector: string): string {
 }
 
 describe('the course rail after the grouped nav', () => {
-  it('holds the rows in one card: the surface colour, the large radius, the resting edge', () => {
+  it('holds the rows in the large card primitive, with no padding of its own', () => {
     const group = rule(SIDEBAR, '.group');
-    expect(group).toMatch(/background\s*:\s*var\(--color-surface\)/);
-    expect(group).toMatch(/border-radius\s*:\s*var\(--radius-lg\)/);
-    expect(group).toMatch(/box-shadow\s*:\s*var\(--shadow-sm\)/);
+    expect(group).toMatch(/composes\s*:\s*cardLg from '@\/styles\/tokens\.module\.css'/);
+    expect(group).toMatch(/padding\s*:\s*0\s*;/);
   });
 
-  it('heads the list in sentence case, not small capitals', () => {
-    expect(rule(SIDEBAR, '.head')).not.toMatch(/text-transform\s*:\s*uppercase/);
+  it('heads the list at the semibold weight in sentence case, not in small capitals', () => {
+    const head = rule(SIDEBAR, '.head');
+    expect(head).toMatch(/font-weight\s*:\s*var\(--font-weight-semibold\)/);
+    expect(head).not.toMatch(/text-transform\s*:\s*uppercase/);
+  });
+
+  it('draws no hairline over the current row and none under it', () => {
+    const hidden = rule(SIDEBAR, '.list li:has(.rowCurrent) + li .row::before');
+    expect(hidden).toMatch(/display\s*:\s*none/);
+    expect(rule(SIDEBAR, '.list li + li .rowCurrent::before')).toBe(hidden);
   });
 
   it('fills the current row with the ink, writes it in the ground colour, and keeps the red mark', () => {

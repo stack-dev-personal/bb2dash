@@ -117,7 +117,8 @@ export function CourseSidebar() {
                         <span className={styles.text}>
                           <span className={styles.title}>{course.title_short}</span>
                           <span className={styles.sub}>
-                            <span className={styles.code}>{courseCode(course)}</span>
+                            {/* Its own element, so the code reads as one unit. */}
+                            <span>{courseCode(course)}</span>
                             {kind && ` · ${kind}`}
                             {course.section && ` · ${course.section}`}
                           </span>

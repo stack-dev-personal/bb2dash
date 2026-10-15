@@ -70,12 +70,13 @@
   user-select: none;
 }
 
-/* The card the rows sit in: inset from the panel's edges, the large radius, the resting edge. */
+/* The card the rows sit in: the large card primitive, inset from the panel's edges, with no
+   padding of its own, so the rows reach its edge. */
 .group {
+  composes: cardLg from '@/styles/tokens.module.css';
+  display: block;
+  padding: 0;
   margin: 0 var(--size-12);
-  background: var(--color-surface);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
   overflow: hidden;
 }
 
@@ -88,11 +89,15 @@
 }
 
 .row {
+  /* The hairline's inset is the sum of these three, so each is named once. */
+  --rail-pad: var(--size-10);
+  --rail-tile: var(--size-28);
+  --rail-gap: var(--size-10);
   position: relative;
   display: flex;
   align-items: center;
-  gap: var(--size-10);
-  padding: var(--size-8) var(--size-10);
+  gap: var(--rail-gap);
+  padding: var(--size-8) var(--rail-pad);
   color: var(--color-text);
   text-decoration: none;
   user-select: none;
@@ -116,9 +121,9 @@
   content: '';
   position: absolute;
   top: 0;
-  left: calc(var(--size-10) + var(--size-28) + var(--size-10));
+  left: calc(var(--rail-pad) + var(--rail-tile) + var(--rail-gap));
   right: 0;
-  height: 1px;
+  height: var(--size-underline);
   background: var(--color-divider);
 }
 
@@ -141,16 +146,18 @@
 .rowCurrent:focus-visible {
   outline-color: var(--color-bg);
 }
-/* A solid row has no hairline over it. */
-.list li + li .rowCurrent::before {
+/* A solid row has no hairline over it, and none under it: the row after the current course
+   keeps its top edge clear too. */
+.list li + li .rowCurrent::before,
+.list li:has(.rowCurrent) + li .row::before {
   display: none;
 }
 
 /* The subject on a small square: the course's identity, in the figures' face. */
 .tile {
   flex: none;
-  width: var(--size-28);
-  height: var(--size-28);
+  width: var(--rail-tile);
+  height: var(--rail-tile);
   display: grid;
   place-items: center;
   border-radius: var(--radius-md);
