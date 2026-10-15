@@ -321,9 +321,13 @@ export async function expectUncovered(locator: Locator): Promise<void> {
  * The message column: one locator, one helper
  * ------------------------------------------------------------------------ */
 
-/** The message column: the one box of the screen that scrolls (`MessageList.module.css`, `.column`). */
+/**
+ * The message column: the one box of the screen that scrolls (`MessageList.module.css`, `.column`). Found
+ * as the box that holds the turns list, because since Phase 24b the stream area wraps the whole column
+ * (the lobby or the thread) and its first child is no longer the column itself.
+ */
 export function messageColumn(page: Page): Locator {
-  return page.locator('[data-workspace-stream] > div');
+  return page.locator('[data-workspace-stream] ol[aria-label="Messages"]').locator('xpath=..');
 }
 
 /** Where an element stands in the column that scrolls it. */
