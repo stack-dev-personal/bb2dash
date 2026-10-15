@@ -35,6 +35,9 @@ vi.mock('@/lib/supabase/client', async () =>
   (await import('./workspace-harness')).supabaseClientMock(),
 );
 vi.mock('next/navigation', async () => (await import('./workspace-harness')).navigationMock());
+// The composer is W-87's (ruling C-1): its stand-in reads Ask or Stop from what the thread hands it.
+vi.mock('@/components/workspace/Composer', async () => (await import('./workspace-harness')).composerMock());
+vi.mock('@/components/workspace/Lobby', async () => (await import('./workspace-harness')).lobbyMock());
 
 const { Workspace } = await import('@/app/(app)/workspace/Workspace');
 
@@ -225,6 +228,7 @@ describe('after a request closes with its answer unstored the messages are polle
     };
   }
 
+  /** The answer body's text: a paragraph is set without the space it ended on (`answer-format.ts`). */
   function answerText(container: HTMLElement): string | null {
     return turn(container).querySelector('[data-answer-text]')?.textContent ?? null;
   }
@@ -242,7 +246,7 @@ describe('after a request closes with its answer unstored the messages are polle
     await advance(100);
     expect(fake.state.rows.workspace_requests[0]).toMatchObject({ state: 'cancelled' });
     expect(lineOf(view.container)).toBe(STOPPED);
-    expect(answerText(view.container)).toBe('Week one: ');
+    expect(answerText(view.container)).toBe('Week one:');
     return view;
   }
 
@@ -254,7 +258,7 @@ describe('after a request closes with its answer unstored the messages are polle
     runnerStoresPartial();
     await advance(2_000); // 4.0 s: no poll yet
     expect(messageReads()).toBe(before);
-    expect(answerText(container)).toBe('Week one: ');
+    expect(answerText(container)).toBe('Week one:');
 
     await advance(1_300); // 5.3 s: the first poll
     expect(messageReads()).toBe(before + 1);
@@ -271,7 +275,7 @@ describe('after a request closes with its answer unstored the messages are polle
     const { container } = await stopMidAnswer();
 
     await advance(11_900); // 12.0 s after the press: the polls at 5 s and 10 s brought the unfinished row
-    expect(answerText(container)).toBe('Week one: ');
+    expect(answerText(container)).toBe('Week one:');
     expect(lineOf(container)).toBe(STOPPED);
     runnerStoresPartial();
 

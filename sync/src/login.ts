@@ -25,13 +25,15 @@
  * credential.
  */
 
+import { LOGIN_HOSTS as SHARED_LOGIN_HOSTS } from '../../ingest/fetch_signed.mjs';
+
 export const BLACKBOARD_ORIGIN = 'https://blackboard.syracuse.edu';
 /** Absolute, because Ultra's <base href> points at the CDN. */
 export const PROBE_URL = `${BLACKBOARD_ORIGIN}/learn/api/public/v1/users/me`;
 /** The page whose load lets a still-valid Microsoft sign-in log Blackboard back in. */
 export const REAUTH_PATH = '/ultra/';
 /** The one host skills/bb-sync step 1 spells out, and the only one the spike's Duo login passed (82b). */
-export const LOGIN_HOSTS = Object.freeze(['login.microsoftonline.com'] as const);
+export const LOGIN_HOSTS: readonly string[] = SHARED_LOGIN_HOSTS;
 /** Read-only pages, visited in turn: never a course page, a form or anything that records an action. */
 export const KEEPALIVE_PAGES = Object.freeze([
   '/ultra/course',

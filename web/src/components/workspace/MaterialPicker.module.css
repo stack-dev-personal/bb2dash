@@ -1,0 +1,93 @@
+/* The material picker (Phase 24b, W-87), inside PopoutShell's panel: a serif
+   title, a search well, then the files under their course codes as quiet rows.
+   The list scrolls inside its own positioned box. Tokens only. */
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  padding-right: var(--space-8);
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: var(--text-lg);
+}
+
+.search {
+  composes: input from '@/styles/tokens.module.css';
+}
+
+/* What scrolls is positioned, so what it holds scrolls with it. */
+.scroll {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-height: var(--size-420);
+  overflow-y: auto;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+}
+
+.heading {
+  composes: kicker from '@/styles/tokens.module.css';
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  font-weight: var(--font-weight-regular);
+}
+
+.file {
+  width: 100%;
+  min-height: var(--size-target);
+  padding: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-14);
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  transition: var(--motion-control);
+}
+
+.file:hover:not(:disabled),
+.file:focus-visible {
+  background: var(--color-hover);
+}
+
+.file:disabled {
+  color: var(--color-muted);
+  cursor: default;
+}
+
+.line {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+}
+
+.problem {
+  composes: errorNotice from '@/styles/tokens.module.css';
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 720px) {
+  .file {
+    min-height: var(--size-44);
+  }
+
+  .scroll {
+    max-height: none;
+  }
+}

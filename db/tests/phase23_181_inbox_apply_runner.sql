@@ -100,7 +100,8 @@ begin
      'assignment_progress:insert,assignment_progress:select,assignment_progress:update,'
      'assignments:insert,assignments:select,assignments:update,attention_items:select,'
      'bb_gradebook:select,course_staff:insert,course_staff:select,course_staff:update,'
-     'courses:select,grade_components:select,inbox_apply_writes:insert,sessions:select,'
+     -- 107 gives the role select on grade_column_links: v_gradebook_latest, which it reads, is security_invoker.
+     'courses:select,grade_column_links:select,grade_components:select,inbox_apply_writes:insert,sessions:select,'
      'sync_runs:select,v_gradebook_latest:select,v_inbox_queue:select' then
     v_fail := v_fail || format('the role holds table privileges %s', v_got);
   end if;
@@ -380,7 +381,9 @@ begin
   end if;
   select state, params into v_row from agent_requests where id = v_follow;
   if v_row.state <> 'queued'
-     or v_row.params is distinct from jsonb_build_object('trigger', 'followup', 'after', v_r1, 'skip', '[]'::jsonb) then
+     -- 187 (R3): this request has no trigger, so it is a press's request and its follow-up carries
+     -- retry_held: true; before 187 it carries nothing more. The unit reads both the same.
+     or (v_row.params - 'retry_held') is distinct from jsonb_build_object('trigger', 'followup', 'after', v_r1, 'skip', '[]'::jsonb) then
     raise exception 'FAIL 6: the follow-up reads %', row_to_json(v_row);
   end if;
   insert into _t181 values ('r2', v_follow, null);

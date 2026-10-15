@@ -1,4 +1,4 @@
-/* The tier badge. Existing tokens only; Phase 22 restyles. */
+/* The tier badge: the outlined pill, never red. Tokens only. */
 
 .badge {
   composes: tagOutline from '@/styles/tokens.module.css';

@@ -1,8 +1,10 @@
 import { redirect } from 'next/navigation';
 import { Suspense, type ReactNode } from 'react';
+import { ContentPane } from '@/components/shell/ContentPane';
 import { CourseSidebar } from '@/components/shell/CourseSidebar';
 import { ItemPopout } from '@/components/popout/ItemPopout';
 import { SidebarProvider } from '@/components/shell/SidebarProvider';
+import { SkipLink } from '@/components/shell/SkipLink';
 import { TopNav } from '@/components/shell/TopNav';
 import { SIDEBAR_BOOT_SCRIPT } from '@/lib/sidebar-preference';
 import { getCurrentUser } from '@/lib/supabase/server';
@@ -26,6 +28,9 @@ import styles from './Shell.module.css';
  * column, which takes every pixel the rail leaves (no `--content-max` cap here
  * — screens that want a measure set their own).
  */
+/** The content pane's id: the skip link's target. */
+const CONTENT_ID = 'content';
+
 export default async function AppLayout({ children }: { children: ReactNode }) {
   if (!isSupabaseConfigured()) redirect('/login');
 
@@ -38,10 +43,16 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           remembered state on the first paint. */}
       <script dangerouslySetInnerHTML={{ __html: SIDEBAR_BOOT_SCRIPT }} />
       <div className={styles.shell}>
+        {/* The first Tab stop: drawn only while focused, moves focus to the content pane. */}
+        <SkipLink target={CONTENT_ID} className={styles.skip}>
+          Skip to content
+        </SkipLink>
         <TopNav userEmail={user.email ?? null} />
         <div className={styles.body}>
           <CourseSidebar />
-          <main className={styles.main}>{children}</main>
+          <ContentPane id={CONTENT_ID} className={styles.main}>
+            {children}
+          </ContentPane>
         </div>
         <Suspense fallback={null}>
           <ItemPopout />

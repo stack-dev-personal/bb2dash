@@ -1,0 +1,28 @@
+/* The plus button (Phase 24b, W-87): a round secondary pill with the plus drawn
+   in the ink. Its panel is the shared pop-down (Menu.module.css); the routine
+   list it opens is wider. Tokens only. */
+
+.button {
+  composes: btnSecondary from '@/styles/tokens.module.css';
+  width: var(--size-target);
+  height: var(--size-target);
+  padding: 0;
+}
+
+.glyph {
+  width: var(--size-14);
+  height: var(--size-14);
+  fill: currentColor;
+}
+
+.routines {
+  width: var(--size-320);
+  padding: var(--space-2);
+}
+
+@media (max-width: 720px) {
+  .button {
+    width: var(--size-44);
+    height: var(--size-44);
+  }
+}

@@ -1,4 +1,5 @@
-/* The message column. Existing tokens only, no new colour; Phase 22 restyles. */
+/* The message column (Phase 21; Phase 24b). Tokens only. The answer itself is
+   set by AnswerBody.module.css. */
 
 /* The column scrolls inside itself, so the composer under it stays in reach
    while a long answer is written.
@@ -7,11 +8,19 @@
    contains, and each turn's screen-reader label is an absolute box
    (`.sr-only`, globals.css). Left to the page, the labels stayed where the
    unscrolled column would have put them, and the document grew as tall as
-   the whole conversation (W-1). */
+   the whole conversation (W-1).
+
+   Its height (round 4, Stack's look at the preview): in the shell it grows to
+   the room the thread has over the dock (`flex: 1 1 auto` in ThreadView's
+   flex column, which the pane sizes), so a short conversation still sets the
+   composer at the pane's foot and a long one scrolls here. The bound below
+   holds where nothing sizes the thread (the layout spec's document cases): the
+   window less the room the date line and the dock take. */
 .column {
   position: relative;
+  flex: 1 1 auto;
   min-height: calc(var(--space-12) * 3);
-  max-height: 62dvh;
+  max-height: calc(100dvh - var(--size-220));
   overflow-y: auto;
   padding: var(--space-6);
   border-radius: var(--radius-lg);
@@ -49,8 +58,8 @@
   min-width: 0;
 }
 
-/* Questions and answers are plain text: line breaks are kept and nothing is
-   parsed (brief 102, O-5: no Markdown in v1). */
+/* A question, as the reader typed it: line breaks are kept and nothing is
+   parsed. */
 .text {
   margin: 0;
   font-size: var(--text-base);
@@ -59,13 +68,15 @@
   overflow-wrap: anywhere;
 }
 
-/* The tools an answer used. */
-.used {
-  margin: 0;
-  font-family: var(--font-mono);
+/* The sources row under a finished answer: "3 sources", a quiet button that
+   opens the panel's Sources tab at that answer. */
+.sources {
+  composes: btnGhost from '@/styles/tokens.module.css';
+  align-self: flex-start;
   font-size: var(--text-xs);
-  color: var(--color-neutral-400);
-  overflow-wrap: anywhere;
+}
+.sources:active {
+  opacity: 0.7;
 }
 
 /* The state in words: queued, late-stream, or one error sentence. The empty
@@ -77,7 +88,7 @@
 }
 
 /* The column with no turn to show: one line, and for an id that was not found
-   the link back to an empty composer under it. */
+   the link back to the lobby under it. */
 .empty {
   display: flex;
   flex-direction: column;
@@ -87,4 +98,14 @@
 
 .emptyLink {
   composes: btnGhost from '@/styles/tokens.module.css';
+}
+.emptyLink:active {
+  opacity: 0.7;
+}
+
+/* A phone's press area: 44 px. */
+@media (max-width: 720px) {
+  .sources {
+    min-height: var(--size-44);
+  }
 }

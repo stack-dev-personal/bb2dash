@@ -200,14 +200,16 @@ select jsonb_agg(jsonb_build_object('id', f.id, 'file_name', f.file_name,
          'bucket', f.bucket, 'attempt_id', f.attempt_id) order by f.id)
   from bb_files f
  where f.storage_path is null and f.superseded_by is null
-   and f.source_url is not null and not bb_file_is_outside_link(f.source_url);
+   and f.source_url is not null and not bb_file_is_outside_link(f.source_url)
+   and f.outside_url is null;
 ```
 
 One query, both kinds. `source_url is not null` is what drops the rows Stack staged in bb2dash
 himself: they have no Blackboard URL and nothing here ever touches them. `bb_file_is_outside_link`
 (migration 161) drops **outside links** — a row whose `source_url` is an outside site (cbo.gov,
 sec.gov, …), catalogued with its text and never with bytes: they are not files to pull, and they
-never count in `files_not_pulled`. The script's own gate
+never count in `files_not_pulled`. So does a row with an `outside_url` (migration 164): a Blackboard
+file whose link redirects to another site, which the sync runner saved as that link. The script's own gate
 splits the rest — a run with `--bucket my_submissions` writes only submission rows, a run without
 it only course rows — so the two passes below can never write each other's rows.
 
@@ -404,12 +406,14 @@ The container's runner does this by itself (migration 180). This skill is the fa
 container did not run, so it files the same request by hand. Skip the step when the sync failed.
 
 ```sql
-select (select count(*) from v_inbox_queue) as answered,
+select (select count(*) from v_inbox_queue where id not in (select inbox_apply_held_items())) as answered,
        (select id from agent_requests where kind = 'inbox_feedback' and state in ('queued', 'claimed')
          order by created_at limit 1) as open_request;
 ```
 
-- `answered = 0`: nothing to apply. Say so and go to step 6.
+- `answered = 0`: nothing to apply. Say so and go to step 6. The count leaves out held answers
+  (ones an earlier run could not apply and Stack has not answered again): a sync does not try them
+  again, so a queue of held answers alone files nothing. Name the held ones in step 6 when there are any.
 - `open_request` is not null: one is already open (one at a time, migration 183). Use that id.
 - Otherwise file one:
 

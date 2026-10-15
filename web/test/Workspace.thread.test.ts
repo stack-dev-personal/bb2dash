@@ -9,19 +9,25 @@
  *   * the sentence of a failed or cancelled request comes from the request
  *     row's `error_code`, with or without an assistant row;
  *   * a stored answer replaces the stream; text past a gap never shows;
- *   * the "Used:" line lists only the `ok: true` calls, each entry once;
- *   * a column with no turn says one of three things (ruling U1): start,
- *     loading, or that the conversation was not found.
+ *   * a column with no turn says one of two things (ruling U1, less its
+ *     `start`: no conversation shows the lobby, Phase 24b): loading, or that
+ *     the conversation was not found;
+ *   * Phase 24b: the searching line, the turn row (`workspace_turns`), the
+ *     fixed lines it shows (default R-1: never the sentence twice), and the
+ *     format the answer is read in.
  */
 
 import { describe, expect, it } from 'vitest';
 import {
+  answerBlocks,
   buildTurns,
   emptyColumnOf,
+  formatsOf,
   liveRequestOf,
-  usedLine,
+  newestKnownRequestOf,
   withoutBoldMarkers,
 } from '@/components/workspace/thread';
+import { normalizeTurn, type WorkspaceTurn as WorkspaceTurnRow } from '@/lib/queries.workspace-sources';
 import {
   WORKSPACE_ERROR_CODES,
   normalizeMessage,
@@ -33,6 +39,8 @@ import {
   ERROR_SENTENCES,
   LATE_STREAM_LINE,
   QUEUED_LINE,
+  RETRIEVAL_LINES,
+  SEARCHING_LINE,
   STOPPED_SENTENCE,
 } from '@/lib/workspace-labels';
 
@@ -76,11 +84,30 @@ function request(id: number, questionN: number, state: string, errorCode: string
   return row;
 }
 
+/** A `workspace_turns` row, through the frozen normaliser. */
+function turnRow(requestId: number, retrievalState: string): WorkspaceTurnRow {
+  const row = normalizeTurn({
+    request_id: requestId,
+    depth: 'auto',
+    tier: 'low',
+    plan_state: 'skipped',
+    retrieval_state: retrievalState,
+    found_n: 0,
+    passages_n: 0,
+    memory_n: 0,
+    feed_rows: 0,
+    attachments: [],
+    created_at: '2026-10-15T14:00:00Z',
+  });
+  if (row === null) throw new Error('bad turn fixture');
+  return row;
+}
+
 /** The one turn of a one-question conversation. */
 function turn(
   messages: WorkspaceMessage[],
   requests: WorkspaceRequest[],
-  live: { requestId: number; text: string; late: boolean } | null = null,
+  live: { requestId: number; text: string; late: boolean; searched?: boolean } | null = null,
   stopped: ReadonlySet<number> = NONE,
 ) {
   const turns = buildTurns({ messages, requests, live, stoppedRequestIds: stopped });
@@ -91,7 +118,7 @@ function turn(
 describe('buildTurns: the state under a question comes from its request row', () => {
   it.each([
     ['queued', 'queued', QUEUED_LINE],
-    ['claimed', 'streaming', LATE_STREAM_LINE],
+    ['claimed', 'streaming', SEARCHING_LINE],
     ['cancelled', 'stopped', STOPPED_SENTENCE],
   ])('reads %s as %s', (rowState, state, line) => {
     expect(turn([question(1)], [request(42, 1, rowState)])).toMatchObject({ state, line, text: '' });
@@ -215,7 +242,7 @@ describe('buildTurns: the stream, then the stored row', () => {
     const other = { requestId: 41, text: 'not this one', late: false };
     expect(turn([question(1)], [request(42, 1, 'claimed')], other)).toMatchObject({
       text: '',
-      line: LATE_STREAM_LINE,
+      line: SEARCHING_LINE,
     });
   });
 
@@ -314,54 +341,9 @@ describe('liveRequestOf: the request whose stream the page still needs', () => {
   });
 });
 
-describe('usedLine: the tools an answer used', () => {
-  const call = (tool: string, scope: string | null, ok = true) => ({ tool, query: 'never shown', scope, ok });
-
-  it('lists the ok calls as "tool · scope", or "tool" alone, joined with ", " in call order', () => {
-    expect(
-      usedLine([
-        call('search_context', 'bb2dash-inbox-decisions'),
-        call('list_courses', null),
-        call('get_material_text', '2489'),
-      ]),
-    ).toBe('Used: search_context · bb2dash-inbox-decisions, list_courses, get_material_text · 2489');
-  });
-
-  it('shows an identical entry once, and keeps the same tool under another scope', () => {
-    expect(
-      usedLine([
-        call('search_materials', 'IST.323'),
-        call('search_materials', 'IST.323'),
-        call('search_materials', 'ECN.304'),
-        call('search_materials', null),
-      ]),
-    ).toBe('Used: search_materials · IST.323, search_materials · ECN.304, search_materials');
-  });
-
-  it('leaves out failed and denied calls', () => {
-    expect(usedLine([call('search_context', 'stack', false), call('list_courses', null)])).toBe(
-      'Used: list_courses',
-    );
-  });
-
-  it('is absent when there are none', () => {
-    expect(usedLine([])).toBeNull();
-    expect(usedLine([call('get_document', null, false)])).toBeNull();
-  });
-
-  it('never shows the stored query', () => {
-    expect(usedLine([call('search_materials', 'IST.323')])).not.toContain('never shown');
-  });
-});
-
 describe('emptyColumnOf: what the message column says while it holds no turn (ruling U1)', () => {
   /** An id that has been read with no failure, no rows and no question asked into it. */
-  const READ = { conversationId: A, loaded: true, readFailed: false, askedIntoMissing: false, turns: 0 };
-
-  it('is "start" with no conversation selected, whatever else is true', () => {
-    expect(emptyColumnOf({ ...READ, conversationId: null })).toBe('start');
-    expect(emptyColumnOf({ ...READ, conversationId: null, loaded: false })).toBe('start');
-  });
+  const READ = { loaded: true, readFailed: false, askedIntoMissing: false, turns: 0 };
 
   it('is "loading" while the rows of a conversation are still being read', () => {
     expect(emptyColumnOf({ ...READ, loaded: false })).toBe('loading');
@@ -388,6 +370,156 @@ describe('emptyColumnOf: what the message column says while it holds no turn (ru
   });
 });
 
+describe('buildTurns: the text is shown as it was written (Phase 24b: the answer body formats it)', () => {
+  it('keeps a stored answer`s markers: formatting is the answer body`s, not the thread`s', () => {
+    const stored = answer(2, 42, { content: '**Quiz 2.** It is on Friday.' });
+    expect(turn([question(1), stored], [request(42, 1, 'done')]).text).toBe('**Quiz 2.** It is on Friday.');
+  });
+
+  it('keeps the live text as it arrived', () => {
+    const live = { requestId: 42, text: '**The syl', late: false };
+    expect(turn([question(1)], [request(42, 1, 'claimed')], live).text).toBe('**The syl');
+  });
+});
+
+describe('buildTurns: the searching line (brief 111, "Turn": searching)', () => {
+  const claimed = () => [request(42, 1, 'claimed')];
+
+  it('shows the searching line for a claimed request with no sources event and no text', () => {
+    const live = { requestId: 42, text: '', late: false, searched: false };
+    expect(turn([question(1)], claimed(), live).line).toBe(SEARCHING_LINE);
+  });
+
+  it('shows it too while no stream is followed and no turn row is known', () => {
+    expect(turn([question(1)], claimed()).line).toBe(SEARCHING_LINE);
+  });
+
+  it('takes it away on the sources event: the answer is being written', () => {
+    const live = { requestId: 42, text: '', late: false, searched: true };
+    expect(turn([question(1)], claimed(), live).line).toBe(LATE_STREAM_LINE);
+  });
+
+  it('takes it away on the first text', () => {
+    const live = { requestId: 42, text: 'Quiz', late: false, searched: false };
+    expect(turn([question(1)], claimed(), live).line).toBeNull();
+  });
+
+  it('takes it away once the turn row is known: the search is over', () => {
+    const turns = buildTurns({
+      messages: [question(1)],
+      requests: claimed(),
+      live: null,
+      stoppedRequestIds: NONE,
+      turnRows: [turnRow(42, 'found')],
+    });
+    expect(turns[0].line).toBe(LATE_STREAM_LINE);
+  });
+
+  it('takes it away once the answer row is begun: `workspace_begin()` comes after the search', () => {
+    const begun = answer(2, 42, { finished: false });
+    expect(turn([question(1), begun], claimed()).line).toBe(LATE_STREAM_LINE);
+  });
+
+  it('is never shown for a queued request: no runner has claimed it', () => {
+    expect(turn([question(1)], [request(42, 1, 'queued')]).line).toBe(QUEUED_LINE);
+  });
+});
+
+describe('buildTurns: the turn row, the format and the fixed lines', () => {
+  const EMPTY_LINE = RETRIEVAL_LINES.empty;
+
+  function doneTurn(content: string, rows: WorkspaceTurnRow[], formats?: ReadonlyMap<number, 'plain' | 'rich'>) {
+    const turns = buildTurns({
+      messages: [question(1), answer(2, 42, { content })],
+      requests: [request(42, 1, 'done')],
+      live: null,
+      stoppedRequestIds: NONE,
+      turnRows: rows,
+      formats,
+    });
+    return turns[0];
+  }
+
+  it('carries the turn row of its request, or null while it is not known', () => {
+    expect(doneTurn('a', [turnRow(41, 'found'), turnRow(42, 'empty')]).row?.request_id).toBe(42);
+    expect(doneTurn('a', [turnRow(41, 'found')]).row).toBeNull();
+    expect(doneTurn('a', []).retrieval).toBeNull();
+  });
+
+  it.each([
+    ['empty', RETRIEVAL_LINES.empty],
+    ['failed', RETRIEVAL_LINES.failed],
+  ] as const)('shows the fixed line for %s when the answer does not already start with it', (state, line) => {
+    const done = doneTurn('Quiz 2 is on Friday.', [turnRow(42, state)]);
+    expect(done.retrieval).toBe(state);
+    expect(done.retrievalLine).toBe(line);
+  });
+
+  it('does not say the sentence twice: the runner wrote it as the answer`s first line (R-1)', () => {
+    const done = doneTurn(`\n  ${EMPTY_LINE}\n\nQuiz 2 is on Friday.`, [turnRow(42, 'empty')]);
+    expect(done.retrieval).toBe('empty');
+    expect(done.retrievalLine).toBeNull();
+  });
+
+  it.each(['found', 'attached_only'] as const)('shows no fixed line for %s', (state) => {
+    const done = doneTurn('Quiz 2 is on Friday.', [turnRow(42, state)]);
+    expect(done.retrieval).toBe(state);
+    expect(done.retrievalLine).toBeNull();
+  });
+
+  it('shows no fixed line while the answer is still open', () => {
+    const turns = buildTurns({
+      messages: [question(1)],
+      requests: [request(42, 1, 'claimed')],
+      live: { requestId: 42, text: 'Quiz', late: false, searched: true },
+      stoppedRequestIds: NONE,
+      turnRows: [turnRow(42, 'empty')],
+    });
+    expect(turns[0].retrieval).toBe('empty');
+    expect(turns[0].retrievalLine).toBeNull();
+  });
+
+  it('reads the format from the request`s options row, and plain when there is none', () => {
+    expect(doneTurn('a', [], new Map([[42, 'rich']])).format).toBe('rich');
+    expect(doneTurn('a', [], new Map([[42, 'plain']])).format).toBe('plain');
+    expect(doneTurn('a', []).format).toBe('plain');
+  });
+});
+
+describe('formatsOf and answerBlocks', () => {
+  it('maps each options row to its request', () => {
+    const rows = [
+      { request_id: 41, depth: 'auto', format: 'plain', routine_id: null, course_display_id: null, course_ids: null },
+      { request_id: 42, depth: 'deep', format: 'rich', routine_id: null, course_display_id: null, course_ids: null },
+    ] as const;
+    expect([...formatsOf(rows)]).toEqual([
+      [41, 'plain'],
+      [42, 'rich'],
+    ]);
+  });
+
+  it('parses a rich answer and reads a plain one as paragraphs of text', () => {
+    expect(answerBlocks('# Title', 'rich')).toEqual([
+      { type: 'heading', level: 1, children: [{ type: 'text', text: 'Title' }] },
+    ]);
+    expect(answerBlocks('# Title', 'plain')).toEqual([
+      { type: 'paragraph', children: [{ type: 'text', text: '# Title' }] },
+    ]);
+  });
+});
+
+describe('newestKnownRequestOf: the answer the Sources tab shows when none is picked (R-2)', () => {
+  it('is the newest request whose turn row is known', () => {
+    expect(newestKnownRequestOf([turnRow(41, 'found'), turnRow(43, 'empty'), turnRow(42, 'found')])).toBe(43);
+  });
+
+  it('is nothing with no row', () => {
+    expect(newestKnownRequestOf(undefined)).toBeNull();
+    expect(newestKnownRequestOf([])).toBeNull();
+  });
+});
+
+/* Round 2, R2-6: Stack's ruling of 2026-10-07 stands for every answer that is not rich. */
 describe('withoutBoldMarkers: an answer is shown without Markdown`s bold markers (Stack, 2026-10-07)', () => {
   it('drops a pair of ** around a run of text and keeps the text', () => {
     expect(withoutBoldMarkers('**Decision 434 (September 17).** You chose "Keep mine".')).toBe(
@@ -421,23 +553,16 @@ describe('withoutBoldMarkers: an answer is shown without Markdown`s bold markers
   });
 });
 
-describe('buildTurns: the text shown has no bold markers, stored or live', () => {
-  it('shows a stored answer without them and leaves the stored row alone', () => {
-    const stored = answer(2, 42, { content: '**Quiz 2.** It is on Friday.' });
-    expect(turn([question(1), stored], [request(42, 1, 'done')]).text).toBe('Quiz 2. It is on Friday.');
-    expect(stored.content).toBe('**Quiz 2.** It is on Friday.');
+describe('answerBlocks: a plain answer loses its bold pairs, a rich one is parsed (round 2, R2-6)', () => {
+  it('strips the pairs before a plain answer is set as paragraphs', () => {
+    expect(answerBlocks('**Decision 434.** You chose "Keep mine".', 'plain')).toEqual([
+      { type: 'paragraph', children: [{ type: 'text', text: 'Decision 434. You chose "Keep mine".' }] },
+    ]);
   });
 
-  it('shows the live text without a pair that has closed, and an opener still waiting as typed', () => {
-    const live = (text: string) => ({ requestId: 42, text, late: false });
-    expect(turn([question(1)], [request(42, 1, 'claimed')], live('**The syllabus** says')).text).toBe(
-      'The syllabus says',
-    );
-    expect(turn([question(1)], [request(42, 1, 'claimed')], live('**The syl')).text).toBe('**The syl');
-  });
-
-  it('does not touch the question, which is shown as the reader typed it', () => {
-    const asked = question(1, 'what does **kwargs** mean?');
-    expect(turn([asked], [request(42, 1, 'queued')]).question?.content).toBe('what does **kwargs** mean?');
+  it('parses a rich answer`s bold as bold', () => {
+    expect(answerBlocks('**Decision 434.**', 'rich')).toEqual([
+      { type: 'paragraph', children: [{ type: 'strong', children: [{ type: 'text', text: 'Decision 434.' }] }] },
+    ]);
   });
 });

@@ -753,3 +753,261 @@ test('README.md says what the saved session file holds, where it lives and when 
   const readme = readText('acceptance/README.md').replace(/\s+/g, ' ');
   for (const said of ['`ACCEPT_STATE`', 'answers included', 'private folder', 'deleted when the stage ends']) assert.ok(readme.includes(said), said);
 });
+
+/* ---------------------------------------------------------------------------------------------
+ * Phase 24's pack: the Workspace behind the page (brief 109, task 45)
+ * ------------------------------------------------------------------------------------------ */
+
+/** The stages: 24a's nine, with 24b's page stages between them (brief 111, task 14): `page` first after go-live, so step 17's conversation is quiet by the memory stages. */
+const PACK_24_STAGES = ['prepare', 'go-live', 'page', 'walk', 'walk-proofs', 'upload', 'indexed', 'find', 'delete', 'page-upload', 'page-delete', 'page-memory', 'memory-proofs', 'page-forget', 'store-proofs'];
+const PACK_24_WALK = ['2 open workspace', '3 course question', '4 lookup one turn', '5 standard plan', '6 planner feed', '7 follow-up', '8 nothing matches', '9 stop then answer'];
+const PACK_24_UPLOAD_TITLES = ['11 upload file', '13 find upload', '14 send twice', '15 delete upload'];
+/** Phase 24b's page steps, by sandbox stage. */
+const PACK_24_PAGE = ['17 lobby and options', '18 sources and panel'];
+/** The delete is a stage of its own, after the host has read step 20's proof of the attached file: a proof is read after its step's stage. */
+const PACK_24_PAGE_UPLOAD = ['19 upload through the page', '20 ask with the file attached'];
+const PACK_24_PAGE_DELETE = ['21 delete through the files tab'];
+const PACK_24_PAGE_MEMORY = ['22 memory item shown'];
+const PACK_24_PAGE_FORGET = ['24 memory item deleted'];
+const PACK_24_PAGE_TITLES = [...PACK_24_PAGE, ...PACK_24_PAGE_UPLOAD, ...PACK_24_PAGE_DELETE, ...PACK_24_PAGE_MEMORY, ...PACK_24_PAGE_FORGET];
+/** The proofs the store's five reads are carried as (task 49, proofs 1, 2, 3, 6 and 7). */
+const PACK_24_STORE_PROOFS = ['store-extension', 'store-vector-columns', 'store-vector-indexes', 'store-counts', 'store-no-links'];
+
+/** What a constant of a source file is set to, for `const NAME = '…';` or `"…"` on one line. */
+function constantOf(source, name) {
+  const found = new RegExp(`const ${name}(?::[^=]+)? = (['"])((?:(?!\\1).)+)\\1;`).exec(source);
+  assert.ok(found, `${name} is defined as one quoted string`);
+  return found[2];
+}
+
+const hostProofRuns = (manifest) =>
+  manifest.stages.flatMap((stage) => stage.actions ?? []).filter((entry) => ['db.proof', 'db.proofUntil'].includes(entry.action));
+
+test("Phase 24: the stages are the brief's, in order, and the go-live stage stops nothing it does not own", () => {
+  const { manifest } = loadPack(REPO, '24');
+  assert.deepEqual(manifest.stages.map((stage) => stage.id), PACK_24_STAGES);
+  assert.deepEqual(stageOf(manifest, 'go-live').actions, [
+    { action: 'runner.record' },
+    { action: 'db.proof', with: { name: 'planner-fingerprint', save: 'planner_before' } },
+    { action: 'workspace.ensureProfile' },
+    { action: 'workspace.start' },
+    { action: 'workspace.doctorRow' },
+    { action: 'ingest.start' },
+  ]);
+  const named = manifest.stages.flatMap((stage) => (stage.actions ?? []).map((entry) => entry.action));
+  for (const never of ['workspace.stopTestRunner', 'workspace.stop', 'apply.stop', 'apply.startNoBuild', 'exports.runNow']) assert.ok(!named.includes(never), never);
+  assert.deepEqual(stageOf(manifest, 'walk').tests, PACK_24_WALK);
+  assert.deepEqual(stageOf(manifest, 'upload').tests, ['11 upload file']);
+  assert.deepEqual(stageOf(manifest, 'find').tests, ['13 find upload', '14 send twice']);
+  assert.deepEqual(stageOf(manifest, 'delete').tests, ['15 delete upload']);
+  assert.deepEqual(stageOf(manifest, 'page').tests, PACK_24_PAGE);
+  assert.deepEqual(stageOf(manifest, 'page-upload').tests, PACK_24_PAGE_UPLOAD);
+  assert.deepEqual(stageOf(manifest, 'page-delete').tests, PACK_24_PAGE_DELETE);
+  assert.deepEqual(stageOf(manifest, 'page-memory').tests, PACK_24_PAGE_MEMORY);
+  assert.deepEqual(stageOf(manifest, 'page-forget').tests, PACK_24_PAGE_FORGET);
+  assert.deepEqual(specTitles(readText('web/e2e/accept24.spec.ts')), [...PACK_24_WALK, ...PACK_24_UPLOAD_TITLES, ...PACK_24_PAGE_TITLES]);
+});
+
+test("Phase 24: step 1 stays a person's, and every step has its owner", () => {
+  const { manifest } = loadPack(REPO, '24');
+  const kinds = Object.fromEntries(manifest.steps.map((step) => [step.id, step.kind]));
+  assert.deepEqual(kinds, {
+    0: 'host', 1: 'human', 2: 'auto', 3: 'auto', 4: 'auto', 5: 'auto', 6: 'auto', 7: 'auto', 8: 'auto', 9: 'auto',
+    10: 'host', 11: 'auto', 12: 'host', 13: 'auto', 14: 'auto', 15: 'auto', 16: 'host',
+    17: 'auto', 18: 'auto', 19: 'auto', 20: 'auto', 21: 'auto', 22: 'auto', 23: 'host', 24: 'auto',
+  });
+});
+
+test("Phase 24: each proof that holds a question is held to the md5 of the question the step's own test types", () => {
+  const { manifest, specText } = loadPack(REPO, '24');
+  const typed = {
+    3: { 'turn-found': 'QUESTION_COURSE' },
+    4: { 'turn-lookup': 'QUESTION_LOOKUP' },
+    5: { 'turn-planned': 'QUESTION_PLAN' },
+    6: { 'turn-feed': 'QUESTION_PLANNER' },
+    7: { 'turn-followup': 'QUESTION_FOLLOW_UP' },
+    8: { 'turn-empty': 'QUESTION_NOTHING' },
+    9: { 'turn-stopped': 'QUESTION_STOP', 'turn-done-after-stop': 'QUESTION_AFTER_STOP' },
+    13: { 'turn-upload-found': 'QUESTION_UPLOAD' },
+    17: { 'options-stored': 'QUESTION_OPTIONS' },
+    18: { 'turn-found': 'QUESTION_SOURCES' },
+    20: { 'turn-attached': 'QUESTION_ATTACHED' },
+  };
+  for (const [id, byProof] of Object.entries(typed)) {
+    const step = stepOf(manifest, id);
+    assert.deepEqual(step.proofs.map((proof) => proof.name).filter((name) => name in byProof), Object.keys(byProof), `step ${id} lists its question proofs`);
+    const body = testBody(specText, step.test);
+    for (const [name, constant] of Object.entries(byProof)) {
+      assert.match(body, new RegExp(`\\b${constant}\\b`), `the test "${step.test}" types ${constant}`);
+      assert.equal(step.proofs.find((proof) => proof.name === name).with.question_md5, md5(constantOf(specText, constant)), `step ${id}, proof ${name}`);
+    }
+  }
+  // The reading tells one question from another: a different question gives a different md5.
+  assert.notEqual(md5(constantOf(specText, 'QUESTION_COURSE')), md5(constantOf(specText, 'QUESTION_LOOKUP')));
+});
+
+test('Phase 24: the questions route the way the playbook says they do (workspace/src/router.ts)', async () => {
+  const { specText } = loadPack(REPO, '24');
+  const { routeTier } = await import('../workspace/src/router.ts');
+  const tierOf = (name, prior = null) => routeTier(constantOf(specText, name), prior);
+  for (const name of ['QUESTION_COURSE', 'QUESTION_LOOKUP', 'QUESTION_PLANNER', 'QUESTION_NOTHING', 'QUESTION_AFTER_STOP', 'QUESTION_UPLOAD', 'QUESTION_SOURCES', 'QUESTION_ATTACHED']) {
+    assert.equal(tierOf(name), 'low', `${name} is a lookup`);
+  }
+  // A plan is taken on mid and high only: the page can only send Auto, so the wording decides.
+  assert.equal(tierOf('QUESTION_PLAN'), 'mid');
+  assert.equal(tierOf('QUESTION_STOP'), 'mid');
+  // Step 17 sends its question at the Standard depth (24b's page), which is the middle tier whatever the words say; the words agree.
+  assert.equal(tierOf('QUESTION_OPTIONS'), 'mid');
+  // The follow-up is short and keeps the conversation's tier.
+  assert.ok(Array.from(constantOf(specText, 'QUESTION_FOLLOW_UP')).length <= 40);
+  assert.equal(tierOf('QUESTION_FOLLOW_UP', 'low'), 'low');
+});
+
+test('Phase 24: the nonsense question is made of invented words that the synthetic file does not hold', () => {
+  const { specText } = loadPack(REPO, '24');
+  const nonsense = constantOf(specText, 'QUESTION_NOTHING').toLowerCase();
+  const file = constantOf(readText('web/e2e/accept24.lib.ts'), 'FILE_PREFIX').toLowerCase();
+  const words = nonsense.match(/[a-z]{6,}/g) ?? [];
+  assert.ok(words.length >= 3, 'the question is made of invented words');
+  for (const word of words) assert.ok(!file.includes(word), word);
+});
+
+test('Phase 24: the fixed sentence of an empty answer is the one in contract24/lines.txt', () => {
+  const lines = readText('workspace/test/fixtures/contract24/lines.txt');
+  const sentence = /^empty: (.+)$/m.exec(lines)?.[1];
+  assert.ok(sentence);
+  assert.equal(constantOf(readText('web/e2e/accept24.spec.ts'), 'EMPTY_LINE'), sentence);
+});
+
+test('Phase 24: the synthetic file is new in every run: its hash is made from a nonce the host carries, and the proofs derive it the same way', () => {
+  const { manifest, proofs } = loadPack(REPO, '24');
+  const lib = readText('web/e2e/accept24.lib.ts');
+  const prefix = constantOf(lib, 'FILE_PREFIX');
+  assert.match(lib, /randomUUID\(\)/, 'the nonce is drawn in each run');
+  assert.match(lib, /nonce_id/, 'and noted as a uuid, a kind of value that crosses between stages');
+  const keyed = ['upload-indexed', 'upload-one-row', 'upload-gone', 'page-upload-gone'];
+  for (const name of keyed) {
+    assert.deepEqual(Object.keys(proofs[name].params).slice(0, 1), ['nonce'], name);
+    assert.equal(proofs[name].params.nonce, 'uuid');
+    assert.ok(proofs[name].sql.includes(`convert_to('${prefix}' || $1::text, 'UTF8')`), `${name} hashes the file the test writes`);
+  }
+  // 24b's page file (step 19's nonce) is hashed the same way by the attached-file proof, where the nonce is its fourth parameter.
+  assert.equal(proofs['turn-attached'].params.nonce, 'uuid');
+  assert.ok(proofs['turn-attached'].sql.includes(`convert_to('${prefix}' || $4::text, 'UTF8')`), 'turn-attached hashes the file the page test writes');
+  // Three reads keyed on it, in the order of the brief: indexed (waited for, before the delete), one row (after the second send), gone (after the delete).
+  const waited = hostProofRuns(manifest).filter((entry) => keyed.includes(entry.with.name));
+  assert.deepEqual(waited.map((entry) => [entry.action, entry.with.name]), [['db.proofUntil', 'upload-indexed']]);
+  assert.equal(waited[0].with.nonce, 'carry:11.nonce_id');
+  assert.deepEqual(stepOf(manifest, '14').proofs, [{ name: 'upload-one-row', with: { nonce: 'carry:11.nonce_id', document: 'carry:11.document_id', since: RUN_START } }]);
+  const gone = stepOf(manifest, '15').proofs.find((proof) => proof.name === 'upload-gone');
+  assert.deepEqual(gone.with, { nonce: 'carry:11.nonce_id', document: 'carry:11.document_id' });
+  const order = manifest.stages.map((stage) => stage.id);
+  assert.ok(order.indexOf('indexed') > order.indexOf('upload') && order.indexOf('indexed') < order.indexOf('find'), 'it is waited for before it is searched');
+  assert.ok(order.indexOf('delete') > order.indexOf('find'));
+  assert.equal(constantOf(lib, 'FILE_MIME'), 'text/plain');
+  assert.doesNotMatch(prefix, /IST|ECN|syllabus|lecture/i);
+});
+
+test('Phase 24: no proof of the walk compares a counter between two moments, and proof 6 reads its counts against a direct count', () => {
+  const { manifest, proofs } = loadPack(REPO, '24');
+  for (const [name, proof] of Object.entries(proofs).filter(([name]) => !name.startsWith('store-'))) {
+    assert.ok(!/uploads_indexed|memory_indexed|course_units_indexed/.test(proof.sql), `${name} reads no counter of the status row`);
+  }
+  const counts = proofs['store-counts'].sql;
+  for (const direct of ['count(*) from public.bb_file_text', 'count(distinct e.text_id) from public.bb_text_embeddings', "d.kind = 'upload' and d.state = 'indexed'", "d.kind = 'memory' and d.state = 'indexed'"]) {
+    assert.ok(counts.includes(direct), direct);
+  }
+  assert.deepEqual(proofs['store-counts'].params, {});
+  assert.deepEqual(stepOf(manifest, '16').proofs.map((proof) => proof.name), PACK_24_STORE_PROOFS);
+  assert.deepEqual(stageOf(manifest, 'store-proofs').actions.map((entry) => entry.with.name), PACK_24_STORE_PROOFS);
+});
+
+test("Phase 24: one proof counts the run's conversations left unarchived and expects none; each step archives what it opened", () => {
+  const { manifest, proofs, specText } = loadPack(REPO, '24');
+  // Since 24b the last step that archives is 24 (step 17's conversation, kept for the memory stages); step 15 no longer carries it.
+  const proof = stepOf(manifest, '24').proofs.find((candidate) => candidate.name === 'conversations-unarchived');
+  assert.ok(proof, 'the last step that archives carries it');
+  assert.equal(stepOf(manifest, '15').proofs.some((candidate) => candidate.name === 'conversations-unarchived'), false);
+  assert.deepEqual(proofs['conversations-unarchived'].params, { since: 'time', min_conversations: 'integer' });
+  assert.match(proofs['conversations-unarchived'].sql, /count\(\*\) filter \(where not c\.archived\) = 0/);
+  // Steps 3 and 7 share one conversation; 4, 5, 6, 8, 9 and 13 open one each; 24b's 17, 18 and 20 open one each.
+  assert.deepEqual(proof.with, { since: RUN_START, min_conversations: 10 });
+  for (const title of ['4 lookup one turn', '5 standard plan', '6 planner feed', '7 follow-up', '8 nothing matches', '9 stop then answer', '13 find upload', '18 sources and panel', '20 ask with the file attached']) {
+    assert.match(testBody(specText, title), /archiveAfter\(/, `"${title}" archives what it opened`);
+  }
+  assert.doesNotMatch(testBody(specText, '3 course question'), /archiveAfter\(/, 'step 3 leaves its conversation to step 7, the last that uses it');
+  assert.doesNotMatch(testBody(specText, '17 lobby and options'), /archiveAfter\(/, 'step 17 leaves its conversation to step 24, the last that uses it');
+  assert.match(testBody(specText, '24 memory item deleted'), /archiveConversations\(/, 'step 24 archives step 17\'s conversation');
+});
+
+test("Phase 24: the proofs by name; the planner's two reads are pack 21's, word for word", () => {
+  const { proofs } = loadPack(REPO, '24');
+  assert.deepEqual(Object.keys(proofs).sort(), [
+    'conversations-unarchived', 'planner-fingerprint', 'planner-unchanged', ...PACK_24_STORE_PROOFS,
+    'turn-done-after-stop', 'turn-empty', 'turn-feed', 'turn-found', 'turn-followup', 'turn-lookup', 'turn-planned', 'turn-stopped', 'turn-upload-found',
+    'upload-gone', 'upload-indexed', 'upload-one-row',
+    // Phase 24b's five: the chips, the attached file, the page's delete, the remembered item and its deletion.
+    'memory-gone', 'memory-item', 'options-stored', 'page-upload-gone', 'turn-attached',
+  ].sort());
+  for (const name of ['planner-fingerprint', 'planner-unchanged']) assert.deepEqual(proofs[name], loadPack(REPO, '21').proofs[name], name);
+});
+
+test('Phase 24: the planner is read before the walk and again after it, and the walk-proofs stage runs only that comparison', () => {
+  const { manifest } = loadPack(REPO, '24');
+  assert.deepEqual(stageOf(manifest, 'walk-proofs').actions, [{ action: 'db.proof', with: { name: 'planner-unchanged', before: 'carry:planner_before.fingerprint' } }]);
+  assert.deepEqual(stepOf(manifest, '10').proofs, [{ name: 'planner-unchanged', with: { before: 'carry:planner_before.fingerprint' } }]);
+  assert.deepEqual(stepOf(manifest, '6').proofs.map((proof) => proof.name), ['turn-feed']);
+});
+
+test("Phase 24: the wait for the index is db.proofUntil on a host step's proof, and a db.proofUntil is held to proofs.json like db.proof", () => {
+  const { manifest } = loadPack(REPO, '24');
+  const values = { nonce: 'carry:11.nonce_id', document: 'carry:11.document_id', since: RUN_START };
+  assert.deepEqual(stageOf(manifest, 'indexed').actions, [{ action: 'db.proofUntil', with: { name: 'upload-indexed', ...values } }]);
+  assert.deepEqual(stepOf(manifest, '12').proofs, [{ name: 'upload-indexed', with: values }]);
+  const broken = (change) => {
+    const pack = loadPack(REPO, '24');
+    const copy = { ...pack, manifest: copyOf(pack.manifest), proofs: copyOf(pack.proofs) };
+    change(copy);
+    return packProblems(copy, { repo: REPO, manifestSchema: MANIFEST_SCHEMA });
+  };
+  assert.ok(broken((pack) => { stageOf(pack.manifest, 'indexed').actions[0].with.name = 'upload-missing'; }).includes('stage indexed: proofs.json holds no proof named "upload-missing"'));
+  assert.ok(broken((pack) => { delete stageOf(pack.manifest, 'indexed').actions[0].with.document; }).includes('stage indexed: proof "upload-indexed" is not given "document"'));
+  assert.ok(broken((pack) => { stageOf(pack.manifest, 'indexed').actions[0].with.nonce = 'carry:15.nonce_id'; }).some((line) => line.includes('is read before step 15 has run')));
+  // The host step's proof is run by its stage only when the action carries the same values.
+  assert.ok(broken((pack) => { stageOf(pack.manifest, 'indexed').actions[0].with.document = 'carry:11.request_id'; }).some((line) => line.startsWith('step 12:')));
+});
+
+test("Phase 24b: the page's file is step 19's nonce for steps 20 and 21, and the memory stages read step 17's conversation: shown on the page, read by the host until it passes, then deleted and archived", () => {
+  const { manifest, proofs } = loadPack(REPO, '24');
+  // The page steps come first after go-live, so that step 17's conversation is quiet for the runner's 15 minutes by the memory stages.
+  const order = manifest.stages.map((stage) => stage.id);
+  assert.equal(order.indexOf('page'), order.indexOf('go-live') + 1);
+  assert.ok(order.indexOf('page-memory') > order.indexOf('page-upload'));
+  assert.deepEqual(order.slice(order.indexOf('page-memory')), ['page-memory', 'memory-proofs', 'page-forget', 'store-proofs']);
+  // Step 17: the options row, by the picked course; its conversation is what the memory stages carry.
+  assert.deepEqual(stepOf(manifest, '17').proofs.map((proof) => [proof.name, proof.with.course]), [['options-stored', 'IST.323']]);
+  assert.equal(proofs['options-stored'].params.course, 'text');
+  // Steps 20 and 21 work from the file step 19 made through the page; the delete is a later stage than the ask,
+  // so the host reads step 20's proof of the attached file while the row still exists.
+  assert.equal(stepOf(manifest, '20').proofs[0].with.nonce, 'carry:19.nonce_id');
+  assert.deepEqual(stepOf(manifest, '21').proofs, [{ name: 'page-upload-gone', with: { nonce: 'carry:19.nonce_id' } }]);
+  assert.ok(order.indexOf('page-delete') > order.indexOf('page-upload'), 'the delete runs in a stage after the ask with the file attached');
+  assert.equal(stepOf(manifest, '20').stage, 'page-upload');
+  assert.equal(stepOf(manifest, '21').stage, 'page-delete');
+  // The host reads the item itself, again until it passes, after the page step waited for it; the delete's proof is step 24's own.
+  assert.deepEqual(stageOf(manifest, 'memory-proofs').actions, [{ action: 'db.proofUntil', with: { name: 'memory-item', conversation: 'carry:17.conversation_id', since: RUN_START } }]);
+  assert.deepEqual(stepOf(manifest, '23').proofs, [{ name: 'memory-item', with: { conversation: 'carry:17.conversation_id', since: RUN_START } }]);
+  assert.deepEqual(stepOf(manifest, '24').proofs.map((proof) => proof.name), ['memory-gone', 'conversations-unarchived']);
+  assert.deepEqual(stepOf(manifest, '24').proofs[0].with, { conversation: 'carry:17.conversation_id' });
+  assert.match(proofs['memory-gone'].sql, /memory_opt_out/);
+  assert.match(proofs['memory-gone'].sql, /memory_written_at/);
+  assert.match(proofs['memory-item'].sql, /workspace_text_embeddings/);
+  for (const name of ['memory-item', 'memory-gone']) assert.equal(proofs[name].params.conversation, 'uuid');
+});
+
+test('Phase 24: no title of its browser tests is a title of another pack: ACCEPT_ONLY names a title, and every accept spec is loaded', () => {
+  const own = specTitles(readText('web/e2e/accept24.spec.ts'));
+  const others = PACKS.filter((phase) => phase !== '24').flatMap((phase) => specTitles(readText(`web/e2e/accept${phase}.spec.ts`)));
+  assert.ok(others.length > 0);
+  assert.deepEqual(own.filter((title) => others.includes(title)), []);
+});

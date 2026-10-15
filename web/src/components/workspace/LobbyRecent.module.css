@@ -1,0 +1,81 @@
+/* The lobby's recent conversations (Phase 24b, W-87): a kicker heading, then
+   rows of title and time over a hairline each, and the quiet "View all".
+   Tokens only; no row is red (red marks the picked conversation, in the rail). */
+
+.recent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.heading {
+  composes: kicker from '@/styles/tokens.module.css';
+  margin: 0;
+  font-weight: var(--font-weight-regular);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: var(--size-target);
+  padding: var(--space-2) var(--space-1);
+  border-bottom: 1px solid var(--color-divider);
+  color: var(--color-text);
+  text-decoration: none;
+  transition: var(--motion-control);
+}
+
+.row:hover,
+.row:focus-visible {
+  background: var(--color-hover);
+}
+
+.title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-14);
+}
+
+.when {
+  flex: none;
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+.viewAll {
+  composes: btnGhost from '@/styles/tokens.module.css';
+  align-self: flex-start;
+  font-size: var(--text-13);
+}
+
+.empty {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+}
+
+.problem {
+  composes: errorNotice from '@/styles/tokens.module.css';
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 720px) {
+  .row,
+  .viewAll {
+    min-height: var(--size-44);
+  }
+}

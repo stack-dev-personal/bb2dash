@@ -23,6 +23,8 @@ export interface NotPulled {
 export interface FilesSummary {
   pulled: number;
   not_pulled: NotPulled[];
+  /** 164: files saved as links to another site. Absent (not 0) when none, so a pass without any reads as before. */
+  linked?: number;
 }
 
 export interface Report {
@@ -44,6 +46,11 @@ export interface ReportInput {
   filesError?: string | null;
   /** The embed step's failure, if it ran and failed. */
   embedError?: string | null;
+  /**
+   * Units the files step posted. With exactly 0, an embed failure is a report line and never the
+   * sync's error (Phase 24a): a failed sync files no Inbox apply request. Left out, it fails the sync.
+   */
+  unitsPosted?: number;
 }
 
 const EMPTY_FILES: FilesSummary = Object.freeze({ pulled: 0, not_pulled: [] }) as FilesSummary;
@@ -56,6 +63,11 @@ function clip(text: string, max: number): string {
 /** The one line Activity shows for the files step; its exact text is what task 28 quotes. */
 export function filesLine(files: FilesSummary): string {
   const notPulled = files.not_pulled.length;
+  const linked = files.linked ?? 0;
+  if (linked > 0) {
+    const noun = linked === 1 ? 'a link' : 'links';
+    return `Files: ${files.pulled} pulled, ${linked} saved as ${noun}, ${notPulled} not pulled`;
+  }
   if (files.pulled === 0 && notPulled === 0) return 'Files: nothing new to pull';
   return notPulled === 0 ? `Files: ${files.pulled} pulled` : `Files: ${files.pulled} pulled, ${notPulled} not pulled`;
 }
@@ -114,8 +126,12 @@ export function buildReport(input: ReportInput): { state: 'done' | 'failed'; rep
 
   if (input.embedError) {
     const message = clip(input.embedError, ERROR_MAX);
-    lines.push(`Sync runner: embedding failed: ${message}`);
-    error = error ?? `embed failed: ${message}`;
+    if (input.unitsPosted === 0) {
+      lines.push(`Embedding did not finish: ${message}; it is tried again at the next sync`);
+    } else {
+      lines.push(`Sync runner: embedding failed: ${message}`);
+      error = error ?? `embed failed: ${message}`;
+    }
   }
 
   return {
@@ -123,7 +139,11 @@ export function buildReport(input: ReportInput): { state: 'done' | 'failed'; rep
     report: {
       lines,
       error,
-      files: { pulled: input.files.pulled, not_pulled: input.files.not_pulled.map((f) => ({ ...f })) },
+      files: {
+        pulled: input.files.pulled,
+        not_pulled: input.files.not_pulled.map((f) => ({ ...f })),
+        ...((input.files.linked ?? 0) > 0 ? { linked: input.files.linked } : {}),
+      },
       claim_attempts: input.claimAttempts,
     },
   };

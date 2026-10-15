@@ -119,6 +119,39 @@ describe('CourseSidebar — the course list', () => {
     expect(screen.getByRole('link', { name: /GEO 103/ })).toHaveAttribute('href', '/course/GEO.103');
   });
 
+  it('draws each course as a subject tile, its title, and its code with its section', async () => {
+    renderShell();
+    await waitFor(() => expect(sidebarState()).toBe('open'));
+
+    const ist = screen.getByRole('link', { name: /IST 323/ });
+    expect(ist).toHaveTextContent(/^IST/);
+    expect(ist).toHaveTextContent('Intro to Cybersecurity');
+    expect(ist).toHaveTextContent('M002');
+    expect(screen.getByRole('link', { name: /GEO 103/ })).toHaveTextContent('M001');
+  });
+
+  it('names the kind on a row that is not a lecture, and says nothing on a lecture', async () => {
+    stub.courses = {
+      isPending: false,
+      isError: false,
+      data: [COURSES[0], { ...COURSES[1], id: 'GEO.103.recitation', kind: 'recitation', section: 'M003' }],
+    };
+    renderShell();
+    await waitFor(() => expect(sidebarState()).toBe('open'));
+
+    expect(screen.getByRole('link', { name: /GEO 103/ })).toHaveTextContent('Recitation');
+    expect(screen.getByRole('link', { name: /IST 323/ })).not.toHaveTextContent(/Lecture/);
+  });
+
+  it('keeps the chevron and the tile out of a row’s name: a reader hears the course, not a glyph', async () => {
+    renderShell();
+    await waitFor(() => expect(sidebarState()).toBe('open'));
+
+    const ist = screen.getByRole('link', { name: /IST 323/ });
+    expect(ist).not.toHaveAccessibleName(/▸/);
+    expect(ist).toHaveAccessibleName(/^Intro to Cybersecurity/);
+  });
+
   it('marks the open course as the current page and no other', async () => {
     stub.pathname = '/course/IST.323';
     renderShell();

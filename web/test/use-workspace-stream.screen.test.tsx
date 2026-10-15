@@ -9,6 +9,7 @@
  *   * a stream joined late shows only "Answering…";
  *   * a delta is text, never markup;
  *   * a delta for a request the page does not follow is ignored;
+ *   * the `sources` event Phase 24b adds changes nothing today's screen shows;
  *   * with no `?c=`, or one that is not a uuid, the page holds the lobby
  *     channel and reads no conversation;
  *   * a conversation that cannot be read says so and keeps its channel;
@@ -183,6 +184,19 @@ describe('the route: /workspace?c= shows streamed text', () => {
 
     expect(answerText(container)).toBe('<script>alert(1)</script>');
     expect(container.querySelector('script')).toBeNull();
+  });
+
+  it('keeps today`s screen as it was when the sources event arrives (Phase 24b adds the event)', async () => {
+    seed('claimed');
+    const { container, channel } = await following();
+
+    act(() => {
+      channel.emit('delta', { request_id: REQUEST, seq: 1, delta: 'The syllabus says' });
+      channel.emit('sources', { request_id: REQUEST, state: 'found', found_n: 2 });
+    });
+
+    expect(answerText(container)).toBe('The syllabus says');
+    expect(streamArea(container)).toHaveAttribute('data-request-id', String(REQUEST));
   });
 
   it('ignores a delta for a request that is not the conversation`s open one', async () => {

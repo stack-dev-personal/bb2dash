@@ -8,9 +8,11 @@
  * `workspace_finish()` writes. The stored row is the record; this hook is only
  * the live half, and losing any part of it costs live text, never the answer.
  *
- * THE WIRE (brief 102, "Realtime"). Two events, which the page only receives:
- *   `delta`  `{request_id, seq, delta}`   `seq` starts at 1 and rises by 1 per flush
- *   `done`   `{request_id, message_id, state}`
+ * THE WIRE (brief 102, "Realtime"; brief 111 adds `sources`). Three events, which
+ * the page only receives:
+ *   `delta`    `{request_id, seq, delta}`   `seq` starts at 1 and rises by 1 per flush
+ *   `done`     `{request_id, message_id, state}`
+ *   `sources`  `{request_id, state, found_n}`   the runner searched; sent once, before any text
  * `realtime.send` adds an `id` key to every payload. The named keys are read
  * and every other key is ignored.
  *
@@ -23,6 +25,11 @@
  *     gap is never shown, `done` or not.
  *   * A repeated seq is dropped. Another request's deltas are never rendered.
  *   * `done` invalidates the conversation's messages (and its requests).
+ *   * `sources` is kept on the view, and it and `done` invalidate the turns and
+ *     the request's sources (`invalidateWorkspaceProvenance`).
+ *   * STOP. Once the page marks a request stopped (`markStopped`), a later
+ *     `delta`, `sources` or `done` for it changes nothing; what came before
+ *     stays. An event name the hook does not subscribe to is never dispatched.
  *
  * ONE CHANNEL. To keep Realtime warm the page always holds exactly one private
  * channel: the conversation's when `?c=` is a uuid, else `workspace:lobby`. The
@@ -33,7 +40,7 @@
  * to another conversation shows nothing of the last one without a reset effect.
  */
 
-import { useEffect, useReducer, useRef } from 'react';
+import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { asRecord } from './json-record';
@@ -42,6 +49,7 @@ import {
   parseConversationId,
   toRequestId,
 } from './queries.workspace';
+import { invalidateWorkspaceProvenance, type WorkspaceRetrievalState } from './queries.workspace-sources';
 import { getSupabaseBrowserClient, type SupabaseBrowserClient } from './supabase/client';
 
 /* ---------------------------------------------------------------------------
@@ -69,6 +77,7 @@ const FIRST_SEQ = 1;
 
 const EVENT_DELTA = 'delta';
 const EVENT_DONE = 'done';
+const EVENT_SOURCES = 'sources';
 
 /** The status supabase-js reports once a channel is joined. */
 const CHANNEL_SUBSCRIBED = 'SUBSCRIBED';
@@ -105,6 +114,30 @@ export function parseDone(payload: unknown): StreamDone | null {
   return requestId === null ? null : { requestId };
 }
 
+/** What the runner's search found, as the `sources` event says it (`sources-event.json`). */
+export interface StreamSources {
+  requestId: number;
+  state: WorkspaceRetrievalState;
+  foundN: number;
+}
+
+const RETRIEVAL_STATES: readonly WorkspaceRetrievalState[] = ['found', 'attached_only', 'empty', 'failed'];
+
+/**
+ * One `sources` payload, or null when it cannot be read: a request id, a
+ * retrieval state from the four, and a whole count from 0. Unknown keys, the
+ * added `id` among them, are ignored.
+ */
+export function parseSources(payload: unknown): StreamSources | null {
+  const raw = asRecord(payload);
+  const requestId = toRequestId(raw?.request_id);
+  const state = RETRIEVAL_STATES.find((known) => known === raw?.state);
+  const foundN = raw?.found_n;
+  if (requestId === null || state === undefined) return null;
+  if (typeof foundN !== 'number' || !Number.isSafeInteger(foundN) || foundN < 0) return null;
+  return { requestId, state, foundN };
+}
+
 /* ---------------------------------------------------------------------------
  * State (pure)
  * ------------------------------------------------------------------------ */
@@ -112,10 +145,15 @@ export function parseDone(payload: unknown): StreamDone | null {
 /** Where the page's one channel stands. `error` covers a refused, timed-out or closed join. */
 export type ChannelStatus = 'joining' | 'joined' | 'error';
 
-/** What has arrived for one request: its deltas by seq, and whether `done` came. */
+/**
+ * What has arrived for one request: its deltas by seq, whether `done` came,
+ * what its search found, and whether the page marked it stopped.
+ */
 interface RequestStream {
   readonly deltas: ReadonlyMap<number, string>;
   readonly done: boolean;
+  readonly sources: StreamSources | null;
+  readonly stopped: boolean;
 }
 
 export interface StreamState {
@@ -131,7 +169,9 @@ export interface StreamState {
 export type StreamEvent =
   | { type: 'channel'; topic: string; status: ChannelStatus; detail: string | null }
   | { type: 'delta'; topic: string; requestId: number; seq: number; delta: string }
-  | { type: 'done'; topic: string; requestId: number };
+  | { type: 'done'; topic: string; requestId: number }
+  | { type: 'sources'; topic: string; requestId: number; state: WorkspaceRetrievalState; foundN: number }
+  | { type: 'stopped'; topic: string; requestId: number };
 
 /**
  * How many requests' deltas are kept per topic. A conversation has one open
@@ -140,7 +180,11 @@ export type StreamEvent =
  */
 const STREAM_BUFFERED_REQUESTS = 3;
 
-const NO_STREAM: RequestStream = { deltas: new Map(), done: false };
+const NO_STREAM: RequestStream = { deltas: new Map(), done: false, sources: null, stopped: false };
+
+function sameSources(a: StreamSources | null, b: StreamSources): boolean {
+  return a !== null && a.requestId === b.requestId && a.state === b.state && a.foundN === b.foundN;
+}
 
 export function initialStreamState(topic: string): StreamState {
   return { topic, channel: 'joining', channelDetail: null, streams: new Map() };
@@ -156,6 +200,34 @@ function withStream(state: StreamState, requestId: number, stream: RequestStream
   return { ...state, streams };
 }
 
+/** A request event's stream as it changes, or the same state when nothing moves (a stopped request). */
+function requestEvent(
+  current: StreamState,
+  event: Exclude<StreamEvent, { type: 'channel' }>,
+): StreamState {
+  const stream = current.streams.get(event.requestId) ?? NO_STREAM;
+  // Stopped: nothing for this request changes any more, a second mark included.
+  if (stream.stopped) return current;
+  switch (event.type) {
+    case 'delta': {
+      // A repeated seq is dropped: the first text stays.
+      if (stream.deltas.has(event.seq)) return current;
+      const deltas = new Map(stream.deltas);
+      deltas.set(event.seq, event.delta);
+      return withStream(current, event.requestId, { ...stream, deltas });
+    }
+    case 'done':
+      return stream.done ? current : withStream(current, event.requestId, { ...stream, done: true });
+    case 'sources': {
+      const sources: StreamSources = { requestId: event.requestId, state: event.state, foundN: event.foundN };
+      if (sameSources(stream.sources, sources)) return current;
+      return withStream(current, event.requestId, { ...stream, sources });
+    }
+    case 'stopped':
+      return withStream(current, event.requestId, { ...stream, stopped: true });
+  }
+}
+
 export function streamReducer(state: StreamState, event: StreamEvent): StreamState {
   const current = state.topic === event.topic ? state : initialStreamState(event.topic);
 
@@ -166,19 +238,11 @@ export function streamReducer(state: StreamState, event: StreamEvent): StreamSta
       }
       return { ...current, channel: event.status, channelDetail: event.detail };
     }
-    case 'delta': {
-      const stream = current.streams.get(event.requestId) ?? NO_STREAM;
-      // A repeated seq is dropped: the first text stays.
-      if (stream.deltas.has(event.seq)) return current;
-      const deltas = new Map(stream.deltas);
-      deltas.set(event.seq, event.delta);
-      return withStream(current, event.requestId, { ...stream, deltas });
-    }
-    case 'done': {
-      const stream = current.streams.get(event.requestId) ?? NO_STREAM;
-      if (stream.done) return current;
-      return withStream(current, event.requestId, { ...stream, done: true });
-    }
+    case 'delta':
+    case 'done':
+    case 'sources':
+    case 'stopped':
+      return requestEvent(current, event);
     default: {
       const never: never = event;
       throw new Error(`unknown stream event ${JSON.stringify(never)}`);
@@ -197,6 +261,15 @@ export interface WorkspaceStreamView {
   late: boolean;
   /** `done` arrived for the followed request; the stored row is on its way. */
   done: boolean;
+  /** What the followed request's search found (the `sources` event), or null before it. */
+  sources: StreamSources | null;
+  /** The page marked the followed request stopped: nothing moves its stream any more. */
+  stopped: boolean;
+}
+
+/** What the page's Stop holds beside the view. Stable across renders on one topic. */
+export interface WorkspaceStreamControls {
+  markStopped(requestId: number): void;
 }
 
 /**
@@ -209,18 +282,24 @@ export function streamView(
   requestId: number | null,
 ): WorkspaceStreamView {
   const current = state.topic === topic ? state : initialStreamState(topic);
-  const channel = { topic, channel: current.channel, channelDetail: current.channelDetail };
-  const stream = requestId === null ? undefined : current.streams.get(requestId);
+  const stream = (requestId === null ? undefined : current.streams.get(requestId)) ?? NO_STREAM;
+  const base = {
+    topic,
+    channel: current.channel,
+    channelDetail: current.channelDetail,
+    done: stream.done,
+    sources: stream.sources,
+    stopped: stream.stopped,
+  };
 
-  if (stream === undefined) return { ...channel, text: '', late: false, done: false };
-  if (stream.deltas.size === 0) return { ...channel, text: '', late: false, done: stream.done };
-  if (!stream.deltas.has(FIRST_SEQ)) return { ...channel, text: '', late: true, done: stream.done };
+  if (stream.deltas.size === 0) return { ...base, text: '', late: false };
+  if (!stream.deltas.has(FIRST_SEQ)) return { ...base, text: '', late: true };
 
   let text = '';
   for (let seq = FIRST_SEQ; stream.deltas.has(seq); seq += 1) {
     text += stream.deltas.get(seq) ?? '';
   }
-  return { ...channel, text, late: false, done: stream.done };
+  return { ...base, text, late: false };
 }
 
 /* ---------------------------------------------------------------------------
@@ -237,11 +316,12 @@ function describeFailure(status: string, error: Error | undefined): string {
   return error?.message ? `${status}: ${error.message}` : status;
 }
 
-/** One stay on a topic: where its events go, what `done` moves, and whether the page has left. */
+/** One stay on a topic: where its events go, what `done` and `sources` move, and whether the page has left. */
 interface Stay {
   readonly topic: string;
   readonly dispatch: (event: StreamEvent) => void;
-  readonly onDone: () => void;
+  readonly onDone: (requestId: number) => void;
+  readonly onSources: (requestId: number) => void;
   readonly left: () => boolean;
 }
 
@@ -254,9 +334,10 @@ function channelEvent(topic: string, status: string, error: Error | undefined): 
 }
 
 /**
- * Open the topic's private channel and wire its two events and its status to
+ * Open the topic's private channel and wire its three events and its status to
  * the reducer. Nothing is acted on once the page has left the topic: a
- * broadcast can still be on its way to a channel that is being closed.
+ * broadcast can still be on its way to a channel that is being closed. Only
+ * these three names are subscribed, so no other event is ever dispatched.
  */
 function openChannel(supabase: SupabaseBrowserClient, stay: Stay): RealtimeChannel {
   const { topic, dispatch } = stay;
@@ -272,7 +353,14 @@ function openChannel(supabase: SupabaseBrowserClient, stay: Stay): RealtimeChann
       const done = parseDone(message.payload);
       if (done === null) return;
       dispatch({ type: 'done', topic, requestId: done.requestId });
-      stay.onDone();
+      stay.onDone(done.requestId);
+    })
+    .on('broadcast', { event: EVENT_SOURCES }, (message) => {
+      if (stay.left()) return;
+      const sources = parseSources(message.payload);
+      if (sources === null) return;
+      dispatch({ type: 'sources', topic, ...sources });
+      stay.onSources(sources.requestId);
     })
     .subscribe((status, error) => {
       if (stay.left()) return;
@@ -329,11 +417,16 @@ function leaveChannel(
  * `conversationId` is `?c=` once parsed (null for the lobby); `requestId` is
  * the conversation's open request, or null when there is none. Changing only
  * `requestId` never reopens the channel.
+ *
+ * `markStopped` is what the page's Stop calls: after it, nothing the channel
+ * sends for that request changes the view. It is the same function on every
+ * render on one topic. A `done` after the mark still invalidates the rows: the
+ * stored row is the record either way.
  */
 export function useWorkspaceStream(
   conversationId: string | null,
   requestId: number | null,
-): WorkspaceStreamView {
+): WorkspaceStreamView & WorkspaceStreamControls {
   const id = parseConversationId(conversationId);
   const topic = workspaceTopic(id);
   const queryClient = useQueryClient();
@@ -348,7 +441,11 @@ export function useWorkspaceStream(
     const stay: Stay = {
       topic,
       dispatch,
-      onDone: () => invalidateWorkspaceConversation(queryClient, id),
+      onDone: (doneId) => {
+        invalidateWorkspaceConversation(queryClient, id);
+        invalidateWorkspaceProvenance(queryClient, id, doneId);
+      },
+      onSources: (sourcesId) => invalidateWorkspaceProvenance(queryClient, id, sourcesId),
       left: () => left,
     };
 
@@ -369,5 +466,13 @@ export function useWorkspaceStream(
     };
   }, [topic, id, queryClient]);
 
-  return streamView(state, topic, toRequestId(requestId));
+  const markStopped = useCallback(
+    (stoppedId: number) => {
+      const parsed = toRequestId(stoppedId);
+      if (parsed !== null) dispatch({ type: 'stopped', topic, requestId: parsed });
+    },
+    [topic],
+  );
+
+  return { ...streamView(state, topic, toRequestId(requestId)), markStopped };
 }

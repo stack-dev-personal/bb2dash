@@ -21,6 +21,24 @@ describe('the files line (task 28 quotes it beside walk-14/03)', () => {
     );
   });
 
+  it('164: says how many files were saved as links, and keeps the old wording when there are none', () => {
+    expect(filesLine({ pulled: 3, not_pulled: [], linked: 2 })).toBe('Files: 3 pulled, 2 saved as links, 0 not pulled');
+    expect(filesLine({ pulled: 0, not_pulled: [], linked: 1 })).toBe('Files: 0 pulled, 1 saved as a link, 0 not pulled');
+    expect(filesLine({ pulled: 1, not_pulled: [{ id: '9', reason: 'gone: status 404' }], linked: 2 })).toBe(
+      'Files: 1 pulled, 2 saved as links, 1 not pulled',
+    );
+    // linked absent or zero: exactly the wording above.
+    expect(filesLine({ pulled: 3, not_pulled: [], linked: 0 })).toBe('Files: 3 pulled');
+    expect(filesLine({ pulled: 0, not_pulled: [], linked: 0 })).toBe('Files: nothing new to pull');
+  });
+
+  it('164: a pass that only saved links still closes done, and carries the count', () => {
+    const { state, report } = buildReport({ foldStatus: 'ok', files: { pulled: 0, not_pulled: [], linked: 2 }, claimAttempts: 1 });
+    expect(state).toBe('done');
+    expect(report.lines).toEqual(['Files: 0 pulled, 2 saved as links, 0 not pulled']);
+    expect(report.files).toEqual({ pulled: 0, not_pulled: [], linked: 2 });
+  });
+
   it('names each not-pulled file, up to the cap, then counts the rest', () => {
     const many = Array.from({ length: NOT_PULLED_LINES_MAX + 2 }, (_, i) => ({ id: String(i + 1), reason: 'refused: x' }));
     const lines = notPulledLines({ pulled: 0, not_pulled: many });
@@ -96,6 +114,25 @@ describe('the report shape', () => {
     expect(b.state).toBe('failed');
     expect(b.report.lines).toEqual(['Files: 1 pulled', 'Sync runner: embedding failed: exit 1']);
     expect(b.report.error).toBe('embed failed: exit 1');
+  });
+
+  it('an embed failure on a pass that posted no unit is a line and never the error (Phase 24a)', () => {
+    const r = buildReport({ foldStatus: 'ok', files: { pulled: 0, not_pulled: [] }, claimAttempts: 1, embedError: 'exit 1', unitsPosted: 0 });
+    expect(r.state).toBe('done');
+    expect(r.report.error).toBeNull();
+    expect(r.report.lines).toEqual(['Files: nothing new to pull', 'Embedding did not finish: exit 1; it is tried again at the next sync']);
+  });
+
+  it('an embed failure on a pass that posted units still fails the sync', () => {
+    const r = buildReport({ foldStatus: 'ok', files: { pulled: 1, not_pulled: [] }, claimAttempts: 1, embedError: 'exit 1', unitsPosted: 3 });
+    expect(r.state).toBe('failed');
+    expect(r.report.error).toBe('embed failed: exit 1');
+  });
+
+  it('the soft embed line does not hide another error', () => {
+    const r = buildReport({ foldStatus: 'failed', files: { pulled: 0, not_pulled: [] }, claimAttempts: 1, embedError: 'x', unitsPosted: 0 });
+    expect(r.state).toBe('failed');
+    expect(r.report.error).toBe('fold failed');
   });
 
   it('every line is text, as sync_close requires', () => {

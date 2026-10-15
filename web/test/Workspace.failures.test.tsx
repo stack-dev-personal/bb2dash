@@ -5,26 +5,33 @@
  * sibling holds the other half of every read and write: a failure is said, in
  * the app's "Could not …: <reason>" form, and the page is left in the state the
  * database is really in. Nothing is swallowed, and nothing typed is lost.
- * A line that has lost its reason goes: "still answering" once nothing is
- * answering, "could not stop" once the request it was pressed on has finished.
+ * A line that has lost its reason goes: "could not send" once the text is
+ * edited, "could not stop" once the request it was pressed on has finished.
  *
- * It also holds the composer's waiting state and the message column's scroll,
- * which no Contract sentence names.
+ * Since Phase 24b the composer is W-87's, rendered through its contract
+ * (ruling C-1) and stood in for here by `composerMock()`: its own refusals,
+ * keys and waiting state are W-87's tests. This file holds what the thread
+ * hands it, amendment (h) among them: `busy` is a Stop on its way and nothing
+ * else, false once the cancel settles. It also holds the message column's
+ * scroll, which no Contract sentence names.
  */
 
 import { QueryClientProvider, focusManager } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { newQueryClient } from './hydration-harness';
-import { NEW_REQUEST, fake, gate, joined, resetFake, settle, type Row } from './workspace-harness';
+import { NEW_REQUEST, fake, gate, joined, resetFake, settle, wrapperFor, type Row } from './workspace-harness';
 
 vi.mock('@/lib/supabase/client', async () =>
   (await import('./workspace-harness')).supabaseClientMock(),
 );
 vi.mock('next/navigation', async () => (await import('./workspace-harness')).navigationMock());
+vi.mock('@/components/workspace/Composer', async () => (await import('./workspace-harness')).composerMock());
+vi.mock('@/components/workspace/Lobby', async () => (await import('./workspace-harness')).lobbyMock());
 
 const labels = await import('@/lib/workspace-labels');
 const { normalizeMessage, normalizeRequest } = await import('@/lib/queries.workspace');
+const { normalizeTurn } = await import('@/lib/queries.workspace-sources');
 const { MessageList } = await import('@/components/workspace/MessageList');
 const { buildTurns } = await import('@/components/workspace/thread');
 const { Workspace } = await import('@/app/(app)/workspace/Workspace');
@@ -123,6 +130,27 @@ describe('a read that fails is said', () => {
     );
   });
 
+  it('leaves a failed read of the options rows to the composer: it is not said twice (round 2, R2-4)', async () => {
+    fake.state.rows = ANSWERED_ROWS;
+    fake.state.readErrors = { workspace_request_options: DENIED };
+    open();
+    await screen.findByText('Quiz 2.');
+    await waitFor(() => expect(fake.state.log).toContain('from:workspace_request_options'));
+    await settle();
+
+    expect(alerts()).toEqual([]);
+    expect(screen.queryByText(/Could not load this conversation/)).toBeNull();
+  });
+
+  it('says a failed read of the turn rows once, above the column', async () => {
+    fake.state.rows = ANSWERED_ROWS;
+    fake.state.readErrors = { workspace_turns: DENIED };
+    open();
+    await screen.findByText('Quiz 2.');
+
+    await waitFor(() => expect(alerts()).toEqual(['Could not load this conversation: permission denied']));
+  });
+
   it('says an empty list is empty only once the list has answered', async () => {
     open('');
 
@@ -135,24 +163,38 @@ describe('a read that fails is said', () => {
 });
 
 describe('a question that fails', () => {
-  it('says it could not be sent, keeps the text, and shows neither refusal', async () => {
+  const BROKE = { code: 'XX000', message: 'it broke' };
+
+  it('says it could not be sent, above the column, and the composer keeps the text', async () => {
     fake.state.rows = ANSWERED_ROWS;
-    fake.state.rpc.workspace_ask = () => ({ data: null, error: DENIED });
+    fake.state.rpc.workspace_ask_with = () => ({ data: null, error: BROKE });
     open();
     await screen.findByText('Quiz 2.');
     type('What is due?');
 
     fireEvent.click(screen.getByRole('button', { name: 'Ask' }));
 
-    await waitFor(() => expect(alerts()).toEqual(['Could not send this question: permission denied']));
+    await waitFor(() => expect(alerts()).toEqual(['Could not send this question: it broke']));
     expect(box()).toHaveValue('What is due?');
-    expect(screen.queryByText(labels.REFUSAL_QUESTION_LENGTH)).toBeNull();
-    expect(screen.queryByText(labels.REFUSAL_STILL_ANSWERING)).toBeNull();
+  });
+
+  it('takes that line away once the text is edited', async () => {
+    fake.state.rows = ANSWERED_ROWS;
+    fake.state.rpc.workspace_ask_with = () => ({ data: null, error: BROKE });
+    open();
+    await screen.findByText('Quiz 2.');
+    type('What is due?');
+    fireEvent.click(screen.getByRole('button', { name: 'Ask' }));
+    await waitFor(() => expect(alerts()).toEqual(['Could not send this question: it broke']));
+
+    type('What is due this week?');
+
+    await waitFor(() => expect(alerts()).toEqual([]));
   });
 
   it('says a failed read in its own words and a missing id in the not-found line, never the foreign-key sentence', async () => {
     fake.state.readErrors = { workspace_requests: DENIED };
-    fake.state.rpc.workspace_ask = () => ({
+    fake.state.rpc.workspace_ask_with = () => ({
       data: null,
       error: { code: '23503', message: 'violates foreign key constraint' },
     });
@@ -171,58 +213,6 @@ describe('a question that fails', () => {
       ]),
     );
     expect(container.textContent).not.toContain('violates foreign key constraint');
-  });
-
-  it('takes a refusal away once the text is edited', async () => {
-    fake.state.rows = ANSWERED_ROWS;
-    open();
-    await screen.findByText('Quiz 2.');
-    type('   ');
-    fireEvent.click(screen.getByRole('button', { name: 'Ask' }));
-    await screen.findByText(labels.REFUSAL_QUESTION_LENGTH);
-
-    type('What is due?');
-
-    await waitFor(() => expect(screen.queryByText(labels.REFUSAL_QUESTION_LENGTH)).toBeNull());
-    expect(box()).toHaveValue('What is due?');
-  });
-
-  it('makes the button wait while a question is on its way, and does not send it twice', async () => {
-    fake.state.rows = ANSWERED_ROWS;
-    open();
-    await screen.findByText('Quiz 2.');
-    const held = gate();
-    fake.state.rpcGate = held.promise;
-    const field = type('What is due?');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Ask' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Ask' })).toBeDisabled());
-    fireEvent.keyDown(field, { key: 'Enter' });
-    fireEvent.keyDown(field, { key: 'Enter' });
-
-    await act(async () => {
-      held.release();
-      await held.promise;
-    });
-    await waitFor(() => expect(field).toHaveValue(''));
-    expect(fake.state.rpcCalls.map((call) => call.fn)).toEqual(['workspace_ask']);
-  });
-
-  it('sends one question for two Enters in the same tick: a held key does not ask twice', async () => {
-    fake.state.rows = ANSWERED_ROWS;
-    open();
-    await screen.findByText('Quiz 2.');
-    const field = type('What is due?');
-
-    // Both land before the page has re-rendered as busy.
-    act(() => {
-      fireEvent.keyDown(field, { key: 'Enter' });
-      fireEvent.keyDown(field, { key: 'Enter' });
-    });
-
-    await waitFor(() => expect(field).toHaveValue(''));
-    expect(fake.state.rpcCalls.map((call) => call.fn)).toEqual(['workspace_ask']);
-    expect(screen.queryByText(labels.REFUSAL_STILL_ANSWERING)).toBeNull();
   });
 });
 
@@ -282,66 +272,143 @@ describe('a Stop that does not stop', () => {
   });
 });
 
-describe('a refusal that has lost its reason', () => {
-  it('takes "still answering" away once the answer is stored, and keeps what was typed', async () => {
-    fake.state.rows = ANSWERED_ROWS;
-    open();
-    const channel = await joined(TOPIC_A);
-    await screen.findByText('Quiz 2.');
-    // Enter sends only while this page sees nothing open, so the refusal comes by the
-    // backstop: a second question asked from another tab, not yet read here.
-    fake.state.rows = OTHER_TAB_ASKED_ROWS;
-    fireEvent.keyDown(type('and next week?'), { key: 'Enter' });
-    await screen.findByText(labels.REFUSAL_STILL_ANSWERING);
-    await screen.findByRole('button', { name: 'Stop' });
 
-    // Request 43 is answered.
+/**
+ * Amendment (h), from pack 24's run of 2026-10-15: after a Stop and a second
+ * finished answer the Ask button looked a shade dim. `busy` is the composer's
+ * one input for a Stop on its way, and it is the cancel's own pending state:
+ * false the moment the cancel settles, either way. The composer adds its own
+ * pending ask; nothing else dims the button.
+ */
+describe('the composer after a Stop (amendment (h))', () => {
+  const SECOND_ANSWER_ID = 'a7c1d2e3-55aa-4f10-b1d2-000000000900';
+
+  /** Request 900's answer stored, as `workspace_finish()` writes it. */
+  function storeSecondAnswer(): void {
+    const { workspace_messages: messages, workspace_requests: requests } = fake.state.rows;
     fake.state.rows = {
+      ...fake.state.rows,
       workspace_messages: [
-        ...OTHER_TAB_ASKED_ROWS.workspace_messages,
+        ...messages,
         {
-          id: SECOND_ANSWER,
+          id: SECOND_ANSWER_ID,
           conversation_id: A,
           role: 'assistant',
-          request_id: 43,
+          request_id: NEW_REQUEST,
           tier: 'low',
-          content: 'Chapter 4.',
+          content: 'Chapter 4 is due Friday.',
           finished: true,
         },
       ],
-      workspace_requests: OTHER_TAB_ASKED_ROWS.workspace_requests.map((row) => ({ ...row, state: 'done' })),
+      workspace_requests: requests.map((row) => (row.id === NEW_REQUEST ? { ...row, state: 'done' } : row)),
     };
-    act(() => channel.emit('done', { request_id: 43, message_id: SECOND_ANSWER, state: 'done' }));
-    expect(await screen.findByText('Chapter 4.')).toBeInTheDocument();
-    await screen.findByRole('button', { name: 'Ask' });
+  }
 
-    expect(screen.queryByText(labels.REFUSAL_STILL_ANSWERING)).toBeNull();
-    expect(box()).toHaveValue('and next week?');
+  it('is not busy once the cancel settles, and asks again when the next answer is stored', async () => {
+    fake.state.rows = { workspace_messages: [QUESTION_ROW], workspace_requests: [requestRow('claimed')] };
+    open();
+    const channel = await joined(TOPIC_A);
+    const held = gate();
+    fake.state.rpcGate = held.promise;
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Stop' }));
+    // The cancel is on its way: that is the one thing that makes the composer busy.
+    await waitFor(() => expect(fake.state.composer).toMatchObject({ busy: true, requestOpen: false }));
+
+    fake.state.rpcGate = null;
+    await act(async () => {
+      held.release();
+      await held.promise;
+    });
+    // Settled: busy is false again, whatever the cancel answered.
+    await waitFor(() => expect(fake.state.composer).toMatchObject({ busy: false, requestOpen: false }));
+
+    fireEvent.keyDown(type('And the reading?'), { key: 'Enter' });
+    await screen.findByText('And the reading?', { selector: 'p' });
+    storeSecondAnswer();
+    act(() => channel.emit('done', { request_id: NEW_REQUEST, message_id: SECOND_ANSWER_ID, state: 'done' }));
+    await screen.findByText('Chapter 4 is due Friday.');
+
+    await waitFor(() => expect(fake.state.composer).toMatchObject({ busy: false, requestOpen: false, disabled: false }));
+    const ask = screen.getByRole('button', { name: 'Ask' });
+    expect(ask).toBeEnabled();
+    expect(ask).not.toHaveAttribute('aria-busy');
   });
 
-  it('still says "still answering" for an open request this page had not read', async () => {
-    fake.state.rows = ANSWERED_ROWS;
+  it('is not busy after a cancel that failed either: the request reads open again', async () => {
+    fake.state.rows = { workspace_messages: [QUESTION_ROW], workspace_requests: [requestRow('claimed')] };
+    fake.state.rpc.workspace_cancel = () => ({ data: null, error: DENIED });
     open();
-    await screen.findByText('Quiz 2.');
-    await screen.findByRole('button', { name: 'Ask' });
-    // Asked from another tab: open in the database, and not yet on this page.
-    fake.state.rows = OTHER_TAB_ASKED_ROWS;
+    fireEvent.click(await screen.findByRole('button', { name: 'Stop' }));
 
-    fireEvent.keyDown(type('and next week?'), { key: 'Enter' });
+    await waitFor(() => expect(alerts()).toEqual(['Could not stop this answer: permission denied']));
+    expect(fake.state.composer).toMatchObject({ busy: false, requestOpen: true });
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeEnabled();
+  });
+});
 
-    expect(await screen.findByText(labels.REFUSAL_STILL_ANSWERING)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument();
+/**
+ * Round 2, R2-2b: the stream is marked stopped only when `workspace_cancel` answers true. The stopped
+ * sentence still shows at the press (the turn's own mark); a cancel that failed marks nothing, so the
+ * answer the runner keeps writing still reaches the page.
+ */
+describe('the stream`s stop mark follows the cancel`s answer (round 2, R2-2b)', () => {
+  function seedWriting(): void {
+    fake.state.rows = {
+      workspace_messages: [
+        QUESTION_ROW,
+        { id: ANSWER, conversation_id: A, role: 'assistant', request_id: 42, tier: 'mid', content: '', finished: false },
+      ],
+      workspace_requests: [requestRow('claimed')],
+    };
+  }
+
+  function answerText(container: HTMLElement): string {
+    return container.querySelector('li[data-request-id="42"] [data-answer-text]')?.textContent ?? '';
+  }
+
+  it('marks it once the cancel answers true: a later delta changes nothing', async () => {
+    seedWriting();
+    const { container } = open();
+    const channel = await joined(TOPIC_A);
+    act(() => channel.emit('delta', { request_id: 42, seq: 1, delta: 'Week one.' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Stop' }));
+    await waitFor(() => expect(fake.state.rows.workspace_requests[0]).toMatchObject({ state: 'cancelled' }));
+    await waitFor(() => expect(fake.state.composer).toMatchObject({ busy: false }));
+
+    act(() => channel.emit('delta', { request_id: 42, seq: 2, delta: ' Week two.' }));
+
+    expect(answerText(container)).toBe('Week one.');
+    expect(screen.getByText(labels.STOPPED_SENTENCE)).toBeInTheDocument();
   });
 
-  it('keeps the question-length refusal with no request open: its reason is the text', async () => {
-    fake.state.rows = ANSWERED_ROWS;
-    open();
-    await screen.findByText('Quiz 2.');
-    type('   ');
+  it('marks nothing when the cancel fails: the answer keeps arriving under the reopened turn', async () => {
+    seedWriting();
+    fake.state.rpc.workspace_cancel = () => ({ data: null, error: DENIED });
+    const { container } = open();
+    const channel = await joined(TOPIC_A);
+    act(() => channel.emit('delta', { request_id: 42, seq: 1, delta: 'Week one.' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Stop' }));
+    await waitFor(() => expect(alerts()).toEqual(['Could not stop this answer: permission denied']));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Ask' }));
+    act(() => channel.emit('delta', { request_id: 42, seq: 2, delta: ' Week two.' }));
 
-    expect(await screen.findByText(labels.REFUSAL_QUESTION_LENGTH)).toBeInTheDocument();
+    expect(answerText(container)).toBe('Week one. Week two.');
+    expect(container.querySelector('li[data-request-id="42"]')).toHaveAttribute('data-turn', 'streaming');
+  });
+
+  it('marks nothing when the request had already finished (the cancel answers false)', async () => {
+    seedWriting();
+    fake.state.rpc.workspace_cancel = () => ({ data: false, error: null });
+    const { container } = open();
+    const channel = await joined(TOPIC_A);
+    act(() => channel.emit('delta', { request_id: 42, seq: 1, delta: 'Week one.' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Stop' }));
+    await waitFor(() => expect(fake.state.composer).toMatchObject({ busy: false, requestOpen: true }));
+
+    act(() => channel.emit('delta', { request_id: 42, seq: 2, delta: ' Week two.' }));
+
+    expect(answerText(container)).toBe('Week one. Week two.');
   });
 });
 
@@ -407,7 +474,9 @@ describe('the message column follows an answer as it is written', () => {
   }
 
   function mount() {
-    const view = render(<MessageList turns={turnsWith('a')} empty={null} />);
+    const view = render(<MessageList turns={turnsWith('a')} empty={null} />, {
+      wrapper: wrapperFor(newQueryClient()),
+    });
     const column = view.container.firstElementChild as HTMLElement;
     return { ...view, column };
   }
@@ -440,14 +509,33 @@ describe('the message column follows an answer as it is written', () => {
 });
 
 /**
- * The PM's walk of 2026-10-07, W-2: after a long answer finished, its "Used:"
+ * The PM's walk of 2026-10-07, W-2: after a long answer finished, its last
  * line was under the visible part of the column. The stored row stores the text
- * already on screen, and adds lines no character of that text accounts for.
+ * already on screen, and adds lines no character of that text accounts for:
+ * since Phase 24b the fixed line of an `empty` turn is one of them.
  */
 describe('the message column follows what arrives with the stored row', () => {
   const LIVE_TEXT = 'Quiz 2 is due on Friday.';
   const MORE_TEXT = `${LIVE_TEXT} The reading is chapter 4.`;
-  const USED = [{ tool: 'search_materials', scope: 'IST.323', ok: true }];
+
+  /** Request 42's turn row: its search found nothing. */
+  function emptyTurnRow() {
+    const row = normalizeTurn({
+      request_id: 42,
+      depth: 'auto',
+      tier: 'mid',
+      plan_state: 'skipped',
+      retrieval_state: 'empty',
+      found_n: 0,
+      passages_n: 0,
+      memory_n: 0,
+      feed_rows: 98,
+      attachments: [],
+      created_at: null,
+    });
+    if (row === null) throw new Error('bad turn fixture');
+    return row;
+  }
 
   /** Request 42's assistant row: as `workspace_begin()` writes it, unless `fields` say it is stored. */
   function answerRow(fields: Row = {}): Row {
@@ -466,7 +554,7 @@ describe('the message column follows what arrives with the stored row', () => {
   }
 
   /** Request 42 as the page builds it: from its rows, and the text of its stream. */
-  function turnsOfRequest(rows: { request: Row; answer?: Row; text: string }) {
+  function turnsOfRequest(rows: { request: Row; answer?: Row; text: string; searchedEmpty?: boolean }) {
     const messages = [QUESTION_ROW, ...(rows.answer ? [rows.answer] : [])].flatMap(
       (row) => normalizeMessage(row) ?? [],
     );
@@ -476,6 +564,7 @@ describe('the message column follows what arrives with the stored row', () => {
       requests,
       live: { requestId: 42, text: rows.text, late: false },
       stoppedRequestIds: new Set(),
+      turnRows: rows.searchedEmpty ? [emptyTurnRow()] : [],
     });
   }
 
@@ -489,7 +578,9 @@ describe('the message column follows what arrives with the stored row', () => {
 
   /** The column while `written` grows to `grown`, with the reader at its end: 900 px of content, scrolled to 900. */
   function mountAtTheEnd(written: Turns, grown: Turns) {
-    const view = render(<MessageList turns={written} empty={null} />);
+    const view = render(<MessageList turns={written} empty={null} />, {
+      wrapper: wrapperFor(newQueryClient()),
+    });
     const column = view.container.firstElementChild as HTMLElement;
     size(column, 900);
     view.rerender(<MessageList turns={grown} empty={null} />);
@@ -501,23 +592,24 @@ describe('the message column follows what arrives with the stored row', () => {
   const writing = (text: string) =>
     turnsOfRequest({ request: requestRow('claimed'), answer: answerRow(), text });
 
-  /** The same answer stored: the text that was on screen, and the tools it used. */
+  /** The same answer stored: the text that was on screen, and the fixed line of a search that found nothing. */
   const stored = () =>
     turnsOfRequest({
       request: requestRow('done'),
-      answer: answerRow({ content: MORE_TEXT, tool_calls: USED, finished: true }),
+      answer: answerRow({ content: MORE_TEXT, finished: true }),
       text: MORE_TEXT,
+      searchedEmpty: true,
     });
 
-  it('keeps the "Used:" line in view when it arrives under text that does not change', () => {
+  it('keeps the fixed line in view when it arrives under text that does not change', () => {
     const { column, container, rerender } = mountAtTheEnd(writing(LIVE_TEXT), writing(MORE_TEXT));
-    expect(container.querySelector('[data-used]')).toBeNull();
+    expect(container.querySelector('[data-turn-line]')).toBeNull();
 
     size(column, 930);
     rerender(<MessageList turns={stored()} empty={null} />);
 
     expect(container.querySelector('[data-answer-text]')).toHaveTextContent(MORE_TEXT);
-    expect(container.querySelector('[data-used]')).toHaveTextContent('Used: search_materials · IST.323');
+    expect(container.querySelector('[data-turn-line]')).toHaveTextContent(labels.RETRIEVAL_LINES.empty);
     expect(column.scrollTop).toBe(930);
   });
 
@@ -564,7 +656,7 @@ describe('the message column follows what arrives with the stored row', () => {
     size(column, 930);
     rerender(<MessageList turns={stored()} empty={null} />);
 
-    expect(container.querySelector('[data-used]')).not.toBeNull();
+    expect(container.querySelector('[data-turn-line]')).not.toBeNull();
     expect(column.scrollTop).toBe(100);
   });
 
@@ -598,7 +690,8 @@ describe('the message column goes to its end when the reader asks', () => {
     'Next week has two things due: quiz 3 on Wednesday,',
     ' and the chapter 5 reading response on Friday.',
   ];
-  const USED_LINE = 'Used: search_materials · IST.323';
+  /** The line the stored row brings under the answer: its search found nothing. */
+  const FIXED_LINE = labels.RETRIEVAL_LINES.empty;
   /** How far from its end the column still follows (`FOLLOW_SLACK_PX`). */
   const SLACK_PX = 96;
   /** The stand-in layout: the column's own height, and what one turn adds to its content. */
@@ -648,7 +741,7 @@ describe('the message column goes to its end when the reader asks', () => {
     await waitFor(() => expect(column.scrollTop).toBe(column.scrollHeight));
   }
 
-  /** The rows once the runner has stored request 900's answer: its text, its tier, the tool it used. */
+  /** The rows once the runner has stored request 900's answer: its text, its tier, and its turn row. */
   function storedRows(content: string): Record<string, Row[]> {
     const { workspace_messages: messages, workspace_requests: requests } = fake.state.rows;
     const answer: Row = {
@@ -658,11 +751,25 @@ describe('the message column goes to its end when the reader asks', () => {
       request_id: NEW_REQUEST,
       tier: 'mid',
       content,
-      tool_calls: [{ tool: 'search_materials', scope: 'IST.323', ok: true }],
+      tool_calls: [],
       finished: true,
+    };
+    const turnRow: Row = {
+      request_id: NEW_REQUEST,
+      depth: 'auto',
+      tier: 'mid',
+      plan_state: 'skipped',
+      retrieval_state: 'empty',
+      found_n: 0,
+      passages_n: 0,
+      memory_n: 0,
+      feed_rows: 98,
+      attachments: [],
+      created_at: null,
     };
     return {
       ...fake.state.rows,
+      workspace_turns: [turnRow],
       workspace_messages: [...messages, answer],
       workspace_requests: requests.map((row) => (row.id === NEW_REQUEST ? { ...row, state: 'done' } : row)),
     };
@@ -691,7 +798,7 @@ describe('the message column goes to its end when the reader asks', () => {
     const written = column.scrollHeight;
     fake.state.rows = storedRows(FLUSHES.join(''));
     act(() => channel.emit('done', { request_id: NEW_REQUEST, message_id: OWN_ANSWER, state: 'done' }));
-    await within(column).findByText(USED_LINE);
+    await within(column).findByText(FIXED_LINE);
     expect(column.scrollHeight).toBeGreaterThan(written);
     await atItsEnd(column);
   });
@@ -736,11 +843,11 @@ describe('the message column goes to its end when the reader asks', () => {
     expect(column.scrollTop).toBe(0);
   });
 
-  it('goes to its end when the rows bring the question before `workspace_ask()` has answered', async () => {
+  it('goes to its end when the rows bring the question before `workspace_ask_with()` has answered', async () => {
     const { column } = await openScrolledUp();
     // The database has stored the question. Its answer to this page is still on the way.
     const answered = gate();
-    fake.state.rpc.workspace_ask = async () => {
+    fake.state.rpc.workspace_ask_with = async () => {
       fake.state.rows = {
         workspace_messages: [
           ...ANSWERED_ROWS.workspace_messages,

@@ -1,0 +1,56 @@
+/* A removable chip of the composer (Phase 24b, W-87): the outlined pill, its
+   title cut short when it is long, the upload's state in the muted words, and a
+   small round Remove. Tokens only; nothing here is red. */
+
+.chip {
+  composes: tagOutline from '@/styles/tokens.module.css';
+  gap: var(--space-1);
+  max-width: 100%;
+  padding-right: var(--size-3);
+}
+
+.title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: var(--size-220);
+}
+
+.state {
+  color: var(--color-muted);
+}
+
+.action {
+  composes: btnGhost from '@/styles/tokens.module.css';
+  padding-block: 0;
+  font-size: var(--text-xs);
+}
+
+.remove {
+  display: inline-grid;
+  place-items: center;
+  width: var(--size-target);
+  height: var(--size-target);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-chip);
+  background: transparent;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: var(--motion-control);
+}
+
+.remove:hover,
+.remove:focus-visible {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+
+@media (max-width: 720px) {
+  .remove,
+  .action {
+    min-width: var(--size-44);
+    min-height: var(--size-44);
+  }
+}

@@ -203,7 +203,7 @@ export interface EndReading {
 
 export async function endReading(page: Page, label: string): Promise<EndReading> {
   const turn = lastTurn(page);
-  const used = turn.locator('[data-used]');
+  const used = turn.locator('[data-sources]');
   const line = turn.locator('[data-turn-line]');
   const box = await turn.boundingBox();
   const reading: EndReading = {
@@ -301,12 +301,13 @@ export async function retakeAnsweredTurn(page: Page, retake: Retake): Promise<vo
   const turn = page.locator('li[data-turn="done"]').filter({ has: page.getByText(retake.question, { exact: true }) });
   const question = turn.getByText(retake.question, { exact: true });
   const badge = turn.locator('[data-tier]');
-  const used = turn.locator('[data-used]');
+  // Phase 24b: the "Used:" line is the sources row.
+  const used = turn.locator('[data-sources]');
   await assertThenShootWindow(page, retake.shot, async () => {
     await expect(link).toHaveAttribute('aria-current', 'page');
     await expect(turn, 'one answered turn asks this question').toHaveCount(1);
     await expect(badge).toHaveText(retake.badge);
-    await expect(used).toHaveText(/^Used: \S/);
+    await expect(used).toHaveText(/^\d+ sources?$/);
     await expect(turn.locator('[data-answer-text]')).not.toBeEmpty();
     await scrollColumnToTurnStart(page, turn);
     const questionAt = await inColumnBox(question);
