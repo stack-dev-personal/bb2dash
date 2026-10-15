@@ -41,3 +41,18 @@ the reading / help me plan). Each is one string in the labels file and its test.
 
 **Merges into the phase branch:** 1c04d71 (`origin/feat/workspace-24` at 1fdd6b6), c6e94dd (W-86 at 6fcb03a), 34b7d9d (`origin/feat/workspace-24` at 7b7baf3), 881d02e (W-86 round 2, a fast-forward), b87fbd5 (`origin/feat/workspace-24` at c87a2f3), all 2026-10-14; 7e71eb7 (`origin/main` at 39937fd, 2026-10-15). Rule: `origin/feat/workspace-24` whenever 24ab pushes; `origin/main`
 once 24a/24ab is on `main`; always a merge, never a rebase.
+
+## Part 2: the page (2026-10-15)
+
+The session started from brief 111's final prompt (Stack's paste, with steps (1) and (2) marked done) in the worktree `bb2dash-wt-24b` at 3c237ed (`main` 022812c plus one docs commit).
+
+| step | what | result |
+|---|---|---|
+| session start | `/bb2dash-pm`: ORCHESTRATOR, STATUS's header, DECISIONS' tail, the live-state checks; `node untagged-sessions.mjs --due` | not due (2 untagged since 2026-10-14, last review 0.9 days ago); open PRs #84 (docs, Stack's) and #59 (a draft); six worktrees, none of this phase's but `bb2dash-wt-24b` and `bb2dash-wt-24b-data` |
+| task 1, the gate | `git merge-base --is-ancestor dff1e05 origin/main`; the same for 2b7c388; `grep -c "Phase 24a accepted" DECISIONS.md` | 0, 0, 1: open |
+| task 1, `origin/main` | `git fetch --all --prune`; `git merge-base --is-ancestor origin/main HEAD` | `origin/main` = 022812c, exit 0: an ancestor, nothing to merge; the gates were green at 7e71eb7 and the branch since then is docs |
+| task 1, the re-read | Phase 22 as merged: `globals.css` (622 lines) token by token, `tokens.module.css`'s classes, the twelve files of the two Workspace folders (Phase 22 changed `Workspace.module.css:8` and nothing else there), `Shell.module.css`, `CourseSidebar.module.css:147`, the token audit's cluster map, its FROZEN allowlist (A1: eight `@media` widths, one `@container` width), the red files (`git grep`: nine), `walk22.lib.ts:164`, the row 12 fixture, `MASTER.md` 49/96/171, `pages/workspace.md`; every line number brief 111 cites checked (the drift table in the brief) | written into brief 111, "Frozen at the gate": the names, the numbers, the drift table, Q-5, amendments (f) to (h) as binding rules, five defaults D-F to D-J |
+| task 2, Q-5 | (1) the names, above; (2) is the red-file count a standing test; (3) can a module map be read from a folder under vitest (a scratch case with `import.meta.glob(..., { eager: true })`, run once, removed) | **(1) read; (2) no: a `git grep` at the walk (brief 103 line 2083, WALK.md PD-3); (3) PASS, 1 passed in 2.8 s**, so the layout test may read the folder's sheets by glob |
+| the date line | amendment (g) on the page: `todayWords` in `workspace-examples.ts` and `todayLine` in `workspace-labels.ts`, each tested | 9bcbae8: `workspace-examples.test.ts` and `workspace-labels.test.ts` 87 passed together; eslint clean on the four files; typecheck clean |
+| red files | `git grep -l "var(--color-accent-500)" -- web/src` before the page | nine (CourseSubBar, Inbox, AnnouncementsList, CourseTimeline, PlannerWeek, Bell, CourseSidebar, TopNav, UpcomingTracker); the page adds two (the picked tab, the picked conversation): the count after integration goes here |
+| follow-up for Stack | from amendment (g): the runner's planner feed carries dates and no weekday, and its prompt does not state today's date (`workspace/`, 24a's ground, out of this phase); the page shows the true date instead | **his word needed**: a `workspace/` change, no migration, a phase of its own or a fix PR |
