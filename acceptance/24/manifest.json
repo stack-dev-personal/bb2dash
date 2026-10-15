@@ -36,6 +36,14 @@
       ]
     },
     {
+      "id": "page",
+      "kind": "sandbox",
+      "tests": [
+        "17 lobby and options",
+        "18 sources and panel"
+      ]
+    },
+    {
       "id": "walk",
       "kind": "sandbox",
       "tests": [
@@ -97,6 +105,43 @@
       "kind": "sandbox",
       "tests": [
         "15 delete upload"
+      ]
+    },
+    {
+      "id": "page-upload",
+      "kind": "sandbox",
+      "tests": [
+        "19 upload through the page",
+        "20 ask with the file attached",
+        "21 delete through the files tab"
+      ]
+    },
+    {
+      "id": "page-memory",
+      "kind": "sandbox",
+      "tests": [
+        "22 memory item shown"
+      ]
+    },
+    {
+      "id": "memory-proofs",
+      "kind": "host",
+      "actions": [
+        {
+          "action": "db.proofUntil",
+          "with": {
+            "name": "memory-item",
+            "conversation": "carry:17.conversation_id",
+            "since": "carry:run.started_at"
+          }
+        }
+      ]
+    },
+    {
+      "id": "page-forget",
+      "kind": "sandbox",
+      "tests": [
+        "24 memory item deleted"
       ]
     },
     {
@@ -420,7 +465,7 @@
     {
       "id": "15",
       "kind": "auto",
-      "text": "The file is deleted in its two steps, leaving no row in deleting, and every conversation the run opened is archived.",
+      "text": "The file is deleted in its two steps, leaving no row in deleting. Whether every conversation the run opened is archived is read at step 24, the last step that archives one.",
       "stage": "delete",
       "test": "15 delete upload",
       "evidence": [
@@ -432,13 +477,6 @@
           "with": {
             "nonce": "carry:11.nonce_id",
             "document": "carry:11.document_id"
-          }
-        },
-        {
-          "name": "conversations-unarchived",
-          "with": {
-            "since": "carry:run.started_at",
-            "min_conversations": 7
           }
         }
       ]
@@ -463,6 +501,159 @@
         },
         {
           "name": "store-no-links"
+        }
+      ]
+    },
+    {
+      "id": "17",
+      "kind": "auto",
+      "text": "The lobby: greeting, today's date with its weekday, routines. A course chip and the Standard depth are picked and a question asked; the options row holds them and the turn was planned. The conversation stays open for step 22.",
+      "stage": "page",
+      "test": "17 lobby and options",
+      "evidence": [
+        "17-lobby.png",
+        "17-start.png",
+        "17-end.png",
+        "17.json"
+      ],
+      "proofs": [
+        {
+          "name": "options-stored",
+          "with": {
+            "request": "carry:17.request_id",
+            "since": "carry:run.started_at",
+            "question_md5": "80a6db20649a545d58a371d257be8f44",
+            "course": "IST.323"
+          }
+        }
+      ]
+    },
+    {
+      "id": "18",
+      "kind": "auto",
+      "text": "A formatted answer carries a sources row; pressing it opens the panel on Sources with the rows; the answer holds no link, image, frame, script or style element; Hide panel folds it away. The step archives its conversation.",
+      "stage": "page",
+      "test": "18 sources and panel",
+      "evidence": [
+        "18-start.png",
+        "18-end.png",
+        "18-panel.png",
+        "18.json"
+      ],
+      "proofs": [
+        {
+          "name": "turn-found",
+          "with": {
+            "request": "carry:18.request_id",
+            "since": "carry:run.started_at",
+            "question_md5": "f3e8ea504452c26da542793714891606"
+          }
+        }
+      ]
+    },
+    {
+      "id": "19",
+      "kind": "auto",
+      "text": "A file that is new in this run goes in through the plus menu's own control; its chip follows the row to indexed; the Files tab lists it with that state.",
+      "stage": "page-upload",
+      "test": "19 upload through the page",
+      "evidence": [
+        "19-chip.png",
+        "19-files.png",
+        "19.json"
+      ]
+    },
+    {
+      "id": "20",
+      "kind": "auto",
+      "text": "The same file sent again through the page shows the row it already has, indexed at once; a question asked with it attached stores an attachment row and a source of origin attached. The step archives its conversation.",
+      "stage": "page-upload",
+      "test": "20 ask with the file attached",
+      "evidence": [
+        "20-start.png",
+        "20-end.png",
+        "20.json"
+      ],
+      "proofs": [
+        {
+          "name": "turn-attached",
+          "with": {
+            "request": "carry:20.request_id",
+            "since": "carry:run.started_at",
+            "question_md5": "7b1f0f1b2bd7a2214163713528ae4975",
+            "nonce": "carry:19.nonce_id"
+          }
+        }
+      ]
+    },
+    {
+      "id": "21",
+      "kind": "auto",
+      "text": "The file is deleted through the Files tab in two presses and leaves the list; no row holds its hash.",
+      "stage": "page-upload",
+      "test": "21 delete through the files tab",
+      "evidence": [
+        "21-files.png",
+        "21.json"
+      ],
+      "proofs": [
+        {
+          "name": "page-upload-gone",
+          "with": {
+            "nonce": "carry:19.nonce_id"
+          }
+        }
+      ]
+    },
+    {
+      "id": "22",
+      "kind": "auto",
+      "text": "With memory jobs on, step 17's conversation, answered after the switch and quiet since, shows one remembered item in the Memory tab; the test reloads the tab until it does.",
+      "stage": "page-memory",
+      "test": "22 memory item shown",
+      "evidence": [
+        "22-memory.png",
+        "22.json"
+      ]
+    },
+    {
+      "id": "23",
+      "kind": "host",
+      "text": "The remembered item of step 17's conversation is a document of kind memory, indexed, with a vector, made in this run. Read up to 10 times, 10 seconds apart.",
+      "stage": "memory-proofs",
+      "proofs": [
+        {
+          "name": "memory-item",
+          "with": {
+            "conversation": "carry:17.conversation_id",
+            "since": "carry:run.started_at"
+          }
+        }
+      ]
+    },
+    {
+      "id": "24",
+      "kind": "auto",
+      "text": "The remembered item is deleted in two presses and leaves the Memory tab; its conversation is archived. Nothing of the run is left in his memory or his list.",
+      "stage": "page-forget",
+      "test": "24 memory item deleted",
+      "evidence": [
+        "24-memory.png",
+        "24.json"
+      ],
+      "proofs": [
+        {
+          "name": "memory-gone",
+          "with": {
+            "conversation": "carry:17.conversation_id"
+          }
+        },
+        {
+          "name": "conversations-unarchived",
+          "with": {
+            "since": "carry:run.started_at",
+            "min_conversations": 10
+          }
         }
       ]
     }

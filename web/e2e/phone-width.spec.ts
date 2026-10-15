@@ -24,7 +24,16 @@
 
 import { type BrowserContext, type Locator, type Page } from '@playwright/test';
 import { A1_POPOUT, fulfillView, openSignedIn } from './walk';
-import { LONGEST_SYNC_PHASE_22, SYNC_LABEL_22, expect, quietSync, shotPath22, shotsAsked22, test } from './walk22.lib';
+import {
+  LONGEST_SYNC_PHASE_22,
+  SYNC_LABEL_22,
+  expect,
+  fulfillWorkspacePageFixture,
+  quietSync,
+  shotPath22,
+  shotsAsked22,
+  test,
+} from './walk22.lib';
 
 test.use({ reducedMotion: 'reduce' });
 
@@ -140,7 +149,9 @@ async function fulfillWorkspaceFixture(context: BrowserContext): Promise<void> {
       role: 'assistant',
       request_id: WORKSPACE_REQUEST_ID,
       tier: 'mid',
-      content: 'Sample answer: the reading for the week and the second quiz are due on Friday.',
+      // Rich text with one label the fixture's source rows resolve, so the formatted answer and a chip render (Phase 24b).
+      content:
+        'Sample answer: the reading for the week and the second quiz are due on Friday [M101].\n\n## This week\n\n- The reading, by Friday\n- The second quiz, Friday in class [M102]',
       tool_calls: [{ tool: 'search_materials', query: 'due this week', scope: 'IST.323', ok: true }],
       finished: true,
       error_code: null,
@@ -162,6 +173,7 @@ async function fulfillWorkspaceFixture(context: BrowserContext): Promise<void> {
   await fulfillView(context, 'v_workspace_status', [
     { polled_at: now.toISOString(), runner: 'walk22', open_requests: 0, oldest_open_at: null, polled_age_seconds: 5 },
   ]);
+  await fulfillWorkspacePageFixture(context, WORKSPACE_REQUEST_ID, now.toISOString());
 }
 
 /** Waits for the first family of `--font-body` to hold a loaded face, and says which family it was. */

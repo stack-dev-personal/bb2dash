@@ -80,8 +80,19 @@ const TABLES = {
     error_code: 'text',
     attempts: 'integer not null default 0',
     signed_url_expires_at: 'timestamptz',
+    conversation_id: 'uuid',
     created_at: 'timestamptz not null default now()',
   },
+  // Phase 24b's proofs (the page): the options and attachments of a request (194) and a conversation's memory state (195).
+  workspace_request_options: {
+    request_id: 'bigint primary key',
+    course_display_id: 'text',
+    depth: "text not null default 'auto'",
+    routine_id: 'text',
+    format: "text not null default 'plain'",
+  },
+  workspace_request_attachments: { request_id: 'bigint not null', ord: 'smallint not null', kind: 'text not null', document_id: 'bigint' },
+  workspace_conversation_state: { conversation_id: 'uuid primary key', memory_opt_out: 'boolean not null default false', memory_written_at: 'timestamptz' },
   workspace_document_text: { id: 'bigint generated always as identity primary key', document_id: 'bigint not null' },
   workspace_text_embeddings: { text_id: 'bigint not null', embedding: 'real[]' },
   workspace_ingest_heartbeat: { id: 'smallint primary key', polled_at: 'timestamptz', runner: 'text' },
@@ -242,8 +253,8 @@ test('every table and column these cases are made of is in the migrations, and t
   assert.deepEqual([...columnsOf('v_workspace_index_status')], STATUS_COLUMNS);
 });
 
-test('pack 24 holds the twenty proofs, every statement is one plain read, and every proof is declared with typed parameters', () => {
-  assert.equal(Object.keys(PACK_24).length, 20);
+test('pack 24 holds the twenty-five proofs (24a\'s twenty and 24b\'s five), every statement is one plain read, and every proof is declared with typed parameters', () => {
+  assert.equal(Object.keys(PACK_24).length, 25);
   assert.doesNotThrow(() => validatePack(PACK_24));
   for (const [name, proof] of Object.entries(PACK_24)) {
     assert.ok(proof.sql.startsWith('select') || proof.sql.startsWith('with'), name);
@@ -434,6 +445,150 @@ test('conversations-unarchived: at least the expected number made in this run an
   await db.query('update public.workspace_conversations set archived = true');
   await addTurn({ createdAt: BEFORE_RUN });
   await passes('conversations-unarchived', params);
+});
+
+/* ---------------------------------------------------------------------------------------------
+ * Phase 24b, the page: the chips, the attached file, the page's delete, the remembered item
+ * ------------------------------------------------------------------------------------------ */
+
+const COURSE = 'IST.323';
+const CONVERSATION_A = '7a1e0c42-3b5d-4e6f-8a9b-0c1d2e3f4a5b';
+
+async function addOptions(request, { depth = 'standard', format = 'rich', course = COURSE, routine = null } = {}) {
+  await db.query('insert into public.workspace_request_options (request_id, course_display_id, depth, routine_id, format) values ($1, $2, $3, $4, $5)', [request, course, depth, routine, format]);
+}
+
+async function addAttachment(request, { ord = 1, kind = 'upload', document = null } = {}) {
+  await db.query('insert into public.workspace_request_attachments (request_id, ord, kind, document_id) values ($1, $2, $3, $4)', [request, ord, kind, document]);
+}
+
+/** A remembered item of a conversation: the document of kind memory, its one unit and, unless told otherwise, the unit's vector. */
+async function addMemory(conversation, { state = 'indexed', createdAt = IN_RUN, vector = true } = {}) {
+  const document = (await one("insert into public.workspace_documents (kind, state, conversation_id, created_at) values ('memory', $1, $2, $3::timestamptz) returning id", [state, conversation, createdAt])).id;
+  const unit = (await one('insert into public.workspace_document_text (document_id) values ($1) returning id', [document])).id;
+  if (vector) await db.query('insert into public.workspace_text_embeddings (text_id, embedding) values ($1, $2)', [unit, [0.1, 0.2]]);
+  return document;
+}
+
+async function setConversationState(conversation, { optOut = true, writtenAt = IN_RUN } = {}) {
+  await db.query(
+    'insert into public.workspace_conversation_state (conversation_id, memory_opt_out, memory_written_at) values ($1, $2, $3::timestamptz) on conflict (conversation_id) do update set memory_opt_out = $2, memory_written_at = $3::timestamptz',
+    [conversation, optOut, writtenAt],
+  );
+}
+
+/** A turn asked at the Standard depth with a course chip: the middle tier, a planned turn whose depth is standard. */
+async function addStandardTurn(options = {}) {
+  const turn = await addTurn({ answer: { tier: 'mid' }, turn: { tier: 'mid', planState: 'planned', planMs: 1800 } });
+  await db.query("update public.workspace_turns set depth = 'standard' where request_id = $1", [turn.request]);
+  await addOptions(turn.request, options);
+  return turn;
+}
+
+test('options-stored: a done request whose options row holds depth standard, format rich and the picked course, with a planned turn on the middle tier, passes; each other option, a skipped plan or the low tier fails', async () => {
+  const good = await addStandardTurn();
+  const result = await passes('options-stored', asked(good, { course: COURSE }));
+  assert.equal(result.detail.options_depth, 'standard');
+  assert.equal(result.detail.options_format, 'rich');
+  assert.equal(result.detail.course_matches, true);
+  await fails('options-stored', asked(good, { course: 'IST.352' }));
+  await fails('options-stored', asked(await addStandardTurn({ depth: 'quick' }), { course: COURSE }));
+  await fails('options-stored', asked(await addStandardTurn({ format: 'plain' }), { course: COURSE }));
+  await fails('options-stored', asked(await addStandardTurn({ routine: 'quiz' }), { course: COURSE }));
+  await fails('options-stored', asked(await addStandardTurn({ course: null }), { course: COURSE }));
+  // No options row at all: a question the old page sent.
+  await fails('options-stored', asked(await addTurn({ answer: { tier: 'mid' }, turn: { tier: 'mid', planState: 'planned' } }), { course: COURSE }));
+  // The plan was skipped, or the answer came from the low tier: the depth did not reach the runner.
+  const skipped = await addTurn({ answer: { tier: 'mid' }, turn: { tier: 'mid', planState: 'skipped' } });
+  await db.query("update public.workspace_turns set depth = 'standard' where request_id = $1", [skipped.request]);
+  await addOptions(skipped.request);
+  await fails('options-stored', asked(skipped, { course: COURSE }));
+  const low = await addTurn({ turn: { tier: 'low', planState: 'skipped' } });
+  await db.query("update public.workspace_turns set depth = 'standard' where request_id = $1", [low.request]);
+  await addOptions(low.request);
+  await fails('options-stored', asked(low, { course: COURSE }));
+  await fails('options-stored', asked(good, { course: COURSE, question_md5: md5(OTHER_QUESTION) }));
+});
+
+test('turn-attached: one indexed upload of the nonce, attached to the request and stored as a source of origin attached, passes; no attachment, another document, an auto source, a second row of the hash or a document not indexed fails', async () => {
+  const document = await addDocument();
+  const good = await addTurn({ sources: [{ kind: 'upload', origin: 'attached', document }] });
+  await addAttachment(good.request, { document });
+  const result = await passes('turn-attached', asked(good, { nonce: NONCE }));
+  assert.equal(result.detail.rows_holding_it, 1);
+  assert.equal(result.detail.attached_this_document, 1);
+  assert.equal(result.detail.attached_upload_sources, 1);
+  await fails('turn-attached', asked(good, { nonce: OTHER_NONCE }));
+  await fails('turn-attached', asked(await addTurn({ sources: [{ kind: 'upload', origin: 'attached', document }] }), { nonce: NONCE }));
+  const other = await addDocument({ nonce: OTHER_NONCE });
+  const wrongFile = await addTurn({ sources: [{ kind: 'upload', origin: 'attached', document }] });
+  await addAttachment(wrongFile.request, { document: other });
+  await fails('turn-attached', asked(wrongFile, { nonce: NONCE }));
+  const auto = await addTurn({ sources: [{ kind: 'upload', origin: 'auto', document }] });
+  await addAttachment(auto.request, { document });
+  await fails('turn-attached', asked(auto, { nonce: NONCE }));
+  // A second send that made a second row would be the page's fault: the hash is one row.
+  await db.query("insert into public.workspace_documents (kind, state, sha256, created_at) values ('upload', 'indexed', $1, $2::timestamptz)", [hashOf(NONCE), IN_RUN]);
+  await fails('turn-attached', asked(good, { nonce: NONCE }));
+  await db.query('delete from public.workspace_documents where id <> $1 and id <> $2', [document, other]);
+  await db.query("update public.workspace_documents set state = 'text_ready' where id = $1", [document]);
+  await fails('turn-attached', asked(good, { nonce: NONCE }));
+});
+
+test('page-upload-gone: no row holds the hash passes; a row of the hash in any state fails; other uploads in deleting are only reported', async () => {
+  await passes('page-upload-gone', { nonce: NONCE });
+  const document = await addDocument({ state: 'deleting' });
+  const left = await fails('page-upload-gone', { nonce: NONCE });
+  assert.equal(left.detail.rows_holding_it, 1);
+  await db.query("update public.workspace_documents set state = 'indexed' where id = $1", [document]);
+  await fails('page-upload-gone', { nonce: NONCE });
+  await db.query('delete from public.workspace_documents');
+  await addDocument({ nonce: OTHER_NONCE, state: 'deleting' });
+  const other = await passes('page-upload-gone', { nonce: NONCE });
+  assert.equal(other.detail.uploads_deleting_now, 1);
+});
+
+test('memory-item: one indexed memory document of the conversation, made in this run, with a vector behind its unit passes; none, no vector, not indexed, before the run, two items or another conversation fails', async () => {
+  const params = { conversation: CONVERSATION_A, since: SINCE };
+  await fails('memory-item', params);
+  const document = await addMemory(CONVERSATION_A);
+  const result = await passes('memory-item', params);
+  assert.equal(result.detail.document_id, document);
+  assert.equal(result.detail.has_vector, true);
+  assert.equal(result.detail.made_in_this_run, true);
+  await fails('memory-item', { ...params, conversation: '00000000-0000-4000-8000-000000000099' });
+  await fails('memory-item', { ...params, since: '2026-10-09T15:00:00.000Z' });
+  await db.query('delete from public.workspace_text_embeddings');
+  assert.equal((await fails('memory-item', params)).detail.has_vector, false);
+  await db.exec('delete from public.workspace_documents; delete from public.workspace_document_text;');
+  await addMemory(CONVERSATION_A, { state: 'text_ready' });
+  assert.equal((await fails('memory-item', params)).detail.document_state, 'text_ready');
+  await db.exec('delete from public.workspace_documents; delete from public.workspace_document_text; delete from public.workspace_text_embeddings;');
+  await addMemory(CONVERSATION_A, { createdAt: BEFORE_RUN });
+  assert.equal((await fails('memory-item', params)).detail.made_in_this_run, false);
+  await addMemory(CONVERSATION_A);
+  assert.equal((await fails('memory-item', params)).detail.remembered_items, 2);
+});
+
+test('memory-gone: no memory document of the conversation, its state row opted out with a written time, and no orphan vector passes; an item left, no state row, not opted out, never written or an orphan vector fails', async () => {
+  const params = { conversation: CONVERSATION_A };
+  await fails('memory-gone', params);
+  await setConversationState(CONVERSATION_A);
+  const result = await passes('memory-gone', params);
+  assert.equal(result.detail.memory_opt_out, true);
+  assert.equal(result.detail.orphan_vectors, 0);
+  await setConversationState(CONVERSATION_A, { optOut: false });
+  await fails('memory-gone', params);
+  await setConversationState(CONVERSATION_A, { optOut: true, writtenAt: null });
+  await fails('memory-gone', params);
+  await setConversationState(CONVERSATION_A);
+  const document = await addMemory(CONVERSATION_A);
+  assert.equal((await fails('memory-gone', params)).detail.remembered_items, 1);
+  // The delete that leaves a unit's vector behind, with its document gone, is not a clean delete.
+  await db.query('delete from public.workspace_documents where id = $1', [document]);
+  assert.equal((await fails('memory-gone', params)).detail.orphan_vectors, 1);
+  await db.exec('delete from public.workspace_text_embeddings; delete from public.workspace_document_text;');
+  await passes('memory-gone', params);
 });
 
 /* ---------------------------------------------------------------------------------------------

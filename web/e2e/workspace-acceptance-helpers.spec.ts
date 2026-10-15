@@ -63,7 +63,8 @@ const LONG_ANSWER_LINES = 60;
 const FIRST_REQUEST = 400;
 const LAST_REQUEST = FIRST_REQUEST + TURNS - 1;
 const LAST_QUESTION = `Question ${TURNS}: what is due this week?`;
-const USED_LINE = 'Used: search_materials · a-course';
+/** The sources row under an answer, which Phase 24b put where Phase 21's "Used:" line stood (`data-sources`). */
+const USED_LINE = '2 sources';
 
 const CONVERSATION = '0b6f7c1e-2d3a-4b5c-8d9e-0f1a2b3c4d5e';
 const OTHER = '9a8b7c6d-5e4f-4a3b-9c2d-1e0f9a8b7c6d';
@@ -79,7 +80,7 @@ function turnMarkup(index: number): string {
         <span class="sr-only">The assistant answered</span>
         <span data-tier="low">${BADGE_LOW}</span>
         <p class="text" data-answer-text>${answer}</p>
-        <p class="used" data-used>${USED_LINE}</p>
+        <p class="sources" data-sources>${USED_LINE}</p>
       </div>
     </li>`;
 }

@@ -304,6 +304,7 @@ export interface TurnReading {
   state: string | null;
   requestId: number | null;
   badge: string | null;
+  /** The sources row under the answer ("3 sources"); null when the turn has none. Phase 21's "Used:" line until 24b. */
   used: string | null;
   line: string | null;
   /** The answer's text; empty when the turn shows none. */
@@ -322,7 +323,7 @@ export async function readTurn(turn: Locator): Promise<TurnReading> {
       state: item.getAttribute('data-turn'),
       requestId: /^\d+$/.test(id) ? Number(id) : null,
       badge: textOf('[data-tier]'),
-      used: textOf('[data-used]'),
+      used: textOf('[data-sources]'),
       line: textOf('[data-turn-line]'),
       answer: textOf('[data-answer-text]') ?? '',
     };
@@ -474,7 +475,7 @@ export interface TurnShots {
  * where each thing stood is noted in the facts and returned.
  */
 export async function shootTurn(page: Page, rec: Recorder, turn: Locator, question: string): Promise<TurnShots> {
-  const used = turn.locator('[data-used]');
+  const used = turn.locator('[data-sources]');
   const usedLineInView = (await used.count()) === 0 ? null : (await inColumnBox(used)).inside;
   await rec.shot(page, 'end');
 
@@ -510,9 +511,9 @@ export async function expectAnswered(turn: Locator, live: Pick<LiveQuestion, 'ba
   await expect(turn.locator('[data-tier]')).toHaveText(live.badge);
   await expect(turn.locator('[data-answer-text]')).not.toBeEmpty();
   await expect(turn.locator('[data-turn-line]')).toHaveCount(0);
+  // Phase 24b: the "Used:" line is the sources row ("1 source", "3 sources"); a tool is no longer named on the page.
   for (const tool of live.usedTools) {
-    await expect(turn.locator('[data-used]')).toContainText(/^Used: /);
-    await expect(turn.locator('[data-used]')).toContainText(tool);
+    await expect(turn.locator('[data-sources]'), `the sources row stands where the tool ${tool} was named`).toHaveText(/^\d+ sources?$/);
   }
 }
 

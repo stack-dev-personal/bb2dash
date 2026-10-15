@@ -287,7 +287,7 @@ export async function reportTurn(page: Page, label: string, askedAt: string): Pr
     request: await turn.getAttribute('data-request-id'),
     state: await turn.getAttribute('data-turn'),
     badge: await textOrNull(turn.locator('[data-tier]')),
-    used: await textOrNull(turn.locator('[data-used]')),
+    used: await textOrNull(turn.locator('[data-sources]')),
     line: await textOrNull(turn.locator('[data-turn-line]')),
     answerChars: Array.from(answer).length,
     answerNamesAFile: FILE_NAME.test(answer),
