@@ -1,127 +1,166 @@
 'use client';
 
 /**
- * The composer (Phase 21, task 16).
+ * The composer (Phase 21, task 16; rewritten for Phase 24b, brief 111, task 7,
+ * W-87, to the frozen `ComposerProps` of ruling C-1).
  *
- * A text box and one button. The button reads "Ask"; while a request is open
- * it reads "Stop" (no control reads "Submit": `web/test/audits.test.ts`).
- * Enter asks and Shift+Enter is a new line.
+ * A text box over one row: the plus menu, the dashed course chip, the routine
+ * chip and the attachment chips, then the depth menu and Ask. The composer owns
+ * its chips and its ask: it restores the course and the routine from the last
+ * request's options row, sends the question through `workspace_ask_with` with
+ * the six options (`format` always `rich`), and says every sentence about the
+ * question under the box: the refusals, the routine's need, an upload not yet
+ * indexed, the limit of five, an upload's refusal or failure. The owner hears
+ * of an accepted question through `onAsked` and of any other failure through
+ * `onAskError`.
  *
- * WHILE A REQUEST IS OPEN ENTER DOES NOT SEND (the PM's ruling U1): the button
- * reads Stop, and a question typed meanwhile waits in the box. The database's
- * refusal is the backstop, for an open request this page has not read yet
- * (asked from another tab): Enter then sends, and SQLSTATE 23505 comes back as
- * its one sentence.
+ * Enter asks and Shift+Enter breaks the line; while a request is open the
+ * button reads Stop and Enter sends nothing (the PM's ruling U1). Backspace in
+ * an empty box removes the last chip. Ask is disabled (Phase 22's flat grey
+ * pill) while a question or a Stop is on its way, when the conversation was not
+ * found, and while a routine's need is unmet or an attached upload is not yet
+ * indexed (Round 2, W-4), the last two saying why in one line under the box,
+ * which is the button's description. After a Stop and after an answer it is
+ * enabled again (amendment (h)). Deep applies to one question: after it the menu reads Auto again.
+ * After an accepted question the box and the attachments are cleared.
  *
- * A QUESTION IS 1 TO 8000 CHARACTERS AFTER TRIMMING. The page refuses anything
- * else before a request is sent (`askWorkspace` measures it), and the database
- * refuses the same text. Each refusal is shown here, under the box.
- *
- * The typed text is kept until a question is accepted, so a refusal or a
- * failure never loses it.
- *
- * A CONVERSATION THAT WAS NOT FOUND IS NOT ASKED INTO (the PM's ruling U1):
- * the box and the button are disabled and nothing is sent. What was typed
- * stays in the box.
- *
- * The box has a visible placeholder (PM wording).
+ * A file can be dropped on the composer, and the plus menu opens the file
+ * input; both go through `use-composer-uploads.ts`. The input takes the six
+ * types of `WORKSPACE_UPLOAD_TYPES`.
  */
 
-import { useRef, useState, type KeyboardEvent } from 'react';
-import {
-  ASK_LABEL,
-  QUESTION_FIELD_LABEL,
-  QUESTION_PLACEHOLDER,
-  STOP_LABEL,
-} from '@/lib/workspace-labels';
+import { useId, useRef, useState, type DragEvent, type KeyboardEvent, type Ref } from 'react';
+import type { ComposerProps } from './composer-contract';
+import { WORKSPACE_UPLOAD_TYPES } from '@/lib/workspace-upload-rules';
+import { ASK_LABEL, QUESTION_FIELD_LABEL, QUESTION_PLACEHOLDER, STOP_LABEL } from '@/lib/workspace-labels';
+import { MaterialPicker } from './MaterialPicker';
+import { PlusMenu } from './PlusMenu';
+import { CourseMenu } from './CourseMenu';
+import { DepthMenu } from './DepthMenu';
+import { ChipRow, ComposerLines } from './ComposerParts';
+import { useComposerModel, type ComposerModel } from './use-composer-model';
 import styles from './Composer.module.css';
 
 /** How tall the box starts, in lines. */
 const QUESTION_ROWS = 3;
 
-export interface ComposerProps {
-  /** A request is open in this conversation: the button stops it. */
-  requestOpen: boolean;
-  /** A question or a Stop is on its way: the button waits. */
-  busy: boolean;
-  /** The conversation was not found: there is nothing to ask into, and nothing is sent. */
-  disabled: boolean;
-  /** The sentence of a refused question, or null. */
-  refusal: string | null;
-  /** Ask. Resolves true when the question was accepted. */
-  onAsk: (text: string) => Promise<boolean>;
-  onStop: () => void;
-  /** The text changed: a refusal about the old text no longer applies. */
-  onEdit: () => void;
+/** What the file input offers: the six extensions the upload rules take. */
+const ACCEPTED_TYPES = WORKSPACE_UPLOAD_TYPES.map((type) => `.${type.extension}`).join(',');
+
+function hasFiles(event: DragEvent<HTMLElement>): boolean {
+  return Array.from(event.dataTransfer?.types ?? []).includes('Files');
 }
 
-/**
- * The typed text, and asking with it one question at a time. The text is
- * cleared only when the question was accepted.
- */
-function useQuestion(blocked: boolean, onAsk: (text: string) => Promise<boolean>) {
-  const [text, setText] = useState('');
-  /** A question is on its way. A ref, because a held Enter repeats before `busy` has rendered. */
-  const sending = useRef(false);
+/** The composer as a drop target for files from his device. */
+function useDropTarget(model: ComposerModel, disabled: boolean) {
+  const [dragging, setDragging] = useState(false);
+  return {
+    dragging,
+    handlers: {
+      onDragOver: (event: DragEvent<HTMLElement>) => {
+        if (disabled || !hasFiles(event)) return;
+        event.preventDefault();
+        setDragging(true);
+      },
+      onDragLeave: () => setDragging(false),
+      onDrop: (event: DragEvent<HTMLElement>) => {
+        setDragging(false);
+        if (disabled || !hasFiles(event)) return;
+        event.preventDefault();
+        model.addFiles(Array.from(event.dataTransfer.files));
+      },
+    },
+  };
+}
 
-  async function ask() {
-    if (blocked || sending.current) return;
-    sending.current = true;
-    try {
-      if (await onAsk(text)) setText('');
-    } finally {
-      sending.current = false;
-    }
+function onBoxKeyDown(event: KeyboardEvent<HTMLTextAreaElement>, model: ComposerModel, requestOpen: boolean) {
+  if (event.key === 'Backspace' && model.text === '') {
+    model.removeLastChip();
+    return;
   }
+  // Shift+Enter is the browser's new line. Enter while an input method is composing picks a candidate.
+  if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return;
+  // Enter is the page's key in every state, so it never adds a line. While a request is open it sends nothing.
+  event.preventDefault();
+  if (requestOpen) return;
+  void model.submit();
+}
 
-  return { text, setText, ask };
+function AskButton({ props, model, gateId }: { props: ComposerProps; model: ComposerModel; gateId: string }) {
+  const gated = !props.requestOpen && model.gate !== null;
+  return (
+    <button
+      type="button"
+      className={styles.ask}
+      disabled={props.busy || model.pending || props.disabled || gated}
+      aria-describedby={gated ? gateId : undefined}
+      onClick={() => (props.requestOpen ? props.onStop() : void model.submit())}
+    >
+      {props.requestOpen ? STOP_LABEL : ASK_LABEL}
+    </button>
+  );
+}
+
+/** The hidden file input the plus menu opens; it takes the six types of the upload rules. */
+function FileInput({ ref, onFiles }: { ref: Ref<HTMLInputElement>; onFiles: (files: readonly File[]) => void }) {
+  return (
+    <input
+      ref={ref}
+      type="file"
+      hidden
+      multiple
+      accept={ACCEPTED_TYPES}
+      aria-hidden="true"
+      tabIndex={-1}
+      onChange={(event) => {
+        onFiles(Array.from(event.target.files ?? []));
+        event.target.value = '';
+      }}
+    />
+  );
 }
 
 export function Composer(props: ComposerProps) {
-  const { requestOpen, busy, disabled, refusal, onAsk, onStop, onEdit } = props;
-  // Disabled or not, a key event still reaches the box: the guard is in `ask`, not in the markup.
-  const { text, setText, ask } = useQuestion(busy || disabled, onAsk);
-
-  function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    // Shift+Enter is the browser's new line. Enter while an input method is
-    // composing picks a candidate.
-    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return;
-    // Enter is the page's key in every state, so it never adds a line. While a
-    // request is open it sends nothing: the button reads Stop.
-    event.preventDefault();
-    if (requestOpen) return;
-    void ask();
-  }
+  const model = useComposerModel(props);
+  const drop = useDropTarget(model, props.disabled);
+  const fileInput = useRef<HTMLInputElement | null>(null);
+  const gateId = useId();
 
   return (
-    <div className={styles.composer}>
-      <div className={styles.row}>
-        <textarea
-          className={styles.box}
-          aria-label={QUESTION_FIELD_LABEL}
-          placeholder={QUESTION_PLACEHOLDER}
-          rows={QUESTION_ROWS}
-          disabled={disabled}
-          value={text}
-          onChange={(event) => {
-            setText(event.target.value);
-            onEdit();
-          }}
-          onKeyDown={onKeyDown}
+    <div className={drop.dragging ? styles.dragging : styles.composer} data-drop-target {...drop.handlers}>
+      <textarea
+        className={styles.box}
+        aria-label={QUESTION_FIELD_LABEL}
+        placeholder={QUESTION_PLACEHOLDER}
+        rows={QUESTION_ROWS}
+        disabled={props.disabled}
+        value={model.text}
+        onChange={(event) => model.changeText(event.target.value)}
+        onKeyDown={(event) => onBoxKeyDown(event, model, props.requestOpen)}
+      />
+      <div className={styles.bar}>
+        <PlusMenu
+          disabled={props.disabled}
+          onAttachFromMaterials={model.openPicker}
+          onUploadFromDevice={() => fileInput.current?.click()}
+          onPickRoutine={(routine) => model.pickRoutine(routine.id)}
         />
-        <button
-          type="button"
-          className={styles.button}
-          disabled={busy || disabled}
-          onClick={() => (requestOpen ? onStop() : void ask())}
-        >
-          {requestOpen ? STOP_LABEL : ASK_LABEL}
-        </button>
+        <CourseMenu course={model.choices.course} onPick={model.pickCourse} disabled={props.disabled} />
+        <ChipRow model={model} />
+        <span className={styles.end}>
+          <DepthMenu depth={model.depth} onPick={model.pickDepth} disabled={props.disabled} />
+          <AskButton props={props} model={model} gateId={gateId} />
+        </span>
       </div>
-      {refusal !== null && (
-        <p className={styles.refusal} role="alert">
-          {refusal}
-        </p>
+      <ComposerLines model={model} requestOpen={props.requestOpen} gateId={gateId} />
+      <FileInput ref={fileInput} onFiles={model.addFiles} />
+      {model.pickerOpen && (
+        <MaterialPicker
+          attachedIds={model.fileIds}
+          full={model.full}
+          onPick={model.pickFile}
+          onClose={model.closePicker}
+        />
       )}
     </div>
   );

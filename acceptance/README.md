@@ -7,6 +7,8 @@ way a person would, and the laptop checks the hard facts behind its back.
 
     just accept 21        (from bb2dash-stack, on main, after the phase is merged)
 
+Pack 21 is kept in this folder as the suite's fixture (`acceptance.test.mjs`, `pack-check.mjs`, `scripts/accept-proofs.test.mjs` and `web/e2e/accept.lib.ts` read it) and is not run again: Phase 24b replaced the page it walks, so `just accept 21` is not run after 2026-10-15 (Phase 21 stays accepted, DECISIONS 2026-10-08).
+
 This folder holds what a run needs to know about a phase. The machinery that runs it (the
 container, its firewall, the wrapper script) is in bb2dash-stack.
 

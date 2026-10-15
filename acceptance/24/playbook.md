@@ -33,13 +33,16 @@ through the page's own session, by the `document_id` in that run's `11.json`.
 
 ## Stage: walk
 
-The page under test is the Workspace, a chat page of the app. On the left of the page is the list
-of conversations. To the right of the list is the message column, which holds the questions of one
-conversation, each question followed by its answer. Under the message column is the question box,
-and to the right of the question box is one button. That button reads `Ask`; while an answer is
-being written, the same button reads `Stop`. A question is typed into the question box and sent
-with that button. An answer carries a badge above its text, which names the model level that wrote
-the answer. In the list, each conversation's row has a button that reads `Archive`.
+The page under test is the Workspace, a chat page of the app, as Phase 24b built it. On the left
+of the page is the list of conversations. With no conversation open the page is the lobby: a line
+that reads `What are you working on?` over the question box. With a conversation open, to the
+right of the list is the message column, which holds the questions of one conversation, each
+question followed by its answer. Under the message column is the question box, with a row of chips
+above it, and to the right of the question box is one button. That button reads `Ask`; while an
+answer is being written, the same button reads `Stop`. A question is typed into the question box
+and sent with that button. An answer carries a badge above its text, which names the model level
+that wrote the answer; under a finished answer may stand a row that says how many sources the
+answer used. In the list, each conversation's row has a button that reads `Archive`.
 
 The Workspace service, the program that writes the answers, is running. This stage asks the live
 assistant eight questions. Run each title one time, in the order of your list of titles. A title
@@ -61,15 +64,15 @@ asks no question.
 
 Pass when all of this is true:
 
-- `2-open.png` shows the Workspace page with no conversation open:
+- `2-open.png` shows the Workspace page with no conversation open, which is the lobby:
   - in the top bar, the link that reads `Workspace` is drawn in a different colour from the other
     links of the top bar and has a line under it, and no other link of the top bar has a line
     under it;
   - on the left, a heading that reads `Conversations`, with the list of conversations under it;
-  - the message column holds one line, which reads `Ask a question to start a conversation.`, and
-    nothing else;
-  - under the message column, the question box, and to the right of the question box the button,
-    which reads `Ask`.
+  - a line that reads `What are you working on?`, and under it the question box, with the button
+    that reads `Ask` to its right;
+  - a heading that reads `Routines` with at least one routine under it;
+  - no message column of a conversation, and no question or answer.
 - Nowhere in `2-open.png` is there a line that reads `The Workspace service is offline.`
 - In `2.json`: `path` is `/workspace`, `channel` is `joined`, `offline_line_shown` is false.
 
@@ -108,7 +111,7 @@ What `badge` must be:
   words.
 
 If `badge` is not the text the list gives for the step, the step is a `fail`: which level answers
-which kind of question is what these steps are for. A `Used:` line under an answer may be there or
+which kind of question is what these steps are for. A sources row under an answer may be there or
 not; neither is a fault.
 
 A picture in which the answer's text runs past the edge of the message column is only the scrolled
@@ -152,8 +155,9 @@ Pass when all of this is true:
 Two things about `9-stopped.png` are not faults. The button may look dimmed: the picture is taken
 straight after the press, and the page dims the button while it waits for the stop to be
 confirmed. A dimmed button that reads `Ask` meets the condition. And the facts in `9.json` about the
-stopped answer are taken a moment before the picture, so a `Used:` line may be in the facts and not
-in the picture.
+stopped answer are taken a moment before the picture, so a sources row may be in the facts and not
+in the picture. In `9-after.png`, with both answers finished, the button that reads `Ask` is not
+dimmed: `ask_enabled_after_stop` in `9.json` is true, which the test checked.
 
 If the test failed and `test_error` in `9.json` begins `inconclusive:`, the answer was finished
 before the button could be pressed. Run the title a second time and set `reruns` to 1. If
@@ -242,3 +246,220 @@ Pass when all of this is true in `15.json`:
 
 If `test_error` in `15.json` names `carry.json`, the host handed over no file: the verdict is
 `blocked`.
+
+## Stage: page
+
+The page under test is the Workspace, a chat page of the app, as Phase 24b built it. With no
+conversation open the page is the lobby: a line that reads `What are you working on?`, under it
+the question box with one button that reads `Ask`, a row of chips above the question box, a heading
+that reads `Routines` with the routines under it, and, further down, recent conversations. Above
+the lobby and above every conversation stands one line with today's date and its weekday. Beside
+the question box is a chip for the course and a button that reads `Depth`. A question goes into the
+question box and is sent with the button that reads `Ask`; while an answer is being written the
+same button reads `Stop`. Under a finished answer stands a row that says how many sources the
+answer used (`1 source`, `3 sources`); pressing that row opens a side panel on the right, on a tab
+that reads `Sources`. The panel has three tabs, which read `Sources`, `Files` and `Memory`, and a
+button that reads `Hide panel`; folded, the page shows a button that reads `Show panel`.
+
+The Workspace service, the program that writes the answers, is running. This stage asks the live
+assistant two questions. Run each title one time, in the order of your list of titles.
+
+Step 17 leaves its conversation open on purpose: a later stage waits for the service to remember
+it, and the last step of the run archives it. Do not archive it, and do not run a title a second
+time unless the operator's rules on a second run allow it.
+
+### Step 17: `17 lobby and options`
+
+The test opens the Workspace with no conversation, picks the course `IST 323` on the course chip
+and `Standard` on the depth menu, types a question and sends it with the button that reads `Ask`.
+It waits until the answer is finished and takes three pictures: `17-lobby.png` before anything is
+picked, then `17-end.png` and `17-start.png` as steps 3 to 8 of the walk take them.
+
+Pass when all of this is true:
+
+- `17-lobby.png` shows the lobby: a line that reads `What are you working on?`, the question box
+  with the button that reads `Ask`, a heading that reads `Routines` with at least one routine under
+  it, and one line with a date and its weekday. The message column of a conversation is not in the
+  picture.
+- In `17.json`: `lobby_shown` is true; `today` is a date of the form `YYYY-MM-DD`;
+  `course_picked` is `IST 323`; `depth_picked` is `Standard`; `state` is `done`; `line` is null;
+  `answer_chars` is 1 or more; `badge` reads `Sonnet · standard`; `depth_after_ask` is `standard`.
+- `17-start.png` shows the question and, between the question and the answer's text, a badge with
+  the same text as `badge` in `17.json`. Above the question box a chip names the course
+  (`IST 323`).
+- `17-end.png` shows the last lines of the answer's text, and under them a row that says how many
+  sources the answer used.
+- `answer` in `17.json` is text that answers the question. It is not an error message and it is
+  not empty.
+
+If `badge` is not `Sonnet · standard`, the step is a `fail`: the depth picked on the page decides
+the level, and that is what this step is for. `17.json` holds no `archived_ids`: the conversation
+stays open on purpose, and that is not a fault.
+
+### Step 18: `18 sources and panel`
+
+The test asks one question that a course syllabus answers, waits until the answer is finished,
+notes the sources row under the answer, presses it, looks at the panel, folds the panel away with
+the button that reads `Hide panel`, and archives the conversation it started. It takes three
+pictures: `18-end.png` and `18-start.png` as the walk takes them, and `18-panel.png` with the panel
+open.
+
+Pass when all of this is true:
+
+- In `18.json`: `state` is `done`, `line` is null, `answer_chars` is 1 or more, `badge` reads
+  `Haiku · lookup`; `sources_row` is a text of the form `N sources` or `1 source` with N above 0;
+  `forbidden_elements_in_answer` is 0; `panel_open_controls` is 1 or more; `panel_folded` is true;
+  `archived_ids` holds `conversation_id`, and `archive_writes` equals the number of ids in
+  `archived_ids`.
+- `18-end.png` shows the last lines of the answer's text and, under them, the sources row.
+- `18-panel.png` shows, on the right of the page, a panel whose picked tab reads `Sources`, with at
+  least one row in it, and each row has a button that reads `Open`. The answer's text is still on
+  the page, to the left of the panel.
+- The answer's text in `18-end.png` is laid out as text: headings, lists or paragraphs. It holds no
+  picture and nothing drawn as a link.
+
+`chips_in_answer` in `18.json` may be 0 or more: whether the answer cites a source by a numbered
+chip is the model's choice, and neither count is a fault. Write the number in `notes`.
+
+## Stage: page-upload
+
+The page under test is the Workspace, a chat page of the app, as Phase 24b built it. Above the
+question box is a button that reads `Add`; it opens a menu, and one entry of that menu reads
+`Upload from this device`. A file picked there becomes a chip above the question box, and the chip
+shows the file's state in words: it reads `Waiting`, then `Reading`, then `Indexing`, then
+`Indexed`. The side panel's tab that reads `Files` lists every upload with its state, a field at
+the top of that tab reads `Filter by title`, and each row has a button that reads `Delete`, which
+after one press reads `Press again to delete`.
+
+The Workspace service and the ingest worker, the program that indexes uploads, are running. This
+stage asks the live assistant one question (step 20). Run each title one time, in the order of
+your list of titles. Step 20 works from the file step 19 made and takes its facts file; if `19.json`
+holds no `nonce_id`, give step 20 the verdict `blocked` and say in `saw` that it waited on step 19.
+
+### Step 19: `19 upload through the page`
+
+The test draws a value that is new in this run, makes a small plain-text file from it, and hands
+the file to the page through the menu entry that reads `Upload from this device`. It watches the
+chip's state until the chip reads `Indexed`, then opens the panel's tab that reads `Files`, types
+the file's name into the field that reads `Filter by title`, and takes two pictures: `19-chip.png`
+with the chip, `19-files.png` with the Files tab.
+
+Pass when all of this is true:
+
+- In `19.json`: `nonce_id` is a uuid; `sha256` is 64 lower-case hex characters; `file_name` begins
+  `acceptance-memo-`; `chip_last_state` is `indexed`; `chip_states` is a list whose last entry is
+  `indexed`; `files_rows_matching` is 1; `files_row_state` is `indexed`.
+- `19-chip.png` shows one chip above the question box with the file's name and the word
+  `Indexed`.
+- `19-files.png` shows the panel on the tab that reads `Files`, with one row that names the file
+  and reads `Indexed`.
+
+`chip_states` may hold fewer than four states: a small file is read in a few seconds and a state
+the page did not catch is not a fault. `chip_waited_ms` is how long the chip took; write it in
+`notes`.
+
+### Step 20: `20 ask with the file attached`
+
+The test hands the same file to the page a second time, through the same menu entry; the page
+finds the row the file already has and shows the chip as `Indexed` at once. The test then types a
+question about the file and sends it. It waits until the answer is finished, takes the two pictures
+of the walk, and archives the conversation it started.
+
+Pass when all of this is true:
+
+- In `20.json`: `chip_last_state` is `indexed`; `state` is `done`; `line` is null; `answer_chars`
+  is 1 or more; `badge` reads `Haiku · lookup`; `sources_row` is a text of the form `N sources` or
+  `1 source` with N above 0; `archived_ids` holds `conversation_id`, and `archive_writes` equals
+  the number of ids in `archived_ids`.
+- `20-start.png` shows the question, the badge between the question and the answer's text, and
+  above the question box a chip that names the file.
+- `20-end.png` shows the last lines of the answer's text and, under them, the sources row.
+- `answer` in `20.json` is text that answers the question. It is not an error message.
+
+Guidance, not a pass condition: the answer should speak of a lamp and its hinges or shade. The
+host checks in the database that the file was attached and read; you check that the answer is
+whole. Write in `notes` whether the answer spoke of a lamp.
+
+## Stage: page-delete
+
+The page under test is the Workspace, a chat page of the app, as Phase 24b built it. The side
+panel's tab that reads `Files` lists every upload with its state, a field at the top of that tab reads
+`Filter by title`, and each row has a button that reads `Delete`, which after one press reads
+`Press again to delete`. The host has read in the database that the file step 19 made was attached
+to step 20's question; `carry.json` holds step 19's `nonce_id`, from which the test rebuilds the
+file's name.
+
+This stage asks no question. Run the one title one time.
+
+### Step 21: `21 delete through the files tab`
+
+The test opens the panel's tab that reads `Files`, types the file's name into the field that reads
+`Filter by title`, presses the row's button that reads `Delete` and then the same button, which
+now reads `Press again to delete`, and waits until the row has left the list. It takes one
+picture, `21-files.png`, after the delete.
+
+Pass when all of this is true:
+
+- In `21.json`: `files_rows_after` is 0, and `deleted_at` is a time.
+- `21-files.png` shows the panel on the tab that reads `Files` with no row that names the file.
+  The tab may read `No upload matches.` or `No uploads yet.`, or list other uploads; none of these
+  is a fault.
+
+## Stage: page-memory
+
+The page under test is the Workspace, a chat page of the app, as Phase 24b built it. The side
+panel's tab that reads `Memory` lists what the assistant remembers of earlier conversations, one
+row per remembered conversation, each with a button that reads `Delete`; a field at the top of that
+tab reads `Filter by title`. The assistant remembers a conversation once it has been quiet for
+fifteen minutes after its last answer. Step 17 of this run asked a question and left its
+conversation open for that reason. `carry.json` holds step 17's `conversation_id`.
+
+This stage asks no question. Run the one title one time.
+
+### Step 22: `22 memory item shown`
+
+The test opens step 17's conversation with the panel on the tab that reads `Memory`, types a word
+of step 17's question into the field that reads `Filter by title`, and looks for a row. While no
+row matches it waits half a minute and opens the page again, for up to eight and a half minutes.
+It takes one picture, `22-memory.png`, when it stops.
+
+Pass when all of this is true:
+
+- In `22.json`: `memory_item_shown` is true; `memory_reloads` is 1 or more; `first_seen_at` is a
+  time.
+- `22-memory.png` shows the panel on the tab that reads `Memory` with one row, and that row has a
+  button that reads `Delete`.
+
+If `memory_item_shown` is false, the service did not remember the conversation within the wait:
+the step is a `fail`. Write `memory_waited_ms` in `saw`. If `test_error` names `carry.json`, the
+host handed over no conversation: the verdict is `blocked`.
+
+## Stage: page-forget
+
+The page under test is the Workspace, a chat page of the app, as Phase 24b built it. The side
+panel's tab that reads `Memory` lists what the assistant remembers, one row per remembered
+conversation, each with a button that reads `Delete`, which after one press reads
+`Press again to delete`. `carry.json` holds step 17's `conversation_id`, and the host has read in
+the database that the remembered item of that conversation exists.
+
+This stage asks no question. Run the one title one time.
+
+### Step 24: `24 memory item deleted`
+
+The test opens step 17's conversation with the panel on the tab that reads `Memory`, types the
+same word into the field that reads `Filter by title`, presses the row's button that reads
+`Delete` and then the same button, which now reads `Press again to delete`, and waits until the
+row has left the list. It takes one picture, `24-memory.png`, after the delete, and then archives
+step 17's conversation through the list's own button that reads `Archive`.
+
+Pass when all of this is true:
+
+- In `24.json`: `items_before` is 1; `items_after` is 0; `deleted_at` is a time; `archived_ids`
+  holds `conversation_id`, and `archive_writes` equals the number of ids in `archived_ids`.
+- `24-memory.png` shows the panel on the tab that reads `Memory` with no row that matches the
+  filter. The tab may read `No remembered item matches.` or `Nothing is remembered yet.`; neither
+  is a fault.
+
+If `test_error` names `carry.json`, the host handed over no conversation: the verdict is
+`blocked`. If the item was not listed when the step began (`test_error` says the item step 22 saw
+is no longer listed), the step is a `fail`.

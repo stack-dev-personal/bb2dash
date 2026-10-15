@@ -10,7 +10,7 @@
  * network.
  */
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, keepPreviousData } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -324,6 +324,10 @@ describe('the options rows', () => {
     expect(two).not.toEqual(one);
     expect(requestOptionsOptions(CONVERSATION, [11, 10]).queryKey).toEqual(two);
     expect(two.slice(0, 3)).toEqual(workspaceAskKeys.options(CONVERSATION));
+  });
+
+  it('keeps the previous rows while a new id list is read (round 2, R2-2a): a rich answer never blinks to plain', () => {
+    expect(requestOptionsOptions(CONVERSATION, [10, 11]).placeholderData).toBe(keepPreviousData);
   });
 
   it('is still matched by the frozen prefix key when an ask invalidates it (R2-1)', async () => {

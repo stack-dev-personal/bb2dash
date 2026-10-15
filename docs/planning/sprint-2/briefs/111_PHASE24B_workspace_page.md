@@ -8,14 +8,20 @@ Date 2026-10-08 · PM: the Fable session · Product manager: Stack · Requiremen
 line 13; the PM confirms the one numbering at the freeze) · No migration: the page uses 24a's
 objects; 24a used the whole block 190–199, so a database change here needs a ruling and a new block · One PR in
 bb2dash · Verification file
-`docs/planning/sprint-2/verification/111a_PHASE24B_VERIFICATION.md`, called 111a below · Status:
-**drafted with brief 109 on Stack's answers of 2026-10-08, and through the challenge round of the
-same day** (brief 109, Appendix 2). It is frozen at its gate, after a re-read against Phase 22 as
-merged: every token name, class name and line number of Phase 22 below is read again then.
+`docs/planning/sprint-2/verification/111a_PHASE24B_VERIFICATION.md`, called 111a below · Status: **part 2, the page, built, reviewed and walked 2026-10-15; PR #109 open on Stack's
+merge word; the cut-over turns memory on and `just accept 24` proves it** (111a "Part 2"; the desktop half of
+the walk waits for his sign-in); before that,
+**FROZEN 2026-10-15 at the gate** (the section "Frozen at the gate" below: Phase 22 as merged read
+again, token by token and class by class, every cited line number checked, probe Q-5 run, and
+amendments (f) to (h) folded into the Contract; W-87 and W-88 are cut from the freeze commit, whose
+hash 111a records). Before that: drafted with brief 109 on Stack's answers of 2026-10-08, and through
+the challenge round of the same day (brief 109, Appendix 2). **Where "Frozen at the gate" and any
+line above it differ, "Frozen at the gate" is current.**
 
 **The design is carried out with the `ui-ux-pro-max` skill, in Phase 22's design language.** Dark by
 default with a light version; black, grey and white with `#ff0000` as the one accent; pill buttons;
-square bordered cards (brief 103 on `feat/styling-22` at 3d02033, lines 57-58 and 386-389). The
+square bordered cards (brief 103 on `feat/styling-22` at 3d02033, lines 57-58 and 386-389; as merged
+the rules stand in `design-system/bb2dash/MASTER.md` lines 49, 96 and 171, read again at the freeze). The
 project's rules hold: CSS Modules and custom properties, no Tailwind, no new UI framework, no literal
 where a token exists.
 
@@ -284,6 +290,9 @@ written keep what they quoted from it. 24a gives the browser no way to change a 
 * The parser never throws. An unclosed form shows as text while the answer streams. Blocks are kept
   between flushes.
 * `withoutBoldMarkers` goes (`thread.ts:150`) with its test (`web/test/Workspace.thread.test.ts:391`).
+  **Amended in round 2 (R2-6, 2026-10-15):** it goes for `rich` answers, which the parser formats; a `plain`
+  answer and a stored answer with no options row (every conversation before 24b) keep Stack's ruling of
+  2026-10-07, the closed bold pairs stripped before `plainBlocks`.
 * The composer sends `format: "rich"`. A stored answer of a request with no options row, or with
   `plain`, is shown as plain text, as today.
 
@@ -536,10 +545,10 @@ it. Nobody answers a running worker by message (ruling W-S).
 
 | worker | stream | branch | worktree | owns (disjoint) | tasks |
 |---|---|---|---|---|---|
-| W-86 | data layer | `feat/workspace-page-24b-data` | `bb2dash-wt-24b-data` | the nine new files under `web/src/lib/` and their tests; `use-workspace-stream.ts` and its three tests (since 2026-10-14 `AnswerBody.tsx`, its module and its test are W-88's: "The data layer's frozen exports") | 2 (Q-4), 4 to 6 |
-| W-87 | composer and lobby | `feat/workspace-page-24b-composer` | `bb2dash-wt-24b-composer` | `Composer`, `PlusMenu`, `DepthMenu`, `MaterialPicker`, `Lobby`, `ExamplePrompts`, their modules and tests; `Workspace.empty.test.tsx` | 7, 8 |
-| W-88 | thread and panel | `feat/workspace-page-24b-thread` | `bb2dash-wt-24b-thread` | `page.tsx`, `Workspace.tsx`, `Workspace.module.css`, `Thread`, `MessageList`, `ConversationList`, `TierBadge`, `ServiceStatus`, `SidePanel` and its tabs, `thread.ts`, `route.ts`, their modules; both layout checks; `Workspace.test.tsx`, `Workspace.thread.test.ts`, `Workspace.failures.test.tsx`, `Workspace.rereads.test.tsx`, `Workspace.service.test.tsx`, `workspace-harness.tsx` | 9 to 11 |
-| PM | integration | `feat/workspace-page-24b` | `bb2dash-wt-24b` | `workspace-labels.ts` and its test; the pack and `accept24.spec.ts`; **the acceptance files pack 21 shares:** `web/e2e/accept.lib.ts`, `web/e2e/walk21.lib.ts` and `walk21.window.ts` (the lines that read the two changed attributes), `acceptance/21/playbook.md` (only a sentence the pack check would otherwise fail), `acceptance/README.md` (one line), and the other `walk21*` files with `accept21.spec.ts` and `workspace-acceptance-helpers.spec.ts` as read at the cut; Phase 22's fixture and phone cases; the token baseline if a count moves; `compose.yaml`'s one value; state docs; 111a | 1 to 3, 12 to 16 |
+| W-86 | data layer (**done**: merged to `main` as PR #108, 022812c, 2026-10-15) | `feat/workspace-page-24b-data` | `bb2dash-wt-24b-data` | the nine new files under `web/src/lib/` and their tests; `use-workspace-stream.ts` and its three tests (since 2026-10-14 `AnswerBody.tsx`, its module and its test are W-88's: "The data layer's frozen exports") | 2 (Q-4), 4 to 6 |
+| W-87 | composer and lobby (**done**: merged at 8a02fb2; rounds 2 and 3 at 7947566 and aa16c0e) | `feat/workspace-page-24b-composer` | `bb2dash-wt-24b-composer` | `Composer`, `PlusMenu`, `DepthMenu`, `MaterialPicker`, `Lobby`, `ExamplePrompts`, their modules and tests; `Workspace.empty.test.tsx` | 7, 8 |
+| W-88 | thread and panel (**done**: merged at 8a02fb2; rounds 2 and 3 at 05e942b and 27b099e) | `feat/workspace-page-24b-thread` | `bb2dash-wt-24b-thread` | `page.tsx`, `Workspace.tsx`, `Workspace.module.css`, `Thread`, `MessageList`, `ConversationList`, `TierBadge`, `ServiceStatus`, `SidePanel` and its tabs, `thread.ts`, `route.ts`, their modules; both layout checks; `Workspace.test.tsx`, `Workspace.thread.test.ts`, `Workspace.failures.test.tsx`, `Workspace.rereads.test.tsx`, `Workspace.service.test.tsx`, `workspace-harness.tsx` | 9 to 11 |
+| PM | integration | `feat/workspace-page-24b` | `bb2dash-wt-24b` | `workspace-labels.ts` and its test; `workspace-examples.ts`'s `todayWords` (added at the freeze); the pack and `accept24.spec.ts` with `accept24.lib.ts`; **the acceptance files pack 21 shares:** `web/e2e/accept.lib.ts`, `web/e2e/walk21.lib.ts` and `walk21.window.ts` (the lines that read the two changed attributes), `acceptance/21/playbook.md` (only a sentence the pack check would otherwise fail), `acceptance/README.md` (one line), and the other `walk21*` files with `accept21.spec.ts` and `workspace-acceptance-helpers.spec.ts` as read at the cut; Phase 22's fixture and phone cases (`web/e2e/phone-width.spec.ts`, `web/e2e/theme-walk.spec.ts`); the token baseline if a count moves; `design-system/bb2dash/pages/workspace.md` (rewritten to this page); `compose.yaml`'s one value; state docs and root `CLAUDE.md`'s Workspace paragraph; 111a | 1 to 3, 12 to 16 |
 
 Not edited by anyone in this phase: `acceptance/acceptance.test.mjs`, `acceptance/pack-check.mjs`,
 `acceptance/21/manifest.json`, `acceptance/21/proofs.json` and `scripts/accept-proofs.test.mjs`. They
@@ -1010,6 +1019,358 @@ panel) imports `parseAnswer`, `plainBlocks`, `blocksText`, `citationFor`, `cited
 `createSignedUploadUrl`, `filterByTitle`, `useWorkspaceMemory`, `forgetMemoryItem`, `useWorkspaceProfile`,
 `parseAboutMe`, `setAboutMe`, `useWorkspaceIndexStatus`, `indexStatusLines`, the stream's `sources`,
 `stopped` and `markStopped`, and the labels. `AnswerBody.tsx` is W-88's, over `parseAnswer`'s blocks.
+
+## Frozen at the gate (PM, 2026-10-15)
+
+The gate opened on 2026-10-15 (Phase 22 at `dff1e05`, 24a at `2b7c388` and 24ab on `main`; `just accept 24`
+green, run `20261015T141817Z`; the data layer on `main` as PR #108). This section is what the PM read and
+ruled at the freeze. It binds W-87 and W-88 together with the Contract and "The data layer's frozen
+exports"; where it and any earlier line differ, this section is current. The freeze commit's hash is in
+111a ("Part 2").
+
+### The gate and the branch, checked
+
+* `git merge-base --is-ancestor dff1e05 origin/main` → 0 (Phase 22); `git merge-base --is-ancestor 2b7c388
+  origin/main` → 0 (24a, PR #97); DECISIONS holds the row "Phase 24a accepted" (2026-10-15).
+* `origin/main` is `022812c` (PR #108) and is an ancestor of the phase branch's HEAD (exit 0): nothing to
+  merge. Since the branch's last green gates (7e71eb7, 111a) it holds docs (3c237ed) and the freeze's two
+  commits, so the gates are not re-run before the cut; they run again at integration (task 15).
+
+### Phase 22 as merged, read again
+
+**The two folders are Phase 21's with one Phase 22 line.** `web/src/app/(app)/workspace/`: `page.tsx` (34
+lines), `Workspace.tsx` (380), `Workspace.module.css` (37). `web/src/components/workspace/`: `Composer.tsx`
+(128) and its module (33), `ConversationList.tsx` (221) and module (106), `MessageList.tsx` (216) and module
+(93), `ServiceStatus.tsx` (112) and module (16), `TierBadge.tsx` (20) and module (6), `route.ts` (19),
+`thread.ts` (332). Phase 22's sweep of screens B (`18dd4ce`, then `9d85a10`) changed one declaration in them,
+`Workspace.module.css:8`, `minmax(14rem, 18rem)` → `minmax(var(--size-conversations-min),
+var(--size-conversations-max))`, and left every other line as Phase 21 merged it on 2026-10-07 and amended it
+(W-1 `392c35f`, W-2 `bff1c24`, R3-5 `012e93d`, W-3 `3d9ebb1`, CR-9 `69cd76a`). The six module headers still
+read "Existing tokens only; Phase 22 restyles": the rewrite drops that line. Today's class names, which the
+Tests table keeps or renames: `Workspace.module.css` `.workspace`, `.thread`, `.problem`;
+`MessageList.module.css` `.column`, `.turns`, `.turn`, `.question`, `.answer`, `.text`, `.used`, `.line`,
+`.empty`, `.emptyLink`; `Composer.module.css` `.composer`, `.row`, `.box`, `.button`, `.refusal`;
+`ConversationList.module.css` `.list`, `.head`, `.heading`, `.new`, `.rows`, `.row`, `.rowLink`, `.rowTitle`,
+`.rowWhen`, `.rowAction`, `.toggle`, `.empty`, `.problem`; `ServiceStatus.module.css` `.offline`, `.problem`;
+`TierBadge.module.css` `.badge`. Every one composes from or reads tokens only; `.question` draws its rule with
+`2px solid var(--color-accent)` (the ink, not red), and `.column` is `position: relative; overflow-y: auto;
+max-height: 62dvh`.
+
+**Tokens (`web/src/app/globals.css`, 622 lines: the dark `:root` 28–301, the light
+`:root[data-theme='light']` 303–443, every colour and shadow name declared in both).** Roles 30–39:
+`--color-bg`, `--color-panel`, `--color-surface`, `--color-surface-press`, `--color-text`, `--color-accent`
+(the ink, = `--color-neutral-100`), `--color-on-accent`, `--color-accent-2`, `--color-divider`,
+`--color-muted`. Ramps 42–68: `--color-neutral-100` to `-900`; `--color-accent-100` to `-900`, of which only
+`--color-accent-500: #ff0000` is red (every other step points at the neutral of the same number);
+`--color-accent-2-100` to `-900`. Chrome 71–76: `--color-danger`, `--color-danger-bg`, `--color-hover`,
+`--color-active`, `--color-scrollbar`, `--color-scrollbar-hover`. Type 79–107: `--font-heading` (Source
+Serif 4), `--font-heading-weight`, `--font-body` (Source Sans 3), `--font-mono` (Source Code Pro),
+`--font-weight-regular/medium/semibold/bold`, `--text-xs/sm/base/md/lg/xl/2xl` (11, 12.5, 13.5, 15, 17, 20,
+28 px) and the fixed steps `--text-3xs/2xs/10-5/11-5/12/13/14/19`. Space 110–116: `--space-1/2/3/4/6/8/12`
+(2.8 to 33.6 px). Radii 119–129: `--radius-xs/sm/md/lg` (1, 3, 4, 6 px), `--radius-control` and
+`--radius-chip` (999 px: the pill), `--radius-bar`, `--radius-day`, `--radius-3`. Shadows 132–136:
+`--shadow-sm` (the 1 px ring, a card at rest), `--shadow-hover`, `--shadow-md`, `--shadow-lg`,
+`--shadow-mark`. Sizes 139–152: `--size-underline`, `--size-underline-mark`, `--size-underline-offset`,
+`--size-notice-bar`, `--size-focus`, `--size-focus-gap`, `--size-scrollbar`, `--size-check`, `--size-target`
+(24 px, a press area), `--size-window-controls`. Layout 155–163: `--nav-height` (52 px), `--content-max`,
+`--sidebar-side`, `--sidebar-width` (260 px). Motion 209–228: `--motion-press/state/enter/enter-lg/delay/
+shift/spin/exit/exit-lg`, `--ease-out/linear/in`, `--motion-control`. The fixed sizes 231–294: `--size-3` to
+`--size-760` (among them `--size-44`, the phone target; `--size-280`; `--size-panel-max` 360 px at 283;
+`--size-conversations-min` 14rem and `--size-conversations-max` 18rem at 289–290; `--size-panel-gutter`,
+`--size-toast-top`, `--size-toast-width`, `--size-search-popover-max`). The mixes 295–317: `--color-scrim`,
+`--color-scrim-popout`, `--color-text-45/30/78`, the `--color-mix-*` names and `--color-accent-tint-6/7/12`.
+Global rules: `.sr-only` (478–488), the focus ring (492–498: `:focus-visible` outside a dialog takes
+`--size-focus` of the ink), `[data-loading]` with `@keyframes arrives` and the reduced-motion block (596–621).
+**No worker adds a token.** A size or colour this page needs that no token names is the PM's to add to
+`globals.css` (a colour in both blocks) and to record in 111a; a worker writes its need in its record and
+uses the nearest token meanwhile.
+
+**Shared classes (`web/src/styles/tokens.module.css`, 323 lines)**, composed as the six modules do today
+(`composes: btnPrimary from '@/styles/tokens.module.css'`): `.card` 23, `.cardLg` 33, `.elevSm/Md/Lg`
+39–41, `.rule` 44, `.kicker` 52, `.mono` 60, `.muted` 66, `.tag` 69 (the pill: `--radius-chip`),
+`.tagAccent` 81 (filled ink), `.tagNeutral` 87, `.tagOutline` 94 (the badge's), `.btn` 103 (a pill,
+`--radius-control`, `scale(0.98)` on press), `.btnPrimary` 130 (the ink; disabled is a flat grey pill at
+opacity 1, 145–150), `.btnSecondary` 152, `.btnGhost` 164 (the quiet, underlined button), `.field` 177,
+`.input` 186 (the well: `--color-bg` inside a `--color-neutral-600` edge, `--radius-md`), `.glyph*`
+222–251, `.errorNotice` 264 (the app's one error form), `.tip` 283.
+
+**The design system (`design-system/bb2dash/MASTER.md`).** Red is opt-in: a rule is red only when it names
+`--color-accent-500`, and red marks three things, where you are, what is most urgent and what is unread,
+never text (line 49). The top bar is square; buttons are pills; cards are square with a clear edge (96).
+One primary button per view, no red button, nothing lifts on hover (171). The radii table is 85–91.
+`pages/workspace.md` was written on 2026-10-08 for Phase 21's page and says "no module is added" and
+"answers are plain text": both are superseded by this brief, and the PM rewrites that page in this PR.
+
+**The frame.** `web/src/app/(app)/layout.tsx`: `TopNav`, then `.body` (a flex row in `--sidebar-side`)
+holding `CourseSidebar` and `ContentPane` (`.main`, `Shell.module.css:53–66`: `position: relative;
+overflow-y: auto; scrollbar-gutter: stable`, padding `--space-8 --space-12 --space-12`, at ≤720 px
+`--space-6 --space-4 --space-8`; its children `flex-shrink: 0`). The course rail is 260 px in flow at
+≥1024 px and a fixed drawer at ≤1023.98 px (`CourseSidebar.module.css:147–`), open or closed by
+`html[data-sidebar]`, his remembered ☰ state. The page header pattern is `Shell.module.css` `.header`,
+`.headerText`, `.kicker`, `.title` (76–98), as `page.tsx` uses it with `PAGE_KICKER`.
+
+**The breakpoints the audit allows.** `web/test/token-audit.allowlist.ts` is FROZEN at Phase 22's task 2 and
+is never edited. An `@media` width condition may hold only `480px`, `620px`, `640px`, `720px`, `760px`,
+`820px`, `900px` or `1023.98px` (A1); one `@container` width exists (`CourseTimeline.module.css`, 600 px)
+and any other fails. **So this page folds on `@media (max-width: 1023.98px)` and `@media (max-width:
+720px)` and writes no container query.** `1px` and `2px` pass (A2); every other size is a token;
+`color-mix()` counts; a TSX `style=` key that is not a custom property counts; a `var(--name)` declared
+nowhere fails.
+
+**The token audit's clusters (`web/test/token-audit.test.ts:97–140`).** Both Workspace folders are
+`screens-b` by prefix, so every new file lands there with a baseline of 0 (`token-audit.baseline/
+screens-b.json` lists `Workspace.module.css: 0`; a file not listed is 0). One literal fails `npm test`.
+
+**Red files.** `git grep -l "var(--color-accent-500)" -- web/src` lists nine files today (`CourseSubBar`,
+`Inbox`, `AnnouncementsList`, `CourseTimeline`, `PlannerWeek`, `Bell`, `CourseSidebar`, `TopNav`,
+`UpcomingTracker`), none in the Workspace; Phase 22's walk recorded "exactly nine lines" (`WALK.md`
+PD-3). This page names `--color-accent-500` in two modules only, for the picked tab (`SidePanel.module.css`)
+and the picked conversation (`ConversationList.module.css`): eleven after; 111a records the count at
+integration. Nothing else on the page is red, and no status is told by red alone.
+
+**The walk guard and the row 12 fixture.** `web/e2e/walk22.lib.ts:164` `rpcVerdict`: an RPC not in
+`READ_RPCS` is aborted; a table read passes; a storage POST passes only when it signs a read. The fixture
+for `/workspace?c=<fixture>` fulfils four reads, `workspace_conversations`, `workspace_messages`,
+`workspace_requests` and `v_workspace_status` (`phone-width.spec.ts:118–166`, `theme-walk.spec.ts:142–`).
+The new page also reads, every one a select, `workspace_turns`, `workspace_sources`,
+`workspace_request_options`, `workspace_request_attachments`, `workspace_routines`, `workspace_documents`,
+`v_workspace_memory`, `workspace_profile`, `v_workspace_index_status`, `v_work_items`, `v_course_display` and
+`v_bb_files_current`; the PM extends both fixtures (task 12).
+
+### Line numbers the brief cites, read again
+
+| cited above | as merged |
+|---|---|
+| `Composer.tsx:85-93` (Enter) | 85–93 (`onKeyDown`; `if (requestOpen) return;` at 92) |
+| `MessageList.tsx:10-16` (plain text) | 10–16 |
+| `Workspace.tsx:334` (`useWorkspaceStream`) | 353 |
+| `Workspace.module.css:33` (the 720 px step) | 32–36 |
+| `thread.ts:304-309` (`emptyColumnOf`), `:150` (`withoutBoldMarkers`) | 304; 150; `usedLine` 324 |
+| `queries.workspace.ts:684-687` (`workspace_ask`) | 684; `workspace_cancel` 698; the file is 789 lines, at the cap |
+| `PopoutShell.tsx:31-37` | the export at 23, its props 24–37 |
+| `usePopover.ts:29` | 29 |
+| `FileOpenAction.tsx:70-76` | the export at 72 |
+| `queries.materials.ts:136` (`createSignedFileUrl`) | 132 |
+| `queries.today.ts:123-127` (`WORK_ITEM_COLUMNS`) | 123–127 |
+| `Workspace.layout.test.tsx:61-68` (`SCREEN_SHEETS`) | 61–68 |
+| `Workspace.thread.test.ts:391` | 391 |
+| `walk22.lib.ts:164`; brief 103 "line 182" | 164; the fixture is brief 103's inventory row 12 (its line 409) |
+| brief 103 lines 57-58 and 386-389 | drifted; the rules are `MASTER.md` 49, 96 and 171 |
+| `140:196` (no browser path to a stored answer) | unchanged, migration 140 |
+
+### Probe Q-5
+
+* **(1)** Phase 22's real token and class names: above.
+* **(2)** The count of files that name the red step is not a standing test. It is `git grep -l
+  "var(--color-accent-500)"` run at the walk (brief 103 line 2083; `WALK.md` PD-3, nine). No vitest case
+  pins the number (`theme-tokens.test.ts` and `type-tokens.contrast.test.ts` read the step's value only).
+* **(3) PASS.** A scratch vitest case read `import.meta.glob('../src/components/workspace/*.module.css',
+  { eager: true })` and got a map of the folder's modules, each a class-name map (1 passed, 2.8 s; the file
+  was removed, nothing committed). So `Workspace.layout.test.tsx` may read the folder's sheets by glob and
+  drop its hand-written list, as the Tests table asks; `readdirSync` stays for the folder listing.
+
+### Amendments (f) to (h), folded into the Contract
+
+**(f) The course rail beside the chat.** The page never changes the shell's rail: `html[data-sidebar]` is
+his remembered ☰ state and the same on every page. The Workspace lays itself out in the pane it gets:
+
+* **≥1024 px.** The grid is the conversations rail `minmax(var(--size-conversations-min),
+  var(--size-conversations-max))`, the column `minmax(0, 1fr)` with its 80ch cap, and, while the panel is
+  open, the panel `minmax(var(--size-280), var(--size-panel-max))`; folded (no `panel` parameter), two
+  tracks, as today. With the course rail open at 1024 to 1279 px the column is narrow; the walk records the
+  column's width at 1280 px with the rail open and closed (default D-F below, Stack's to judge).
+* **≤1023.98 px.** The panel is a sheet over the page, through `PopoutShell` (the scrim, Esc, focus moved in
+  and handed back): opened by `?panel=<tab>` and the Show panel button, closed by Hide panel, Esc or the
+  scrim, each of which drops the parameter. It is a sheet from the right, as wide as `min(100%,
+  var(--size-panel-max))`.
+* **≤720 px.** The conversations rail is a sheet too, through `PopoutShell`, opened by one button at the top
+  of the column that reads `CONVERSATIONS_HEADING` and closed the same three ways. The composer is docked:
+  `position: sticky; bottom: 0` inside the pane, on the pane's ground (`--color-bg`), so a long thread
+  never pushes it off screen. The message column keeps scrolling inside itself.
+
+**(g) The weekday and today's date.** The page states today's New York date with its weekday on every
+visit, lobby and thread: one line at the top of the Workspace's column (`Workspace.tsx`, W-88), rendered
+once hydrated from `useNow` through `courseToday()` (`web/src/lib/course-dimension.ts:179`),
+`todayLine(todayWords(date))` → `Today is Thursday, October 15, 2026.`, the element carrying
+`data-today="YYYY-MM-DD"`. The example prompts already name a weekday (`dateWords`). The runner's side (a
+weekday in the feed's rows, today's date in the prompt) is `workspace/`'s and out of this phase; it is put
+to Stack in 111a as a follow-up that needs his word and no migration. The page cannot correct a model's
+wrong weekday; it shows the true one beside the answer.
+
+**(h) The composer after a Stop.** The button is disabled only while a question or a Stop is on its way
+(`busy`) or the conversation was not found (`disabled`). After Stop, the moment the cancel settles, in
+success or failure, `busy` is false again; when a later question's answer is stored the button reads Ask,
+is enabled and carries no `aria-busy`. W-88 owns the state (`Thread` in `Workspace.tsx` derives `busy` from
+`ask.isPending || stopper.pending` and nothing else, and `stopper.pending` is `cancel.isPending`, false once
+settled); W-87 owns the rendering (`disabled={busy || disabled}`, and nothing else dims the button; the
+disabled look is `.btnPrimary:disabled`, Phase 22's flat grey). W-88 adds the case to
+`Workspace.failures.test.tsx`: Stop, the cancel settles, a second question is asked and its row stored, and
+the button reads Ask, `toBeEnabled()`, no `aria-busy`.
+
+### Added by the PM at the freeze (commit 9bcbae8)
+
+* `web/src/lib/workspace-examples.ts`: `export function todayWords(today: string): string`,
+  "Thursday, October 15, 2026" (en-US, weekday long, month long, day, year, America/New_York; throws for a
+  string that is not a YYYY-MM-DD date, as `dateWords`). Four cases in `workspace-examples.test.ts`.
+* `web/src/lib/workspace-labels.ts`: `export function todayLine(words: string): string` → `Today is
+  ${words}.`, in the lobby section; sampled in `workspace-labels.test.ts`'s builder list and asserted.
+* The labels file is otherwise as task 3 froze it (f20843c) with W-86's additions accepted at #108. A worker
+  that needs a string it does not hold adds it under a heading "W-87 additions (for the PM to accept)" or
+  "W-88 additions (for the PM to accept)" at the end of the file and of its test, as W-86's rule was, and
+  names it in its record; nothing above the heading changes.
+
+### Data attributes, final
+
+Eight stay: `data-turn`, `data-tier`, `data-answer-text`, `data-turn-line`, `data-workspace-offline`,
+`data-request-id`, `data-channel`, `data-workspace-stream`. Renamed: `data-used` becomes `data-sources` (the
+row under an answer, text `sourcesCountLine(n)`, a button that opens the panel at its rows);
+`data-column-empty="start"` becomes `data-lobby` on the lobby's root, while `data-column-empty="loading"`
+and `="missing"` stay on the thread's empty column. New: `data-source-ref="<ord>"` on a chip in an answer;
+`data-chip="course|routine|file|upload"` on a composer chip; `data-retrieval="<retrieval_state>"` on a turn
+whose row is known; `data-upload-state="<state>"` on a Files row and on an attachment chip;
+`data-panel="sources|files|memory"` on the open panel's root; `data-depth="<depth>"` on the depth menu's
+button; `data-today="YYYY-MM-DD"` on the date line. `accept24.spec.ts` and the shared helpers read these
+(task 14).
+
+### Workers at the gate
+
+W-86 is done (PR #108). W-87 and W-88 are cut from the freeze commit on `feat/workspace-page-24b`, in
+`bb2dash-wt-24b-composer` and `bb2dash-wt-24b-thread`, on Opus. Each types against "The data layer's frozen
+exports" and imports what "What the page's streams start from, at the gate" lists; W-88 also imports
+`todayWords` and `todayLine`. W-87 imports `web/test/workspace-harness.tsx` and does not edit it (it is
+W-88's); a gap goes in W-87's record as a default. Both use `courseToday()` for the New York date,
+`usePopover` for a menu, `PopoutShell` for a sheet and the picker, `FileOpenAction` for a course file,
+`useHydrated()` before any cached row renders. The PM owns everything in the Workers table's PM row and
+nothing a worker owns.
+
+### Defaults taken at the freeze, each Stack's to overturn
+
+* **D-F** The course rail stays his; the Workspace fits the pane it gets; the panel's docked minimum is
+  `--size-280`. If the column at 1280 px with the rail open reads too narrow at the walk, the PM proposes a
+  rule and does not build one.
+* **D-G** The date line is on the page, both screens; the runner's feed and prompt change is a follow-up
+  for his word.
+* **D-H** As (h) above.
+* **D-I** Red marks the picked tab and the picked conversation (where you are), per this brief's "Look",
+  which overrides `pages/workspace.md`'s 2026-10-08 line that the current conversation gets no red bar.
+* **D-J** The conversations rail under 720 px and the panel under 1024 px are `PopoutShell` sheets, so one
+  component owns every modal surface on the page.
+
+## Round 2 (PM, 2026-10-15, after `/code-review main high`, `/security-review` and the PM's browser walk of the preview)
+
+The integrated branch (8a02fb2 and after) passed every SOP gate: typecheck, eslint, build, 3,834 tests in 208 files,
+93.79 % lines, the acceptance suite 103, the table grep empty. `/security-review` found nothing at its bar and one
+hardening note (S-1). `/code-review main high` found thirteen things; the walk of the preview in a headed browser
+(both themes, 1280 and 390 px) found three more. Each goes back to its stream below, numbered; the HIGH ones and
+the walk's are must-fix, the rest should-fix unless the fix costs a frozen export. Every fix: test first, the
+record extended ("Round 2"), commit and push per item, the gates green on the branch, a report under 300 words.
+Nobody answers a running worker.
+
+### W-87 (composer, lobby), on `feat/workspace-page-24b-composer`
+
+* **R2-1 (HIGH, code review 1 and 11).** The depth picked in the lobby is lost on the hop to the thread: the
+  Lobby and the Thread are different components, so the Composer remounts with `START_CHOICES` and reads Auto,
+  though the brief says Quick and Standard stay until he changes them (Deep alone returns to Auto); acceptance
+  step 17 asserts `data-depth="standard"` after its answer. `useConversationReset` can never fire for the same
+  reason and is dead. Fix inside the composer's own files: keep the depth in a page-lifetime store of W-87's
+  (`useSyncExternalStore` over a module-level value, as `routine-request.ts` keeps its seq; no prop joins
+  `ComposerProps`), read on mount, written on each pick and by the Deep-returns-to-Auto rule; remove the dead
+  hook. Test: pick Standard, remount the composer with another `conversationId`, the menu reads Standard; Deep,
+  ask, remount, Auto.
+* **R2-3 (MEDIUM, code review 4).** In the phone sheet `RoutineList` focuses its search field in a mount effect
+  before `PopoutShell`'s own open effect runs, so the shell finds focus already inside the panel, records no
+  opener and then focuses the panel: the field loses focus and Close hands focus to nothing. Fix: autofocus the
+  field only in the pop-down form, or in the sheet focus it after the shell's effect (a `requestAnimationFrame`
+  or a `setTimeout(0)` after mount), so the opener is recorded and focus returns to Add on Close.
+* **R2-7 (MEDIUM, code review 8).** `uploadOne` adds the chip through `withAttachment`, which silently returns
+  the same choices when five are attached, and then still runs `uploadFile`: a sixth file dropped before React
+  re-rendered is hashed, stored and registered with no chip and no limit line. Fix: decide fullness against the
+  choices the add returned (or make `withAttachment` report refusal) and skip `uploadFile`, saying
+  `ATTACHMENTS_LIMIT_LINE`.
+* **W-2 (walk).** The plus menu, the depth menu and the routine list open upwards (your default 18) because the
+  composer sits at the foot of a thread; in the lobby it sits at the top, and the routine list's first rows and
+  the menus' tops run past the window's top edge (clipped at 1280 by 900: "Quiz me" was above the viewport).
+  Fix: open by the room there is, down when the control is in the upper half of the pane (or when the space
+  below is the larger), up otherwise; measured at open time with `getBoundingClientRect` and `innerHeight`,
+  nothing new in CSS beyond a second placement class. Test the rule as a pure function.
+* **W-4 (walk, and the PM's reading of your default 2).** "Ask off" for an unmet routine need or an upload not
+  yet indexed is `aria-disabled` with the look unchanged. Amendment (h) was about the button after a Stop, not
+  about these; brief 111's Contract says "Ask off, one line" and check 4 "keeps Ask off". Fix: the button takes
+  the disabled look (`disabled`, Phase 22's flat grey pill) while a need is unmet or an attached upload is not
+  `indexed`; the line under the box stays and is still associated (`aria-describedby` may stay on the wrapper or
+  the line may simply be visible); after a Stop and after an answer the button is enabled, as (h) says. Adjust
+  `Composer.chips.test.tsx` accordingly.
+
+### W-88 (thread, panel, layout), on `feat/workspace-page-24b-thread`
+
+* **R2-2a (HIGH, code review 2).** Each new request changes the query keys of the options and the turn rows
+  (the sorted ids are the key's suffix, ruling R2-1 of part 1) and neither query keeps its previous data, so on
+  every ask `formats` collapses to empty and `turnRows` to undefined until the refetch lands: every earlier rich
+  answer re-renders as plain text for a few hundred milliseconds (raw `##`, `**`, `|` visible), the fixed lines
+  and `data-retrieval` blink off, and the Sources tab reads "Pick an answer". Fix at the query: `placeholderData:
+  keepPreviousData` on `requestOptionsOptions` and `turnsOptions` (as `queries.search.ts` does), which the PM
+  permits you to add inside `web/src/lib/queries.workspace-ask.ts` and `queries.workspace-sources.ts` with a
+  case each in their tests; no frozen signature changes. Test on the screen: after a new request id arrives the
+  rich answers stay formatted through the refetch.
+* **R2-2b (MEDIUM, code review 3).** `markStopped` is dispatched at the press, before the cancel answers, and the
+  reducer's `stopped` is terminal; when the cancel fails the turn and the button revert but the live text stays
+  frozen while the runner keeps answering (your default 9). Fix: mark the stream only when `workspace_cancel`
+  answers `true` (the page already shows the stopped sentence at the press through `stoppedRequestIds`); a
+  failed cancel marks nothing. Test the two paths in `Workspace.failures.test.tsx`.
+* **R2-4 (LOW, code review 5).** A failed read of `workspace_request_options` is said twice: folded into
+  `readError` ("Could not load this conversation") above the column and worded again under the box by the
+  composer. Fix: do not fold the options error (nor the turns error, if the thread words it elsewhere) into
+  `readError`; the thread keeps the turn rows' problem line where the brief puts it, once.
+* **R2-5 (MEDIUM, code review 6).** A chip's `ord` is discarded: `AnswerBody` calls `onCite(ord)` but the thread
+  opens the Sources tab at the answer only, while the brief says a chip opens the panel at its row. Fix: carry
+  the ord to `openSources(requestId, ord)`; the Sources tab scrolls that row into view and marks it (an
+  `aria-current="true"` or a focused row with `data-source-ref`), the picked row cleared on the next pick.
+* **R2-6 (MEDIUM, code review 7).** Removing `withoutBoldMarkers` drops Stack's ruling of 2026-10-07 for every
+  answer that is not `rich`: a request with no options row (every conversation before 24b) and a `plain` one go
+  through `plainBlocks`, which keeps `**…**` as literal asterisks on the page (W-3 comes back). Brief 111 said the
+  helper goes; Stack's ruling outranks that line, so: keep a bold-pair strip for the plain path only (in
+  `thread.ts`, before `plainBlocks`), with its test restored; rich answers are parsed as now. The PM amends the
+  brief.
+* **R2-8 (MEDIUM, code review 9).** Each finished turn issues its own `workspace_sources` select
+  (`useWorkspaceSources(requestId)` inside `Answer`): a 40-turn conversation fires 40 reads on open, and a
+  transient failure prints the sources problem line under every answer. Fix: one read for the conversation's
+  requests, `sourcesForRequestsOptions(conversationId, requestIds)` keyed like `turnsOptions` (the sorted ids as
+  the key's suffix, `keepPreviousData`), which the PM permits you to add to `queries.workspace-sources.ts` beside
+  the frozen exports (an addition, nothing renamed) with its test and its normaliser; the turns take their rows
+  by `request_id`; the panel keeps `sourcesOptions(requestId)` or reads the same map.
+* **R2-9 (MEDIUM, code review 10).** `answerBlocks(turn.text, turn.format)` runs for every turn on every render
+  of `Turns`, and `Turns` re-renders on each delta and each clock tick, so one flush re-parses the whole thread.
+  Fix: memoise per turn (`useMemo` on `[text, format]` inside `Answer`, or `React.memo(Answer)`), so only the
+  live turn pays. Test: a spy on the parser counts one call per changed text.
+* **W-1 (walk).** The rail's button (`CONVERSATIONS_HEADING`, your default 13) shows at every width: at 1280 px
+  it stands at the column's top beside the date line while the rail is visible on the left. `.railButton`
+  composes `btnSecondary`, whose `display: inline-flex` wins over the module's `display: none` by stylesheet
+  order in the built app. Fix: hide it through a wrapper that composes nothing (`.railSlot { display: none }`,
+  shown at ≤720 px), or any rule the composition order cannot undo; `Workspace.layout.test.tsx` gains a case
+  that reads the rule as written (the wrapper hidden above 720 px).
+* **W-3 (walk; D-F ruled by the PM).** With the course rail open at 1280 px and the panel docked, the column
+  measured 250 px; the date line wrapped and the thread was a narrow strip. The allowlist still refuses a
+  container query, but your docked-or-sheet decision is already script (`usePanelIsSheet` over `matchMedia`), so
+  decide by the pane: the panel docks when the content pane (`main`) is at least 1024 px wide (a
+  `ResizeObserver` on the pane, `useSyncExternalStore`), else it is a sheet; the rail open at 1280 px then gives
+  a sheet and at 1440 px and wider it docks. The 720 px rail rule stays `@media`. Test the decision as a pure
+  function of the pane's width; `Workspace.layout.test.tsx`'s mounted cases pass a wide pane.
+* **S-1 (LOW, security review).** In `SourcesTab.tsx` the tab an upload opens in is made with
+  `window.open('about:blank', '_blank')` and keeps `window.opener`. Set `tab.opener = null` before assigning
+  its address (and keep `noopener,noreferrer` on the fallback). The existing materials button is outside this
+  phase and stays as it is.
+* **Noted, no change asked:** code review 12 (two `matchMedia` stores: `usePanelIsSheet` and W-87's
+  `usePhoneWidth`) is recorded; a shared `useMediaQuery` is a later cleanup across the two streams.
+
+### PM
+
+* Code review 13: `USED_PREFIX` and `COLUMN_START_LINE` in `workspace-labels.ts` are no screen's any more; the
+  PM marks them retired in the file (kept, since the labels test pins every string and pack 21's playbook quotes
+  the latter).
+* The pack's helpers (`accept24.lib.ts`): the course chip is named `Course: All courses` and the depth button
+  `Depth Auto`, so `pickCourse` and `pickDepth` match by prefix (done, 2026-10-15).
+* Brief 111's Contract line "`withoutBoldMarkers` goes" is amended by R2-6: it goes for rich answers and stays
+  for plain ones.
 
 ## Session prompt for the data layer, started early
 

@@ -29,7 +29,7 @@ import {
   type Recorder,
   type TurnReading,
 } from './accept.lib';
-import { STORED_SETTLE_MS, conversationOf, openSettled, workspaceReady } from './walk21.lib';
+import { STORED_SETTLE_MS, conversationOf, conversationPath, openSettled, utcNow, workspaceReady } from './walk21.lib';
 
 /* ---------------------------------------------------------------------------
  * The synthetic file
@@ -93,6 +93,14 @@ export interface Answered {
  */
 export async function askAndSettle(page: Page, rec: Recorder, spec: AnswerSpec, opened: string[]): Promise<Answered> {
   const turn = await askInto(page, rec, spec.conversation, spec.question);
+  return settleAsked(page, rec, turn, spec, opened);
+}
+
+/**
+ * The second half of `askAndSettle`, for a step that asked on the page as it stood (`askHere`), after
+ * setting the composer up: waits for the stored answer, records it and asserts it.
+ */
+export async function settleAsked(page: Page, rec: Recorder, turn: Locator, spec: AnswerSpec, opened: string[]): Promise<Answered> {
   const conversation = conversationOf(page);
   opened.push(conversation);
   rec.note({ closed_at: await waitClosed(turn) });
@@ -340,4 +348,187 @@ export async function removeObject(page: Page, session: OwnerSession, key: strin
   expectStatus(reply, 'the removal of the object');
   const removed: unknown = JSON.parse(reply.text);
   return Array.isArray(removed) ? removed.length : 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * Phase 24b: the page's own controls (brief 111, task 14)
+ * ------------------------------------------------------------------------ */
+
+/*
+ * The page's own strings (`src/lib/workspace-labels.ts`). Copied, not imported, as `accept.lib.ts`
+ * copies `LATE_STREAM_LINE`: a browser test imports nothing from `src/`. The pack check holds every
+ * text the playbook gives as the page's own to the labels file, so a string that drifts fails there.
+ */
+export const GREETING_LINE = 'What are you working on?';
+export const ROUTINES_HEADING = 'Routines';
+export const ADD_MENU_LABEL = 'Add';
+export const UPLOAD_FROM_DEVICE_LABEL = 'Upload from this device';
+export const COURSE_MENU_LABEL = 'Course';
+export const DEPTH_MENU_LABEL = 'Depth';
+export const DEPTH_STANDARD_LABEL = 'Standard';
+export const SHOW_PANEL_LABEL = 'Show panel';
+export const HIDE_PANEL_LABEL = 'Hide panel';
+export const PANEL_REGION_LABEL = 'Details';
+export const FILES_TAB_LABEL = 'Files';
+export const MEMORY_TAB_LABEL = 'Memory';
+export const FILTER_PLACEHOLDER = 'Filter by title';
+export const DELETE_LABEL = 'Delete';
+export const CONFIRM_DELETE_LABEL = 'Press again to delete';
+export const OPEN_SOURCE_LABEL = 'Open';
+
+/** The course step 17 picks: its display code as the menu shows it, and its id as the options row stores it (`v_course_display`, 2026-10-15). */
+export const COURSE_CODE = 'IST 323';
+export const COURSE_DISPLAY_ID = 'IST.323';
+
+/** The indexing of a small plain-text file took 2.4 s at the walk (109c, P-7); two minutes is the most a step waits for a chip. */
+export const UPLOAD_INDEXED_WAIT_MS = 120_000;
+const UPLOAD_LOOK_EVERY_MS = 500;
+/** A conversation is quiet after 15 minutes and the runner's idle poll then writes the item: a step reloads the Memory tab until it shows, within the test's own time. */
+export const MEMORY_WAIT_MS = 8.5 * 60_000;
+export const MEMORY_LOOK_EVERY_MS = 30_000;
+/** The word of step 17's question the Memory tab's filter narrows by: the item's title is the conversation's, which is the first question. */
+export const MEMORY_FILTER_WORD = 'participation';
+
+/** Today's date in New York, `YYYY-MM-DD`, as the page's date line carries it (`data-today`). */
+export function todayNewYork(now: Date = new Date()): string {
+  return now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+}
+
+/** The lobby is up: its root, the greeting, today's date with its weekday, the routines. */
+export async function expectLobby(page: Page): Promise<void> {
+  await expect(page.locator('[data-lobby]')).toBeVisible();
+  await expect(page.getByText(GREETING_LINE, { exact: true })).toBeVisible();
+  await expect(page.locator('[data-today]')).toHaveAttribute('data-today', todayNewYork());
+  await expect(page.getByText(ROUTINES_HEADING, { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Ask', exact: true })).toBeVisible();
+}
+
+/** Opens a menu by its button and picks the entry with exactly this text. */
+async function pickFromMenu(page: Page, button: RegExp | string, entry: string): Promise<void> {
+  await page.getByRole('button', { name: button }).first().click();
+  await page.getByText(entry, { exact: true }).last().click();
+}
+
+/** The dashed course chip: its accessible name is "Course: All courses", or "Course: <code>" once a course is picked. */
+export async function pickCourse(page: Page, code: string): Promise<void> {
+  await pickFromMenu(page, new RegExp(`^${COURSE_MENU_LABEL}: `), code);
+  await expect(page.locator('[data-chip="course"]')).toContainText(code);
+}
+
+export async function pickDepth(page: Page, label: string): Promise<void> {
+  // The button's accessible name is its screen-reader label and its shown value ("Depth Auto").
+  await pickFromMenu(page, new RegExp(`^${DEPTH_MENU_LABEL}\\b`), label);
+  await expect(page.locator('[data-depth]')).toHaveAttribute('data-depth', label.toLowerCase());
+}
+
+/** The file name the page keeps as the upload's title: the nonce's first eight characters make it the run's own. */
+export function pageFileName(file: SyntheticFile): string {
+  return `acceptance-memo-${file.nonce.slice(0, TITLE_NONCE_CHARS)}.txt`;
+}
+
+/**
+ * Uploads through the page's own control: the plus menu's entry opens the file dialog, the file is
+ * handed to it, and the composer shows the upload as a chip. Returns the chip.
+ */
+export async function uploadThroughPage(page: Page, file: SyntheticFile): Promise<Locator> {
+  await page.getByRole('button', { name: ADD_MENU_LABEL, exact: true }).click();
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByText(UPLOAD_FROM_DEVICE_LABEL, { exact: true }).click();
+  await (await chooser).setFiles({ name: pageFileName(file), mimeType: FILE_MIME, buffer: Buffer.from(file.text, 'utf8') });
+  const chip = page.locator('[data-chip="upload"]');
+  await expect(chip).toHaveCount(1);
+  return chip;
+}
+
+export interface ChipStates {
+  /** Every distinct state the chip showed, in order. */
+  seen: string[];
+  /** The state the wait ended on: `indexed`, `failed`, or the last seen when time ran out. */
+  last: string | null;
+  waitedMs: number;
+}
+
+/** Watches an upload chip's `data-upload-state` until it reads `indexed` or `failed`, or the wait is over. */
+export async function watchUploadStates(page: Page, chip: Locator, waitMs = UPLOAD_INDEXED_WAIT_MS): Promise<ChipStates> {
+  const started = Date.now();
+  const seen: string[] = [];
+  let last: string | null = null;
+  while (Date.now() - started < waitMs) {
+    last = await chip.getAttribute('data-upload-state');
+    if (last !== null && seen.at(-1) !== last) seen.push(last);
+    if (last === 'indexed' || last === 'failed') break;
+    await page.waitForTimeout(UPLOAD_LOOK_EVERY_MS);
+  }
+  return { seen, last, waitedMs: Date.now() - started };
+}
+
+/** The side panel's region. */
+export function panel(page: Page): Locator {
+  return page.getByRole('region', { name: PANEL_REGION_LABEL });
+}
+
+/** Opens the panel on a tab, through the Show panel button when it is folded, and the tab's own control. */
+export async function openPanelTab(page: Page, tab: string): Promise<Locator> {
+  if ((await page.locator('[data-panel]').count()) === 0) {
+    await page.getByRole('button', { name: SHOW_PANEL_LABEL, exact: true }).click();
+  }
+  await page.getByRole('tab', { name: tab, exact: true }).click();
+  await expect(page.locator('[data-panel]')).toHaveAttribute('data-panel', tab.toLowerCase());
+  return panel(page);
+}
+
+export async function hidePanel(page: Page): Promise<void> {
+  await page.getByRole('button', { name: HIDE_PANEL_LABEL, exact: true }).click();
+  await expect(page.locator('[data-panel]')).toHaveCount(0);
+}
+
+/** Types into the open tab's filter field, which narrows the rows on the page and sends nothing. */
+export async function filterPanel(page: Page, text: string): Promise<void> {
+  await panel(page).getByPlaceholder(FILTER_PLACEHOLDER).fill(text);
+}
+
+/** The Files tab's rows that carry an upload state and this title. */
+export function fileRows(page: Page, title: string): Locator {
+  return panel(page).locator('[data-upload-state]').filter({ hasText: title });
+}
+
+/** Delete, then its second press. The row that carried the button leaves the page. */
+export async function deleteTwice(page: Page, scope: Locator): Promise<void> {
+  await scope.getByRole('button', { name: DELETE_LABEL, exact: true }).first().click();
+  await panel(page).getByRole('button', { name: CONFIRM_DELETE_LABEL, exact: true }).first().click();
+}
+
+/** The address of a conversation with the panel open on a tab. */
+export function panelPath(conversation: string | null, tab: string): string {
+  const base = conversationPath(conversation);
+  return `${base}${base.includes('?') ? '&' : '?'}panel=${tab.toLowerCase()}`;
+}
+
+export interface MemoryWait {
+  shown: boolean;
+  waitedMs: number;
+  reloads: number;
+  firstSeenAt: string | null;
+}
+
+/**
+ * Reloads the Memory tab of a conversation until one remembered item matches the filter, or the wait
+ * is over. The runner writes the item once the conversation has been quiet for 15 minutes; the page
+ * reads the list on load, so the test reloads rather than waits on one page.
+ */
+export async function waitForMemoryItem(page: Page, conversation: string, filter: string, waitMs = MEMORY_WAIT_MS): Promise<MemoryWait> {
+  const started = Date.now();
+  let reloads = 0;
+  for (;;) {
+    await openSettled(page, panelPath(conversation, MEMORY_TAB_LABEL));
+    await workspaceReady(page);
+    await expect(page.locator('[data-panel]')).toHaveAttribute('data-panel', MEMORY_TAB_LABEL.toLowerCase());
+    await filterPanel(page, filter);
+    reloads += 1;
+    if ((await panel(page).getByRole('button', { name: DELETE_LABEL, exact: true }).count()) >= 1) {
+      return { shown: true, waitedMs: Date.now() - started, reloads, firstSeenAt: utcNow() };
+    }
+    if (Date.now() - started >= waitMs) return { shown: false, waitedMs: Date.now() - started, reloads, firstSeenAt: null };
+    await page.waitForTimeout(MEMORY_LOOK_EVERY_MS);
+  }
 }

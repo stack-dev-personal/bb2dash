@@ -9,9 +9,11 @@ export const metadata: Metadata = {
 };
 
 /**
- * /workspace — the chat surface (S2-workspace-1, Phase 21).
+ * /workspace — the assistant (S2-workspace-1, Phase 21; Phase 24b): the lobby,
+ * or a conversation's thread, with the side panel.
  *
- * The screen reads `?c=` for its conversation, so it sits behind a Suspense
+ * The screen reads `?c=` for its conversation and `?panel=` for the panel's
+ * tab, so it sits behind a Suspense
  * boundary: without one, `useSearchParams` would opt this route out of
  * prerendering altogether (the same reason /planner has one). The (app) layout
  * supplies the top bar and the sign-in guard.

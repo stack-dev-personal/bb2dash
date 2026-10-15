@@ -112,7 +112,18 @@ step() {
 
 copy_web() {
   mkdir -p "$WORK_WEB" &&
-    tar -C "$SRC_WEB" "${COPY_EXCLUDES[@]}" -cf - . | tar -C "$WORK_WEB" -xf -
+    tar -C "$SRC_WEB" "${COPY_EXCLUDES[@]}" -cf - . | tar -C "$WORK_WEB" -xf - &&
+    copy_runner_fixtures
+}
+
+# What outside web/ the web package's build type-checks (Phase 24b's data layer, brief 111): the
+# labels test imports the runner's own lines (`workspace/src/lines.ts`) and the query tests import
+# the runner's contract fixtures (`workspace/test/fixtures/contract24/`), each as `../../workspace/…`,
+# so the box keeps them at the same places beside its copy of web/.
+copy_runner_fixtures() {
+  mkdir -p "$WORK/workspace/src" "$WORK/workspace/test/fixtures" &&
+    cp "$SRC_WEB/../workspace/src/lines.ts" "$WORK/workspace/src/lines.ts" &&
+    cp -r "$SRC_WEB/../workspace/test/fixtures/contract24" "$WORK/workspace/test/fixtures/contract24"
 }
 
 # Everything in e2e/ but the saved session and the last results is replaced by the checkout's.

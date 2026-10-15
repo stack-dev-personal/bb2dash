@@ -34,20 +34,42 @@
 
 import { expect } from '@playwright/test';
 import {
+  COURSE_CODE,
+  DEPTH_STANDARD_LABEL,
+  FILES_TAB_LABEL,
   FILE_MIME,
+  MEMORY_FILTER_WORD,
+  MEMORY_TAB_LABEL,
+  OPEN_SOURCE_LABEL,
   archiveAfter,
+  archiveConversations,
   askAndSettle,
   deleteDocument,
+  deleteTwice,
+  expectLobby,
+  fileRows,
+  filterPanel,
+  hidePanel,
   newNonce,
+  openPanelTab,
   openWithSession,
+  pageFileName,
+  panel,
+  pickCourse,
+  pickDepth,
   removeObject,
   requestIdOf,
   sendFile,
+  settleAsked,
   syntheticFile,
   uploadRows,
+  uploadThroughPage,
+  waitForMemoryItem,
+  watchUploadStates,
 } from './accept24.lib';
 import {
   acceptStep,
+  askHere,
   askInto,
   conversationOfStep,
   readTurn,
@@ -56,11 +78,10 @@ import {
   waitClosed,
   waitStreaming,
 } from './accept.lib';
-import { readCarry, requireCarried } from './accept.env';
+import { carried, readCarry, readFacts, requireCarried } from './accept.env';
 import {
   BADGE_LOW,
   BADGE_MID,
-  COLUMN_START_LINE,
   SETTLE_MS,
   STOPPED_SENTENCE,
   STORED_SETTLE_MS,
@@ -91,6 +112,16 @@ const QUESTION_NOTHING = 'What is a zxqvl blorptangle wumbaflix frennodyne?';
 const QUESTION_STOP = 'Explain in detail how a feasibility study differs from a requirements study, using the IST.352 slides';
 const QUESTION_AFTER_STOP = 'What does the IST.323 syllabus say about attendance?';
 const QUESTION_UPLOAD = 'What does my uploaded memo say about the quillfern lamp of the Marrowbrook archive?';
+/** Phase 24b's page steps. Step 17 sends it at the Standard depth with a course chip: mid tier, a planning turn, whatever the words say. */
+const QUESTION_OPTIONS = 'Explain how the IST.323 syllabus weighs participation against the exams';
+/** A lookup that finds course passages, so the answer has a sources row to open the panel with. */
+const QUESTION_SOURCES = 'What does the IST.352 syllabus say about group work?';
+/** Asked with the run's file attached as a chip: the attached file is a source of origin attached. */
+const QUESTION_ATTACHED = "What does the attached memo say about the lamp's hinges and shade?";
+/** The step that makes the file through the page, whose nonce the later page steps and the host read. */
+const PAGE_UPLOAD_STEP = '19';
+/** The step whose conversation is left open for the runner to remember, and archived by the last step. */
+const MEMORY_STEP = '17';
 
 /** The fixed sentence of an answer whose retrieval found nothing (`workspace/test/fixtures/contract24/lines.txt`, key `empty`). */
 const EMPTY_LINE = 'No passage of your course files or uploads matched this question, so this answer comes from general knowledge.';
@@ -126,8 +157,8 @@ acceptStep('2 open workspace', { shots: ['open'] }, async ({ page }, rec) => {
   await expect(link).toHaveAttribute('aria-current', 'page');
   await expect(conversationList(page)).toBeVisible();
   await expect(page.locator('li[data-turn]')).toHaveCount(0);
-  await expect(page.locator('[data-column-empty="start"]')).toHaveText(COLUMN_START_LINE);
-  await expect(page.getByRole('button', { name: 'Ask', exact: true })).toBeVisible();
+  // Phase 24b: with no conversation the page is the lobby (brief 111, check 1), not the empty column of Phase 21.
+  await expectLobby(page);
   await expect(offline, 'the service is answering: the page does not call it offline').toHaveCount(0);
 });
 
@@ -214,6 +245,11 @@ acceptStep('9 stop then answer', { shots: ['stopped', 'after'] }, async ({ page,
     await expect(next.locator('[data-tier]')).toHaveText(BADGE_LOW);
     await expect(next.locator('[data-answer-text]')).not.toBeEmpty();
     await expect(next.locator('[data-turn-line]')).toHaveCount(0);
+    // Phase 24b, amendment (h): after a Stop and a finished answer the button reads Ask, enabled, and is not busy.
+    const askButton = page.getByRole('button', { name: 'Ask', exact: true });
+    await expect(askButton).toBeEnabled();
+    await expect(askButton).not.toHaveAttribute('aria-busy', 'true');
+    rec.note({ ask_enabled_after_stop: true });
   });
 });
 
@@ -302,4 +338,147 @@ acceptStep('15 delete upload', { shots: [] }, async ({ page }, rec) => {
   rec.note({ second_call_state: dropped.state, rows_after: left.length, deleted_at: utcNow() });
   expect(dropped.state, 'the second call drops the row').toBe('deleted');
   expect(left, 'no row holds the hash').toEqual([]);
+});
+
+/* ---------------------------------------------------------------------------
+ * Phase 24b: the page (brief 111, task 14). Stage `page` runs first after go-live, so that step 17's
+ * conversation has been quiet for the runner's 15 minutes by the time the memory stages run.
+ * ------------------------------------------------------------------------ */
+
+// Step 17: the lobby, then a question with a course chip and the Standard depth. The conversation is
+// left open: it is the one the runner remembers (step 22) and step 24 archives it.
+acceptStep('17 lobby and options', { shots: ['lobby', 'start', 'end'] }, async ({ page }, rec) => {
+  await openSettled(page, '/workspace');
+  await workspaceReady(page);
+  await expectLobby(page);
+  rec.note({ lobby_shown: true, today: await page.locator('[data-today]').getAttribute('data-today') });
+  await rec.shot(page, 'lobby');
+  await pickCourse(page, COURSE_CODE);
+  await pickDepth(page, DEPTH_STANDARD_LABEL);
+  rec.note({ course_picked: COURSE_CODE, depth_picked: DEPTH_STANDARD_LABEL });
+  const turn = await askHere(page, rec, QUESTION_OPTIONS);
+  const opened: string[] = [];
+  await settleAsked(page, rec, turn, { conversation: null, question: QUESTION_OPTIONS, badge: BADGE_MID }, opened);
+  // Standard stays until he changes it (only Deep returns to Auto): the menu still reads Standard.
+  rec.note({ depth_after_ask: await page.locator('[data-depth]').getAttribute('data-depth') });
+  await expect(page.locator('[data-depth]')).toHaveAttribute('data-depth', 'standard');
+});
+
+// Step 18: a formatted answer with sources: the sources row opens the panel on its rows; nothing in the answer is a link or an image.
+acceptStep('18 sources and panel', { shots: ['start', 'end', 'panel'] }, async ({ page, context }, rec) => {
+  const opened: string[] = [];
+  await archiveAfter(page, context, rec, opened, async () => {
+    const { turn } = await askAndSettle(page, rec, { conversation: null, question: QUESTION_SOURCES, badge: BADGE_LOW }, opened);
+    const sourcesRow = turn.locator('[data-sources]');
+    const forbidden = turn.locator('[data-answer-text] img, [data-answer-text] a, [data-answer-text] iframe, [data-answer-text] script, [data-answer-text] style');
+    rec.note({
+      sources_row: (await sourcesRow.count()) === 0 ? null : (await sourcesRow.first().textContent())?.trim(),
+      chips_in_answer: await turn.locator('[data-source-ref]').count(),
+      forbidden_elements_in_answer: await forbidden.count(),
+    });
+    await expect(sourcesRow, 'the answer has a sources row').toHaveText(/^[1-9]\d* sources?$/);
+    await expect(forbidden, 'no link, image, frame, script or style element in the answer').toHaveCount(0);
+    await sourcesRow.first().click();
+    await expect(page.locator('[data-panel]')).toHaveAttribute('data-panel', 'sources');
+    const openButtons = panel(page).getByRole('button', { name: OPEN_SOURCE_LABEL, exact: true });
+    rec.note({ panel_open_controls: await openButtons.count() });
+    await expect(openButtons.first(), 'the Sources tab lists at least one row with Open').toBeVisible();
+    await rec.shot(page, 'panel');
+    await hidePanel(page);
+    rec.note({ panel_folded: true });
+  });
+});
+
+// Step 19: a file goes in through the page's own control, the chip follows the row to indexed, and the Files tab lists it.
+acceptStep('19 upload through the page', { shots: ['chip', 'files'] }, async ({ page }, rec) => {
+  const file = syntheticFile(newNonce());
+  rec.note({ nonce_id: file.nonce, sha256: file.sha256, byte_size: file.byteSize, storage_key: file.key, mime: FILE_MIME, file_name: pageFileName(file) });
+  await openSettled(page, '/workspace');
+  await workspaceReady(page);
+  const chip = await uploadThroughPage(page, file);
+  const states = await watchUploadStates(page, chip);
+  rec.note({ chip_states: states.seen, chip_last_state: states.last, chip_waited_ms: states.waitedMs, indexed_at: utcNow() });
+  await rec.shot(page, 'chip');
+  expect(states.last, 'the chip reached indexed').toBe('indexed');
+  const files = await openPanelTab(page, FILES_TAB_LABEL);
+  await filterPanel(page, pageFileName(file));
+  const row = fileRows(page, pageFileName(file));
+  rec.note({ files_rows_matching: await row.count(), files_row_state: (await row.count()) === 0 ? null : await row.first().getAttribute('data-upload-state') });
+  await rec.shot(page, 'files');
+  await expect(row, 'one Files row holds the upload').toHaveCount(1);
+  await expect(row.first()).toHaveAttribute('data-upload-state', 'indexed');
+  await expect(files).toBeVisible();
+  await hidePanel(page);
+});
+
+/**
+ * Step 19's file, rebuilt from the nonce its facts hold (step 20, the same stage) or from the carry-over
+ * (step 21, a later stage), and the title the page gave it.
+ */
+function fileOfPageUpload(outDir: string | undefined) {
+  const here = outDir === undefined ? null : readFacts(outDir, PAGE_UPLOAD_STEP)?.['nonce_id'];
+  const nonce = typeof here === 'string' ? here : carried(readCarry(process.env['ACCEPT_IN']), PAGE_UPLOAD_STEP, 'nonce_id', 'uuid');
+  if (typeof nonce !== 'string') throw new Error(`step ${PAGE_UPLOAD_STEP} left no nonce_id to work from`);
+  const file = syntheticFile(nonce);
+  return { file, title: pageFileName(file) };
+}
+
+// Step 20: the same file sent again through the page shows the row it already has, and a question asked with it attached draws on it.
+acceptStep('20 ask with the file attached', { shots: ['start', 'end'] }, async ({ page, context }, rec) => {
+  const { file, title } = fileOfPageUpload(process.env['ACCEPT_OUT']);
+  rec.note({ nonce_id: file.nonce, sha256: file.sha256, file_name: title });
+  const opened: string[] = [];
+  await archiveAfter(page, context, rec, opened, async () => {
+    await openSettled(page, '/workspace');
+    await workspaceReady(page);
+    const chip = await uploadThroughPage(page, file);
+    const states = await watchUploadStates(page, chip);
+    rec.note({ chip_states: states.seen, chip_last_state: states.last, chip_waited_ms: states.waitedMs });
+    expect(states.last, 'the row the file already has is indexed').toBe('indexed');
+    const turn = await askHere(page, rec, QUESTION_ATTACHED);
+    await settleAsked(page, rec, turn, { conversation: null, question: QUESTION_ATTACHED, badge: BADGE_LOW }, opened);
+    rec.note({ sources_row: (await turn.locator('[data-sources]').count()) === 0 ? null : (await turn.locator('[data-sources]').first().textContent())?.trim() });
+    await expect(turn.locator('[data-sources]'), 'the attached file is a source').toHaveText(/^[1-9]\d* sources?$/);
+  });
+});
+
+// Step 21: the file is deleted through the Files tab, in two presses, and leaves the list.
+acceptStep('21 delete through the files tab', { shots: ['files'] }, async ({ page }, rec) => {
+  const { file, title } = fileOfPageUpload(process.env['ACCEPT_OUT']);
+  rec.note({ nonce_id: file.nonce, sha256: file.sha256, file_name: title });
+  await openSettled(page, '/workspace');
+  await workspaceReady(page);
+  await openPanelTab(page, FILES_TAB_LABEL);
+  await filterPanel(page, title);
+  const row = fileRows(page, title);
+  await expect(row, 'the Files tab lists the upload before the delete').toHaveCount(1);
+  await deleteTwice(page, row.first());
+  await expect(row, 'the row left the list').toHaveCount(0, { timeout: 30_000 });
+  rec.note({ files_rows_after: await row.count(), deleted_at: utcNow() });
+  await rec.shot(page, 'files');
+});
+
+// Step 22: with memory on, step 17's conversation, quiet since its answer, shows one remembered item in the Memory tab.
+acceptStep('22 memory item shown', { shots: ['memory'] }, async ({ page }, rec) => {
+  const conversation = conversationOfStep(MEMORY_STEP);
+  rec.note({ conversation_id: conversation, filter: MEMORY_FILTER_WORD });
+  const wait = await waitForMemoryItem(page, conversation, MEMORY_FILTER_WORD);
+  rec.note({ memory_item_shown: wait.shown, memory_waited_ms: wait.waitedMs, memory_reloads: wait.reloads, first_seen_at: wait.firstSeenAt });
+  await rec.shot(page, 'memory');
+  expect(wait.shown, `a remembered item of the conversation shows within ${Math.round(wait.waitedMs / 60_000)} minutes`).toBe(true);
+});
+
+// Step 24: the remembered item is deleted in two presses, and the conversation is archived: the run leaves nothing in his memory or his list.
+acceptStep('24 memory item deleted', { shots: ['memory'] }, async ({ page, context }, rec) => {
+  const conversation = conversationOfStep(MEMORY_STEP);
+  rec.note({ conversation_id: conversation, filter: MEMORY_FILTER_WORD });
+  const wait = await waitForMemoryItem(page, conversation, MEMORY_FILTER_WORD, 60_000);
+  expect(wait.shown, 'the remembered item step 22 saw is still listed').toBe(true);
+  const deleteButtons = panel(page).getByRole('button', { name: 'Delete', exact: true });
+  rec.note({ items_before: await deleteButtons.count() });
+  await deleteTwice(page, panel(page));
+  await expect(deleteButtons, 'the item left the Memory tab').toHaveCount(0, { timeout: 30_000 });
+  rec.note({ items_after: await deleteButtons.count(), deleted_at: utcNow() });
+  await rec.shot(page, 'memory');
+  await archiveConversations(page, context, rec, [conversation]);
 });

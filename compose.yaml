@@ -197,7 +197,7 @@ services:
       CLAUDE_CONFIG_DIR: /home/node/.claude
       # Off turns off the memory jobs only (the remembered items). The rolling summary of a long
       # conversation is on from 24a whatever this says.
-      WORKSPACE_MEMORY_JOBS: "off"
+      WORKSPACE_MEMORY_JOBS: "on"
       # No telemetry, error reports or update checks: the firewall allows api.anthropic.com only.
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
       # The CLI never updates itself: the image pins one version, and its install folder is root's.

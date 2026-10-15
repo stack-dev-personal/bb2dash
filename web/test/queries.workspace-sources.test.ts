@@ -8,7 +8,7 @@
  * only; one call invalidates both keys. The Supabase client is a recording stub.
  */
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, keepPreviousData } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -51,6 +51,8 @@ vi.mock('@/lib/supabase/client', () => ({
 const {
   WORKSPACE_SOURCES_MAX,
   invalidateWorkspaceProvenance,
+  sourcesByRequest,
+  sourcesForRequestsOptions,
   normalizeSource,
   normalizeTurn,
   retrievalLineOf,
@@ -195,6 +197,10 @@ describe('the reads', () => {
     expect(two.slice(0, 3)).toEqual(workspaceSourceKeys.turns(CONVERSATION));
   });
 
+  it('keeps the previous rows while a new id list is read (round 2, R2-2a): the fixed lines do not blink off', () => {
+    expect(turnsOptions(CONVERSATION, [10, 11]).placeholderData).toBe(keepPreviousData);
+  });
+
   it('is still matched by the frozen prefix key the provenance invalidation uses (R2-1)', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const key = turnsOptions(CONVERSATION, [10, 11]).queryKey;
@@ -222,6 +228,56 @@ describe('the reads', () => {
       ['limit', WORKSPACE_SOURCES_MAX],
     ]);
     expect(WORKSPACE_SOURCES_MAX).toBe(40);
+  });
+
+  it('reads every source row of a conversation`s requests in one select (round 2, R2-8)', async () => {
+    expect(sourcesForRequestsOptions(null, [1]).enabled).toBe(false);
+    expect(sourcesForRequestsOptions(CONVERSATION, []).enabled).toBe(false);
+    const query = sourcesForRequestsOptions(CONVERSATION, [4813, 4812]);
+    expect(query.enabled).toBe(true);
+    expect(query.placeholderData).toBe(keepPreviousData);
+    expect(query.queryKey).toEqual(['workspace', 'turns', CONVERSATION, 'sources', [4812, 4813]]);
+    expect(sourcesForRequestsOptions(CONVERSATION, [4812, 4813]).queryKey).toEqual(query.queryKey);
+    stub.result = {
+      data: [
+        { ...turnPut.p_sources[3], request_id: 4812, ord: 1 },
+        { ...turnPut.p_sources[3], request_id: 4813, ord: 1 },
+        { ...turnPut.p_sources[3], request_id: 'bad', ord: 2 },
+      ],
+      error: null,
+    };
+    await expect(query.queryFn!({} as never)).resolves.toHaveLength(2);
+    expect(stub.calls.map((call) => [call.op, ...call.args])).toEqual([
+      [
+        'select',
+        'request_id, ord, kind, origin, file_id, text_id, document_id, doc_text_id, course_id, title, unit_kind, unit_no',
+      ],
+      ['in', 'request_id', [4812, 4813]],
+      ['order', 'request_id', { ascending: true }],
+      ['order', 'ord', { ascending: true }],
+      ['limit', WORKSPACE_SOURCES_MAX * 2],
+    ]);
+  });
+
+  it('is invalidated with the conversation`s turns: the stream`s `sources` and `done` reach it (R2-8)', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = sourcesForRequestsOptions(CONVERSATION, [10]).queryKey;
+    client.setQueryData(key, []);
+    invalidateWorkspaceProvenance(client, CONVERSATION, null);
+    await waitFor(() => expect(client.getQueryState(key)?.isInvalidated).toBe(true));
+  });
+
+  it('groups the rows by request, each by ord (R2-8)', () => {
+    const rows = [
+      normalizeSource({ ...turnPut.p_sources[3], request_id: 2, ord: 2 })!,
+      normalizeSource({ ...turnPut.p_sources[3], request_id: 1, ord: 1 })!,
+      normalizeSource({ ...turnPut.p_sources[3], request_id: 2, ord: 1 })!,
+    ];
+    const grouped = sourcesByRequest(rows);
+    expect([...grouped.keys()]).toEqual([2, 1]);
+    expect(grouped.get(2)?.map((row) => row.ord)).toEqual([1, 2]);
+    expect(grouped.get(3)).toBeUndefined();
+    expect(sourcesByRequest(undefined).size).toBe(0);
   });
 
   it('throws a read error, and refuses a bad id before reading', async () => {

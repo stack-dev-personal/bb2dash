@@ -67,7 +67,14 @@ function builtStrings(): string[] {
     labels.memoryProblemLine(reason),
     labels.forgetProblemLine(reason),
     labels.examplePromptLine('exam', { title: 'Quiz 3', course: 'IST 323', date: 'Tue Oct 21' }),
+    labels.todayLine('Thursday, October 15, 2026'),
     labels.materialsProblemLine(reason),
+    // W-87 additions (for the PM to accept)
+    labels.coursesProblemLine(reason),
+    labels.examplesProblemLine(reason),
+    labels.uploadFailedAttachedLine('The file could not be read.'),
+    // W-88 addition (for the PM to accept): see the heading at the end of this file.
+    labels.openProblemLine(reason),
   ];
 }
 
@@ -493,6 +500,10 @@ describe('the lobby (brief 111, "The lobby")', () => {
     expect(labels.GREETING_LINE).not.toMatch(/stack/i);
   });
 
+  it("states today's weekday and date from the words it is given (amendment (g))", () => {
+    expect(labels.todayLine('Thursday, October 15, 2026')).toBe('Today is Thursday, October 15, 2026.');
+  });
+
   it('has the four headings and the two links', () => {
     expect(labels.ROUTINES_HEADING).toBe('Routines');
     expect(labels.EXAMPLES_HEADING).toBe('From your planner');
@@ -576,5 +587,35 @@ describe('rules every string keeps', () => {
       .filter(([name]) => name !== 'STOPPED_SENTENCE')
       .map(([, value]) => value as string);
     expect(new Set(own).size).toBe(own.length);
+  });
+});
+
+/* ===========================================================================
+ * W-87 additions (for the PM to accept)
+ * ======================================================================== */
+
+describe('W-87 additions: the two problem lines the composer and the lobby need', () => {
+  it('words a failed read of the courses and of the upcoming work in the app form', () => {
+    expect(labels.coursesProblemLine('x')).toBe('Could not load your courses: x');
+    expect(labels.examplesProblemLine('x')).toBe('Could not load your upcoming work: x');
+  });
+});
+
+describe('W-87 additions: the line for an attached upload that failed (Round 3, W-6)', () => {
+  it('names the failure with the row\'s reason, and stands without one', () => {
+    expect(labels.uploadFailedAttachedLine(labels.UPLOAD_ERROR_SENTENCES.too_many_units)).toBe(
+      'An attached upload failed: The file has too many pages or slides to index. Try again or remove it.',
+    );
+    expect(labels.uploadFailedAttachedLine(null)).toBe('An attached upload failed. Try again or remove it.');
+  });
+});
+
+/* ===========================================================================
+ * W-88 additions (for the PM to accept)
+ * ======================================================================== */
+
+describe('W-88 additions (for the PM to accept)', () => {
+  it('says an Open that failed in the app`s own form, with its reason', () => {
+    expect(labels.openProblemLine('x')).toBe('Could not open this file: x');
   });
 });

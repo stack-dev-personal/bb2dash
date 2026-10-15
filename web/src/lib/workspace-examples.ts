@@ -79,6 +79,26 @@ export function dateWords(dueOn: string): string {
   return `${parts.weekday} ${parts.month} ${parts.day}`;
 }
 
+const TODAY_WORDS = new Intl.DateTimeFormat('en-US', {
+  timeZone: NEW_YORK,
+  weekday: 'long',
+  month: 'long',
+  day: 'numeric',
+  year: 'numeric',
+});
+
+/**
+ * "Thursday, October 15, 2026": today's date with its weekday, in full, for the
+ * line the page shows on every visit (brief 111, frozen at the gate, amendment
+ * (g): the model worked a weekday out itself and got it wrong, so the page
+ * states the true one). Throws for a string that is not a date, as `dateWords`.
+ */
+export function todayWords(today: string): string {
+  const moment = middayOf(today);
+  if (moment === null) throw new Error(`not a YYYY-MM-DD date: ${today}`);
+  return TODAY_WORDS.format(moment);
+}
+
 /**
  * Up to nine prompts from the dated items due in [today, today + 14 days] that
  * are not finished, by due date then title. No rows give an empty list.

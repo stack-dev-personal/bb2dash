@@ -1,294 +1,117 @@
 'use client';
 
 /**
- * The Workspace screen (Phase 21, task 16; S2-workspace-1).
+ * The Workspace screen (Phase 21, task 16; Phase 24b, tasks 9 to 11).
  *
- * A chat surface over the two stores: the conversation list, the message
- * column, the composer and a service line. The selected conversation is route
- * state, `?c=<conversation uuid>`; anything else is no conversation, the page
- * holds the lobby channel, and the first question creates one.
+ * The page lays itself out in the pane the shell gives it (frozen (f)): the
+ * conversations rail, a column at a reading measure, and the side panel while
+ * `?panel=<tab>` names one. While the content pane is at least 1024 px wide the
+ * panel is the grid's third track; in a narrower pane it is a sheet from the
+ * right (round 2, W-3: the pane, not the window, `use-workspace-panel.ts`);
+ * under 720 px the rail is a sheet too, opened by one button at the top of the
+ * column (D-J). The column
+ * starts with today's New York date and its weekday (amendment (g)) and holds
+ * the lobby when no conversation is selected (`Lobby`, W-87's) or the thread
+ * (`ThreadView.tsx`).
  *
  * WHERE AN ANSWER COMES FROM. Live, as Realtime Broadcast deltas on the page's
  * one private channel (`use-workspace-stream.ts`), and once more as the stored
  * row `workspace_finish()` writes. The stored row is the record. The page
  * learns that a stream has ended from the `done` broadcast and from a refetch
- * when the tab regains focus; the 5 s interval is only the fallback while the
- * tab is in front, because it does not run in a hidden tab. Whichever of them
- * shows the request closed, the messages are then read once more
- * (`useStoredRowOnClose`): a missed broadcast costs live text, never the answer.
- *
- * WHAT IS SHOWN UNDER A QUESTION comes from its `workspace_requests` row
- * (`components/workspace/thread.ts`). After Stop the stopped sentence shows at
- * once: the request is marked here before the database has answered. The
- * partial text stays under it until the stored row replaces it. That row shows
- * even when its `done` broadcast is missed: while the newest request is closed
- * and its assistant row unfinished, the messages query keeps polling every 5 s
- * for up to 60 s (`lib/workspace-poll.ts`; the review round's ruling V4, which
- * replaced two fixed timers here).
- *
- * A QUESTION ASKED HERE TAKES THE COLUMN TO ITS END (the third review's R3-5).
- * `workspace_ask()` answers with the id of the message it stored; the column is
- * handed that id, and goes to its end when the question becomes one of its
- * turns, wherever the reader had scrolled to (`MessageList.tsx`). There is no
- * optimistic turn: the question is shown when the rows bring it. A turn asked
- * from another tab carries no such id, and a reader who has scrolled up is
- * left where they are.
- *
- * WITH NO TURN TO SHOW the column says which of three states it is in (the
- * PM's ruling U1): no conversation selected, rows still being read, or an id
- * that was not found. A conversation that was not found is not asked into, and
- * a 23503 from `workspace_ask` says the same not-found line: the database's own
- * sentence about the foreign key is never shown.
- *
- * THE SERVICE LINE is said from a status row re-read every 30 s, and re-read at
- * once when a request in view becomes `claimed` and when its first delta
- * arrives (`useStatusOnAnswer`), so the offline line does not sit beside text
- * that is arriving.
+ * when the tab regains focus; whichever shows the request closed, the messages
+ * are read once more (`useStoredRowOnClose`): a missed broadcast costs live
+ * text, never the answer. Since Phase 24b the conversation's turn rows and
+ * options rows are read beside them: the searching line, the fixed lines and
+ * the format come from them (`thread.ts`).
  *
  * TWO PARTS. `Workspace` reads the rows and holds the channel, and stays
  * mounted from one conversation to the next so the old channel is left before
- * the next is joined. `Thread` is keyed by the conversation: what was typed, a
- * refusal and a pressed Stop belong to one conversation and go with it.
+ * the next is joined (the lobby holds `workspace:lobby`). `Thread` is keyed by
+ * the conversation.
+ *
+ * THE PANEL'S ANSWER. A chip or a sources row picks the answer the Sources tab
+ * lists; the pick is page state and goes when the conversation changes. With
+ * nothing picked the tab lists the newest answer whose turn row is known (PM
+ * default R-2).
  *
  * HYDRATION. The rows come from a query cache that is restored from
  * localStorage before this boundary hydrates, and the server never has them.
  * So they are read only once `useHydrated()` is true; the first client render
- * is the server's.
+ * is the server's, with the panel docked and no date line.
  *
  * The stream area carries what it is doing as data attributes, for a walk or a
- * spec to read: `data-topic` (the channel held), `data-channel` (joining,
- * joined, error), `data-channel-detail` (why, on an error) and
+ * spec to read: `data-topic`, `data-channel`, `data-channel-detail` and
  * `data-request-id` (the open request, when there is one).
  */
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Composer } from '@/components/workspace/Composer';
+import { PopoutShell } from '@/components/popout/PopoutShell';
 import { ConversationList } from '@/components/workspace/ConversationList';
-import { MessageList } from '@/components/workspace/MessageList';
-import { ServiceStatus } from '@/components/workspace/ServiceStatus';
-import { CONVERSATION_PARAM, conversationHref } from '@/components/workspace/route';
+import { Lobby } from '@/components/workspace/Lobby';
+import { SidePanel, SidePanelSheet } from '@/components/workspace/SidePanel';
+import { Thread } from '@/components/workspace/ThreadView';
 import {
-  buildTurns,
-  emptyColumnOf,
-  liveRequestOf,
-  type LiveStream,
-} from '@/components/workspace/thread';
+  CONVERSATION_PARAM,
+  PANEL_PARAM,
+  conversationHref,
+  parsePanelTab,
+  type PanelTab,
+} from '@/components/workspace/route';
+import { formatsOf, liveRequestOf } from '@/components/workspace/thread';
+import { courseToday } from '@/lib/course-dimension';
 import {
   WORKSPACE_STATUS_REFETCH_MS,
-  WorkspaceRefusal,
-  isMissingConversation,
   openRequestOf,
   parseConversationId,
-  useAskWorkspace,
-  useCancelWorkspaceRequest,
   useWorkspaceMessages,
   useWorkspaceRequests,
-  workspaceErrorReason,
   workspaceKeys,
   type WorkspaceMessage,
   type WorkspaceRequest,
 } from '@/lib/queries.workspace';
+import type { WorkspaceSource } from '@/lib/queries.workspace-sources';
+import {
+  useWorkspaceRequestOptions,
+  type WorkspaceFormat,
+  type WorkspaceRequestOptions,
+} from '@/lib/queries.workspace-ask';
+import { sourcesByRequest, useWorkspaceSourcesFor, useWorkspaceTurns } from '@/lib/queries.workspace-sources';
 import { useHydrated } from '@/lib/use-hydrated';
 import { useNow } from '@/lib/use-now';
 import { useWorkspaceStream, type WorkspaceStreamView } from '@/lib/use-workspace-stream';
-import {
-  askProblemLine,
-  conversationProblemLine,
-  stopProblemLine,
-} from '@/lib/workspace-labels';
+import { todayWords } from '@/lib/workspace-examples';
+import { CONVERSATIONS_HEADING, SHOW_PANEL_LABEL, todayLine } from '@/lib/workspace-labels';
+import { panelDocks, usePaneWidth, usePanel, type Panel } from './use-workspace-panel';
 import styles from './Workspace.module.css';
 
 const NO_REQUESTS: readonly WorkspaceRequest[] = [];
 const NO_MESSAGES: readonly WorkspaceMessage[] = [];
-const NONE_STOPPED: ReadonlySet<number> = new Set();
-
-/** The key of the thread when no conversation is selected. */
-const NO_CONVERSATION_KEY = 'none';
+const NO_OPTIONS: readonly WorkspaceRequestOptions[] = [];
 
 /**
- * What went wrong, one line each, in the reason it came with. Two failures of a
- * question are not here, because each has its own words: a refusal has its
- * sentence under the box, and an id that does not exist (23503) is the column's
- * not-found line. The database's sentence about the foreign key is never shown.
+ * Rows of this conversation's requests only. The turn and options reads keep their previous rows while a new
+ * id list is read (round 2, R2-2a), and a disabled read (the lobby, another conversation) can still hold the
+ * last conversation's: those never reach this one.
  */
-function problemLines(failed: { read: unknown; ask: unknown; stop: unknown }): string[] {
-  const { read, ask, stop } = failed;
-  const lines: string[] = [];
-  if (read) lines.push(conversationProblemLine(workspaceErrorReason(read)));
-  if (ask && !(ask instanceof WorkspaceRefusal) && !isMissingConversation(ask)) {
-    lines.push(askProblemLine(workspaceErrorReason(ask)));
-  }
-  if (stop) lines.push(stopProblemLine(workspaceErrorReason(stop)));
-  return lines;
+function ofRequests<T extends { request_id: number }>(rows: readonly T[] | undefined, requestIds: readonly number[]) {
+  if (rows === undefined) return undefined;
+  const known = new Set(requestIds);
+  return rows.filter((row) => known.has(row.request_id));
 }
+const NO_FORMATS: ReadonlyMap<number, WorkspaceFormat> = new Map();
+const NO_SOURCE_ROWS: ReadonlyMap<number, readonly WorkspaceSource[]> = new Map();
 
-/**
- * The sentence of a refused question, while its reason holds. "Still answering"
- * is about the conversation, so it goes once the rows show nothing open; the
- * question-length sentence is about the text, and stays until the text changes.
- */
-function refusalLine(asked: unknown, openRequest: WorkspaceRequest | null): string | null {
-  if (!(asked instanceof WorkspaceRefusal)) return null;
-  if (asked.reason === 'still_answering' && openRequest === null) return null;
-  return asked.message;
-}
-
-/**
- * Stop. The request is marked the moment the button is pressed, so the stopped
- * sentence shows at once; the mark comes off again if the database says the
- * request had already finished (false) or the cancel failed (it is still open).
- *
- * A Stop that failed is reported only while the request it was pressed on is
- * the open one (`openRequest`, as the rows have it): once that request has
- * finished there is nothing left to stop, and the next one never had Stop
- * pressed on it.
- *
- * Nothing is scheduled here for the partial answer the runner then stores. The
- * cancel refreshes the conversation, and the messages query polls for that row
- * from what the rows then say (`lib/workspace-poll.ts`), whatever this page
- * held when the button was pressed.
- */
-function useStop(conversationId: string | null, openRequest: WorkspaceRequest | null) {
-  const [stopped, setStopped] = useState<ReadonlySet<number>>(NONE_STOPPED);
-  const cancel = useCancelWorkspaceRequest(conversationId);
-  const failedOnOpen = openRequest !== null && openRequest.id === cancel.variables;
-
-  function stop(requestId: number) {
-    const unmark = () => setStopped((ids) => new Set([...ids].filter((id) => id !== requestId)));
-    setStopped((ids) => new Set([...ids, requestId]));
-    cancel.mutate(requestId, {
-      onSuccess: (changed) => {
-        if (!changed) unmark();
-      },
-      onError: unmark,
-    });
-  }
-
-  return {
-    stopped,
-    stop,
-    error: failedOnOpen ? cancel.error : null,
-    pending: cancel.isPending,
-  };
-}
-
-/** The message column's wrapper: what the channel is doing, as data attributes (see the header). */
-function StreamArea(props: {
-  stream: WorkspaceStreamView;
-  openRequestId: number | undefined;
-  children: ReactNode;
-}) {
-  const { stream } = props;
-  return (
-    <div
-      data-workspace-stream
-      data-topic={stream.topic}
-      data-channel={stream.channel}
-      data-channel-detail={stream.channelDetail ?? undefined}
-      data-request-id={props.openRequestId}
-    >
-      {props.children}
-    </div>
-  );
-}
-
-/**
- * Ask a question, and move to the conversation a first question made. `send`
- * answers whether the question was accepted; a failure is not dropped: the
- * mutation holds the error, and it is said above the column, in it, or under
- * the box.
- */
-function useQuestionSender(conversationId: string | null, onCreated: (id: string) => void) {
-  const ask = useAskWorkspace();
-
-  async function send(text: string): Promise<boolean> {
-    try {
-      const result = await ask.mutateAsync({ conversationId, text });
-      if (conversationId === null) onCreated(result.conversationId);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  return { ask, send };
-}
-
-interface ThreadProps {
-  conversationId: string | null;
-  requests: readonly WorkspaceRequest[];
-  messages: readonly WorkspaceMessage[];
-  /** The conversation's open request, as its rows have it. */
-  openRequest: WorkspaceRequest | null;
-  live: LiveStream | null;
-  stream: WorkspaceStreamView;
-  /** Both reads of the conversation have answered. */
-  loaded: boolean;
-  /** The conversation could not be read. */
-  readError: unknown;
-  now: number;
-  /** A first question made a conversation: the page moves to it. */
-  onCreated: (conversationId: string) => void;
-}
-
-function Thread(props: ThreadProps) {
-  const { conversationId, requests, messages, live, stream } = props;
-  const { ask, send } = useQuestionSender(conversationId, props.onCreated);
-  const stopper = useStop(conversationId, props.openRequest);
-  const { stopped, stop } = stopper;
-
-  // Stop was pressed on it: it reads as stopped, and the button as Ask, before the row does.
-  const openRequest =
-    props.openRequest !== null && !stopped.has(props.openRequest.id) ? props.openRequest : null;
-  const turns = buildTurns({ messages, requests, live, stoppedRequestIds: stopped });
-  const empty = emptyColumnOf({
-    conversationId,
-    loaded: props.loaded,
-    readFailed: Boolean(props.readError),
-    askedIntoMissing: isMissingConversation(ask.error),
-    turns: turns.length,
-  });
-  const problems = problemLines({ read: props.readError, ask: ask.error, stop: stopper.error });
-
-  return (
-    <section className={styles.thread}>
-      {problems.map((line) => (
-        <p key={line} className={styles.problem} role="alert">
-          {line}
-        </p>
-      ))}
-      <StreamArea stream={stream} openRequestId={openRequest?.id}>
-        <MessageList turns={turns} empty={empty} askedQuestionId={ask.data?.messageId ?? null} />
-      </StreamArea>
-      <Composer
-        requestOpen={openRequest !== null}
-        busy={ask.isPending || stopper.pending}
-        disabled={empty === 'missing'}
-        refusal={refusalLine(ask.error, props.openRequest)}
-        onAsk={send}
-        onStop={() => {
-          if (openRequest !== null) stop(openRequest.id);
-        }}
-        onEdit={() => {
-          if (ask.isError) ask.reset();
-        }}
-      />
-      <ServiceStatus now={props.now} />
-    </section>
-  );
-}
+/* ---------------------------------------------------------------------------
+ * The rows of one conversation, and its channel
+ * ------------------------------------------------------------------------ */
 
 /**
  * A request that stops being the open one has its stored row: `workspace_finish()`
  * commits the request and the message together. So the messages are read once at
  * that moment, whatever told the page (the `done` broadcast, a poll, a refetch on
- * focus). Without it a missed broadcast could cost the answer, not only the live
- * text: the two polls keep their own time, the requests poll can see the close
- * first, and the poll after a close runs only for an assistant row the page
- * already holds unfinished. An answer begun and finished between two polls is
- * read here.
+ * focus).
  */
 function useStoredRowOnClose(conversationId: string | null, openRequestId: number | null): void {
   const queryClient = useQueryClient();
@@ -312,13 +135,10 @@ function useStatusRereadFor(requestId: number | null): void {
 }
 
 /**
- * The offline line is said from a status row that is re-read every 30 s. A
- * service that has just come back claims a waiting question and streams its
- * answer inside those 30 s, so the line could sit beside text that is arriving.
- * So the status is re-read at once at the two moments the page learns the
- * service is answering (the PM's ruling U1): a request in view becomes
- * `claimed`, and its first delta arrives. The runner beats on its own timer,
- * so that read holds a current heartbeat.
+ * The offline line is said from a status row re-read every 30 s, so it is
+ * re-read at once at the two moments the page learns the service is answering
+ * (the PM's ruling U1): a request in view becomes `claimed`, and its first
+ * delta arrives.
  */
 function useStatusOnAnswer(
   openRequest: WorkspaceRequest | null,
@@ -331,13 +151,8 @@ function useStatusOnAnswer(
   useStatusRereadFor(followed !== null && receiving ? followed.id : null);
 }
 
-export function Workspace() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const conversationId = parseConversationId(searchParams.get(CONVERSATION_PARAM));
-  const hydrated = useHydrated();
-  const now = useNow(WORKSPACE_STATUS_REFETCH_MS);
-
+/** Everything the screen reads about one conversation, once hydrated, and the stream it follows. */
+function useConversation(conversationId: string | null, hydrated: boolean) {
   const requests = useWorkspaceRequests(conversationId);
   const requestRows = hydrated ? (requests.data ?? NO_REQUESTS) : NO_REQUESTS;
   const openRequest = openRequestOf(requestRows);
@@ -345,36 +160,194 @@ export function Workspace() {
   const messages = useWorkspaceMessages(conversationId, requestRows);
   useStoredRowOnClose(conversationId, openRequest?.id ?? null);
   const messageRows = hydrated ? (messages.data ?? NO_MESSAGES) : NO_MESSAGES;
-  // Until both have answered, an id with no rows is still being read, not "not found".
-  const loaded = hydrated && requests.data !== undefined && messages.data !== undefined;
+  const requestIds = useMemo(() => requestRows.map((request) => request.id), [requestRows]);
+  const turns = useWorkspaceTurns(conversationId, requestIds);
+  const options = useWorkspaceRequestOptions(conversationId, requestIds);
+  const turnRows = useMemo(() => ofRequests(turns.data, requestIds), [turns.data, requestIds]);
+  const sources = useWorkspaceSourcesFor(conversationId, requestIds);
+  const sourceRows = useMemo(
+    () => sourcesByRequest(ofRequests(sources.data, requestIds)),
+    [sources.data, requestIds],
+  );
+  const formats = useMemo(
+    () => formatsOf(ofRequests(options.data, requestIds) ?? NO_OPTIONS),
+    [options.data, requestIds],
+  );
 
   // The newest request is followed until its stored answer has landed.
   const followed = liveRequestOf(requestRows, messageRows);
   const stream = useWorkspaceStream(conversationId, followed?.id ?? null);
   useStatusOnAnswer(openRequest, followed, stream);
   const live =
-    followed === null ? null : { requestId: followed.id, text: stream.text, late: stream.late };
+    followed === null
+      ? null
+      : { requestId: followed.id, text: stream.text, late: stream.late, searched: stream.sources !== null };
+
+  return {
+    requestRows,
+    messageRows,
+    openRequest,
+    stream,
+    live,
+    turnRows: hydrated ? turnRows : undefined,
+    sources: hydrated ? sourceRows : NO_SOURCE_ROWS,
+    sourcesError: hydrated ? sources.error : null,
+    formats: hydrated ? formats : NO_FORMATS,
+    // Until both have answered, an id with no rows is still being read, not "not found".
+    loaded: hydrated && requests.data !== undefined && messages.data !== undefined,
+    // The options rows' failure is the composer's to say, under the box (round 2, R2-4): not said twice.
+    readError: hydrated ? (requests.error ?? messages.error ?? turns.error) : null,
+  };
+}
+
+type Conversation = ReturnType<typeof useConversation>;
+
+/* ---------------------------------------------------------------------------
+ * The parts of the screen
+ * ------------------------------------------------------------------------ */
+
+/** The column's wrapper: what the channel is doing, as data attributes (see the header). */
+function StreamArea(props: { stream: WorkspaceStreamView; openRequestId: number | undefined; children: ReactNode }) {
+  const { stream } = props;
+  return (
+    <div
+      className={styles.stream}
+      data-workspace-stream
+      data-topic={stream.topic}
+      data-channel={stream.channel}
+      data-channel-detail={stream.channelDetail ?? undefined}
+      data-request-id={props.openRequestId}
+    >
+      {props.children}
+    </div>
+  );
+}
+
+/** "Today is Thursday, October 15, 2026.": the New York date, once hydrated (amendment (g)). */
+function DateLine({ now, hydrated }: { now: number; hydrated: boolean }) {
+  if (!hydrated) return <span className={styles.today} />;
+  const today = courseToday(new Date(now));
+  return (
+    <p className={styles.today} data-today={today}>
+      {todayLine(todayWords(today))}
+    </p>
+  );
+}
+
+/** The top of the column: the rail's button under 720 px, the date, and Show panel while it is folded. */
+function ColumnBar(props: { now: number; hydrated: boolean; panel: Panel; onRail: () => void }) {
+  return (
+    <div className={styles.bar}>
+      <span className={styles.railSlot}>
+        <button type="button" className={styles.railButton} onClick={props.onRail}>
+          {CONVERSATIONS_HEADING}
+        </button>
+      </span>
+      <DateLine now={props.now} hydrated={props.hydrated} />
+      {props.panel.tab === null && (
+        <button type="button" className={styles.showPanel} onClick={props.panel.show}>
+          {SHOW_PANEL_LABEL}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** The thread of a selected conversation. */
+function ThreadOf(props: { conversationId: string; conversation: Conversation; now: number; panel: Panel }) {
+  const { conversation } = props;
+  return (
+    <Thread
+      key={props.conversationId}
+      conversationId={props.conversationId}
+      requests={conversation.requestRows}
+      messages={conversation.messageRows}
+      openRequest={conversation.openRequest}
+      live={conversation.live}
+      markStopped={conversation.stream.markStopped}
+      turnRows={conversation.turnRows}
+      sources={conversation.sources}
+      sourcesError={conversation.sourcesError}
+      formats={conversation.formats}
+      loaded={conversation.loaded}
+      readError={conversation.readError}
+      now={props.now}
+      onOpenSources={props.panel.openSources}
+    />
+  );
+}
+
+function PanelOf(props: { panel: Panel; now: number; sheet: boolean }) {
+  const { panel } = props;
+  if (panel.tab === null) return null;
+  const shared = {
+    tab: panel.tab,
+    sourcesRequestId: panel.requestId,
+    sourcesOrd: panel.ord,
+    sourcesBlocks: panel.blocks,
+    now: props.now,
+    onTab: panel.open,
+    onHide: panel.hide,
+  };
+  if (props.sheet) return <SidePanelSheet {...shared} />;
+  return (
+    <aside className={styles.panelTrack}>
+      <SidePanel {...shared} />
+    </aside>
+  );
+}
+
+export function Workspace() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const conversationId = parseConversationId(searchParams.get(CONVERSATION_PARAM));
+  const hydrated = useHydrated();
+  const now = useNow(WORKSPACE_STATUS_REFETCH_MS);
+  const conversation = useConversation(conversationId, hydrated);
+  const panel = usePanel(conversationId, parsePanelTab(searchParams.get(PANEL_PARAM)), conversation);
+  // Docked or a sheet, by the content pane's width (round 2, W-3).
+  const [root, setRoot] = useState<HTMLDivElement | null>(null);
+  const sheet = !panelDocks(usePaneWidth(root));
+  // The rail's sheet belongs to the route it was opened on: a pick closes it.
+  const route = searchParams.toString();
+  const [railOpenOn, setRailOpenOn] = useState<string | null>(null);
+  const openRequestId = conversation.stream.stopped ? undefined : conversation.openRequest?.id;
+  const list = (
+    <ConversationList
+      selectedId={conversationId}
+      now={now}
+      onArchivedSelected={() => router.replace(conversationHref(null))}
+    />
+  );
 
   return (
-    <div className={styles.workspace}>
-      <ConversationList
-        selectedId={conversationId}
-        now={now}
-        onArchivedSelected={() => router.replace(conversationHref(null))}
-      />
-      <Thread
-        key={conversationId ?? NO_CONVERSATION_KEY}
-        conversationId={conversationId}
-        requests={requestRows}
-        messages={messageRows}
-        openRequest={openRequest}
-        live={live}
-        stream={stream}
-        loaded={loaded}
-        readError={hydrated ? (requests.error ?? messages.error) : null}
-        now={now}
-        onCreated={(id) => router.replace(conversationHref(id))}
-      />
-    </div>
+    <>
+      <div
+        ref={setRoot}
+        className={styles.workspace}
+        data-panel-docked={panel.tab !== null && !sheet ? '' : undefined}
+      >
+        <div className={styles.rail}>{list}</div>
+        <div className={styles.pageColumn}>
+          <ColumnBar now={now} hydrated={hydrated} panel={panel} onRail={() => setRailOpenOn(route)} />
+          <StreamArea stream={conversation.stream} openRequestId={openRequestId}>
+            {conversationId === null ? (
+              <Lobby now={now} onCreated={(id) => router.replace(conversationHref(id))} />
+            ) : (
+              <ThreadOf conversationId={conversationId} conversation={conversation} now={now} panel={panel} />
+            )}
+          </StreamArea>
+        </div>
+        {!sheet && <PanelOf panel={panel} now={now} sheet={false} />}
+      </div>
+      {sheet && <PanelOf panel={panel} now={now} sheet />}
+      {railOpenOn === route && (
+        <div className={styles.railSheet}>
+          <PopoutShell label={CONVERSATIONS_HEADING} onClose={() => setRailOpenOn(null)}>
+            {list}
+          </PopoutShell>
+        </div>
+      )}
+    </>
   );
 }

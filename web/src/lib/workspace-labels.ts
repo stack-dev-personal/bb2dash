@@ -104,9 +104,10 @@ export const TIER_BADGES: Readonly<Record<WorkspaceTier, string>> = {
 };
 
 /**
- * Starts the line that names the tools an answer used. Phase 24b's thread
- * replaces that line with the sources row (`sourcesCountLine`); the prefix
- * stays until W-88 rewrites `thread.ts`, which is the one place that reads it.
+ * RETIRED (Phase 24b, 2026-10-15). Started the line that named the tools an
+ * answer used; the sources row (`sourcesCountLine`) stands there now and no
+ * screen reads this. Kept because the labels test pins every string and pack
+ * 21's playbook still quotes the old page; a later phase may delete it.
  */
 export const USED_PREFIX = 'Used:';
 
@@ -133,7 +134,11 @@ export function conversationProblemLine(reason: string): string {
  * way back to an empty composer (ruling U1)
  * ------------------------------------------------------------------------ */
 
-/** The message column with no conversation selected. */
+/**
+ * RETIRED (Phase 24b, 2026-10-15): the message column with no conversation
+ * selected was this one line; the lobby stands there now. Kept for the same
+ * reasons as `USED_PREFIX`.
+ */
 export const COLUMN_START_LINE = 'Ask a question to start a conversation.';
 
 /** The message column while the conversation's rows are still being read. */
@@ -564,6 +569,16 @@ export function forgetProblemLine(reason: string): string {
 
 /** The greeting holds no name: the app holds none of his (brief 111, "The lobby"). */
 export const GREETING_LINE = 'What are you working on?';
+
+/**
+ * Today's date with its weekday, on every visit, lobby and thread (brief 111,
+ * frozen at the gate, amendment (g)): the words come from
+ * `workspace-examples.ts`'s `todayWords`, "Thursday, October 15, 2026".
+ */
+export function todayLine(words: string): string {
+  return `Today is ${words}.`;
+}
+
 export const ROUTINES_HEADING = 'Routines';
 export const EXAMPLES_HEADING = 'From your planner';
 export const REFRESH_EXAMPLES_LABEL = 'Other examples';
@@ -601,4 +616,41 @@ export const NO_MATERIAL_MATCH_LINE = 'No file matches.';
 
 export function materialsProblemLine(reason: string): string {
   return `Could not load your materials: ${reason}`;
+}
+
+/* ===========================================================================
+ * W-87 additions (for the PM to accept)
+ * ======================================================================== */
+
+/** The course menu's classes (`v_course_display`) could not be read; "All courses" still works. */
+export function coursesProblemLine(reason: string): string {
+  return `Could not load your courses: ${reason}`;
+}
+
+/** The lobby's example prompts: his upcoming work (`v_work_items`) could not be read. */
+export function examplesProblemLine(reason: string): string {
+  return `Could not load your upcoming work: ${reason}`;
+}
+
+/**
+ * Ask is off while an attached upload is `failed` (Round 3, W-6): the not-ready line would say it is still
+ * being read. `reason` is the row's `UPLOAD_ERROR_SENTENCES[error_code]`, or null when the row has no code.
+ */
+export function uploadFailedAttachedLine(reason: string | null): string {
+  return reason === null
+    ? 'An attached upload failed. Try again or remove it.'
+    : `An attached upload failed: ${reason} Try again or remove it.`;
+}
+
+/* ===========================================================================
+ * W-88 additions (for the PM to accept)
+ * ======================================================================== */
+
+/**
+ * Open on a source row failed: the short signed link of an upload could not be
+ * made. In the app's "Could not …: <reason>" form; `OpenStoredButton`'s own
+ * fallback words are not reused, so every string the page shows stays here.
+ */
+export function openProblemLine(reason: string): string {
+  return `Could not open this file: ${reason}`;
 }
