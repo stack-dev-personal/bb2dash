@@ -104,9 +104,10 @@ export const TIER_BADGES: Readonly<Record<WorkspaceTier, string>> = {
 };
 
 /**
- * Starts the line that names the tools an answer used. Phase 24b's thread
- * replaces that line with the sources row (`sourcesCountLine`); the prefix
- * stays until W-88 rewrites `thread.ts`, which is the one place that reads it.
+ * RETIRED (Phase 24b, 2026-10-15). Started the line that named the tools an
+ * answer used; the sources row (`sourcesCountLine`) stands there now and no
+ * screen reads this. Kept because the labels test pins every string and pack
+ * 21's playbook still quotes the old page; a later phase may delete it.
  */
 export const USED_PREFIX = 'Used:';
 
@@ -133,7 +134,11 @@ export function conversationProblemLine(reason: string): string {
  * way back to an empty composer (ruling U1)
  * ------------------------------------------------------------------------ */
 
-/** The message column with no conversation selected. */
+/**
+ * RETIRED (Phase 24b, 2026-10-15): the message column with no conversation
+ * selected was this one line; the lobby stands there now. Kept for the same
+ * reasons as `USED_PREFIX`.
+ */
 export const COLUMN_START_LINE = 'Ask a question to start a conversation.';
 
 /** The message column while the conversation's rows are still being read. */
