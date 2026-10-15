@@ -325,3 +325,13 @@ Files changed in Round 2 (`git diff --name-only de4a194..HEAD`, before this reco
 `use-composer-uploads.ts`, and the tests `Composer.chips.test.tsx`, `Composer.uploads.test.tsx`,
 `menu-placement.test.ts` (new). No labels change, no token, no data attribute; every function of mine stays
 under 50 lines.
+
+## Round 3 (W-6, seen on the preview during probe Q-1)
+
+While an attached upload is `failed`, Ask stays disabled and the line under the box (its description) is the
+new W-87 addition `uploadFailedAttachedLine(reason)`, "An attached upload failed: <reason> Try again or remove
+it.", with `UPLOAD_ERROR_SENTENCES[error_code]`, or "An attached upload failed. Try again or remove it." when
+the row has no code; the not-ready line stays for `stored`, `reading` and `text_ready`; a `deleting` chip keeps
+default 9. Red, `Composer.uploads.test.tsx`: 2 failed, 12 passed (14); green: 14 passed (14). Gates on the
+commit: typecheck and eslint exit 0; `npx vitest run` 209 files, 3,847 tests passed; the four audits 107
+passed.

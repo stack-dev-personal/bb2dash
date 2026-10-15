@@ -259,3 +259,24 @@ describe('the limit of five, for files dropped before a re-render (R2-7)', () =>
     expect(screen.getByText(labels.ATTACHMENTS_LIMIT_LINE)).toBeInTheDocument();
   });
 });
+
+describe('an attached upload that failed (Round 3, W-6)', () => {
+  it.each([
+    ['too_many_units', 'with its reason'],
+    [null, 'with no reason when the row has no code'],
+  ] as const)('keeps Ask off and says it failed, %s, never the not-ready line (%s)', async (code, _why) => {
+    const failed = upload(34, 'failed', { title: 'big.pptx', error_code: code });
+    db.state.rows = { ...db.state.rows, workspace_documents: [failed] };
+    const { normalizeDocument } = await import('@/lib/queries.workspace-files');
+    flow.uploadFile.mockResolvedValue({ kind: 'existing', document: normalizeDocument(failed) });
+    const { container } = mount();
+    choose(container, 'big.pptx');
+
+    await waitFor(() => expect(uploadChip(container)).toHaveAttribute('data-upload-state', 'failed'));
+    const line = labels.uploadFailedAttachedLine(code === null ? null : labels.UPLOAD_ERROR_SENTENCES[code]);
+    expect(screen.getByText(line)).toBeInTheDocument();
+    expect(screen.queryByText(labels.UPLOAD_NOT_READY_LINE)).toBeNull();
+    expect(askButton()).toBeDisabled();
+    expect(askButton()).toHaveAccessibleDescription(line);
+  });
+});

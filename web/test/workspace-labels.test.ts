@@ -72,6 +72,7 @@ function builtStrings(): string[] {
     // W-87 additions (for the PM to accept)
     labels.coursesProblemLine(reason),
     labels.examplesProblemLine(reason),
+    labels.uploadFailedAttachedLine('The file could not be read.'),
     // W-88 addition (for the PM to accept): see the heading at the end of this file.
     labels.openProblemLine(reason),
   ];
@@ -597,6 +598,15 @@ describe('W-87 additions: the two problem lines the composer and the lobby need'
   it('words a failed read of the courses and of the upcoming work in the app form', () => {
     expect(labels.coursesProblemLine('x')).toBe('Could not load your courses: x');
     expect(labels.examplesProblemLine('x')).toBe('Could not load your upcoming work: x');
+  });
+});
+
+describe('W-87 additions: the line for an attached upload that failed (Round 3, W-6)', () => {
+  it('names the failure with the row\'s reason, and stands without one', () => {
+    expect(labels.uploadFailedAttachedLine(labels.UPLOAD_ERROR_SENTENCES.too_many_units)).toBe(
+      'An attached upload failed: The file has too many pages or slides to index. Try again or remove it.',
+    );
+    expect(labels.uploadFailedAttachedLine(null)).toBe('An attached upload failed. Try again or remove it.');
   });
 });
 

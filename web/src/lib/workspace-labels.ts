@@ -627,6 +627,16 @@ export function examplesProblemLine(reason: string): string {
   return `Could not load your upcoming work: ${reason}`;
 }
 
+/**
+ * Ask is off while an attached upload is `failed` (Round 3, W-6): the not-ready line would say it is still
+ * being read. `reason` is the row's `UPLOAD_ERROR_SENTENCES[error_code]`, or null when the row has no code.
+ */
+export function uploadFailedAttachedLine(reason: string | null): string {
+  return reason === null
+    ? 'An attached upload failed. Try again or remove it.'
+    : `An attached upload failed: ${reason} Try again or remove it.`;
+}
+
 /* ===========================================================================
  * W-88 additions (for the PM to accept)
  * ======================================================================== */
