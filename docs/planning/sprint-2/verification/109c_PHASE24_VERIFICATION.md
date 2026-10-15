@@ -884,3 +884,7 @@ session has merged `origin/main` (checked at 14:11Z: not yet); a volume of Phase
 **Phase 24a is accepted, and Phase 24ab is done**: tasks 1 to 12 of brief 118 are done but the last part of task
 11 named above. The record is this file's last four sections, STATUS "Phase 24a" and the DECISIONS rows of
 2026-10-15.
+
+**Step 1 (2026-10-15, after the record merged as `0d630ac`).** Stack: "usage credits are off." No `/usage`
+percentages given, as in Phase 21, and nothing waits on them. Pack 24 has no step left; Phase 24a has nothing of
+its own open.

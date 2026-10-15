@@ -1880,7 +1880,8 @@ Workspace never needed putting back. The full table is 109c's last section.
 | 15 | pass, proofs `upload-gone`, `conversations-unarchived` | `deleting` then `deleted`, 0 rows; 0 conversations left unarchived |
 | 16 | pass, five store proofs | pgvector 0.8.2; two 384-dimension columns and two indexes; 1,035 course units indexed, 0 waiting; nothing indexed without a vector; no foreign server, table, link extension or store function that calls out |
 
-**What the run did not exercise:** step 1 (Usage credits, `/usage`), Stack's; memory (off by
+**What the run did not exercise:** step 1 (Usage credits, `/usage`), Stack's, **answered 2026-10-15: "usage
+credits are off."**; memory (off by
 `WORKSPACE_MEMORY_JOBS=off` until 24b); the parser service on a file that needs it (the run's file is plain text;
 the parser's own probe is P-11 of 2026-10-09); the six routines, the depth choice, the attached course file and
 the About me note, which have no control on today's page (24b's pack). **The operator's notes**, none a defect:
@@ -2010,8 +2011,9 @@ read the same and the sync container was untouched.
 4. ~~bb2dash-stack's suite has no verdict for the merged branch~~ Run on Stack's word at 21:01Z: 359 of 359
    in 11 minutes (109c, "The list after a merge").
 
-**What Stack has to do:** nothing of this phase's. Step 1 of pack 24 (Usage credits off; `/usage`) is his to
-read, as in Phases 21 and 23. His own step of this phase, the upload worker's login, was done 2026-10-09, proved
+**What Stack has to do:** nothing. Step 1 of pack 24 (Usage credits off; `/usage`) he answered on 2026-10-15,
+after the record merged: "usage credits are off." (no `/usage` percentages given, as in Phase 21; nothing waits
+on them). Phase 24a has nothing of its own left. His own step of this phase, the upload worker's login, was done 2026-10-09, proved
 at the walk by the test worker's heartbeat and on 2026-10-15 by the live worker's.
 
 ## What's next — Sprint 2
