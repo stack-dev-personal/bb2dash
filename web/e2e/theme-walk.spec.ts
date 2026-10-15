@@ -35,7 +35,8 @@
 import { type BrowserContext, type Locator, type Page } from '@playwright/test';
 import { THEME_BG } from '../src/lib/theme-preference';
 import { A1_POPOUT, coldCache, failReads, fulfillView, openSignedIn } from './walk';
-import { expect, fulfillWorkspacePageFixture, quietSync, shotPath22, shotsAsked22, test } from './walk22.lib';
+import { expect, quietSync, shotPath22, shotsAsked22, test } from './walk22.lib';
+import { fulfillWorkspacePageFixture } from './walk24b.lib';
 
 test.use({ reducedMotion: 'reduce' });
 

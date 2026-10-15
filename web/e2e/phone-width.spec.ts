@@ -24,16 +24,8 @@
 
 import { type BrowserContext, type Locator, type Page } from '@playwright/test';
 import { A1_POPOUT, fulfillView, openSignedIn } from './walk';
-import {
-  LONGEST_SYNC_PHASE_22,
-  SYNC_LABEL_22,
-  expect,
-  fulfillWorkspacePageFixture,
-  quietSync,
-  shotPath22,
-  shotsAsked22,
-  test,
-} from './walk22.lib';
+import { LONGEST_SYNC_PHASE_22, SYNC_LABEL_22, expect, quietSync, shotPath22, shotsAsked22, test } from './walk22.lib';
+import { fulfillWorkspacePageFixture } from './walk24b.lib';
 
 test.use({ reducedMotion: 'reduce' });
 
