@@ -169,6 +169,41 @@ describe('a label in an answer', () => {
     expect(await within(panel).findByText('Week 5 slides.pptx')).toBeInTheDocument();
   });
 
+  it('opens the Sources tab at its own row: the row is marked and scrolled into view (round 2, R2-5)', async () => {
+    const scrolled: Element[] = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function scrollIntoView(this: Element) {
+      scrolled.push(this);
+    };
+    try {
+      seedDone('The slides [M12] and your notes [U9].', {
+        sources: [
+          sourceRow(1, { text_id: 12 }),
+          sourceRow(2, { kind: 'upload', file_id: null, document_id: 5, doc_text_id: 9, title: 'My notes.pdf' }),
+        ],
+      });
+      open();
+
+      fireEvent.click(await screen.findByRole('button', { name: labels.sourceChipLabel(2) }));
+
+      const panel = await screen.findByRole('region', { name: labels.PANEL_REGION_LABEL });
+      const row = await waitFor(() => {
+        const found = panel.querySelector('li[data-source-ref="2"]');
+        if (found === null) throw new Error('no row 2 yet');
+        return found;
+      });
+      await waitFor(() => expect(row).toHaveAttribute('aria-current', 'true'));
+      expect(panel.querySelector('li[data-source-ref="1"]')).not.toHaveAttribute('aria-current');
+      expect(scrolled).toContain(row);
+
+      // The sources row picks the answer and no row: the mark goes.
+      fireEvent.click(screen.getByRole('button', { name: '2 sources' }));
+      await waitFor(() => expect(panel.querySelector('li[aria-current]')).toBeNull());
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
   it('stays text when the request has no such row', async () => {
     seedDone('Something else [M99] and [U4].', { sources: [sourceRow(1, { text_id: 12 })] });
     const { container } = open();

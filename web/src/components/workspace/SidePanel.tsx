@@ -36,6 +36,8 @@ export interface SidePanelProps {
   tab: PanelTab;
   /** The request whose sources the Sources tab lists; null when no answer is picked. */
   sourcesRequestId: number | null;
+  /** The row a chip opened the tab at (round 2, R2-5); null when the answer was picked as a whole. */
+  sourcesOrd?: number | null;
   /** That answer's blocks, for the order of its rows (cited first). */
   sourcesBlocks: readonly AnswerBlock[];
   /** The clock, from the screen's `useNow`, for "updated" and "last indexed". */
@@ -108,6 +110,7 @@ function TabBody(props: SidePanelProps): ReactNode {
       return (
         <SourcesTab
           requestId={props.sourcesRequestId}
+          pickedOrd={props.sourcesOrd ?? null}
           blocks={props.sourcesBlocks}
           onMemory={() => props.onTab('memory')}
         />

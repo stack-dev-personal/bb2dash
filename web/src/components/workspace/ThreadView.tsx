@@ -131,7 +131,7 @@ export interface ThreadProps {
   readError: unknown;
   now: number;
   /** A chip or a sources row was pressed: open the panel's Sources tab at that request. */
-  onOpenSources: (requestId: number) => void;
+  onOpenSources: (requestId: number, ord: number | null) => void;
 }
 
 export function Thread(props: ThreadProps) {

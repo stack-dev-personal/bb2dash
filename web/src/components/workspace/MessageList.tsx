@@ -146,7 +146,7 @@ function SourcesRow(props: { count: number; onOpen: () => void }) {
 
 interface AnswerProps {
   turn: WorkspaceTurn;
-  onOpenSources: (requestId: number) => void;
+  onOpenSources: (requestId: number, ord: number | null) => void;
 }
 
 function Answer({ turn, onOpenSources }: AnswerProps) {
@@ -159,8 +159,9 @@ function Answer({ turn, onOpenSources }: AnswerProps) {
   // A line with no text beside it is a status, not an answer: a screen reader is not
   // told "The assistant answered" before "Waiting for the Workspace service".
   const statusOnly = turn.text === '' && lines.length > 0;
-  const open = () => {
-    if (requestId !== null) onOpenSources(requestId);
+  // A chip opens the panel at its row; the sources row opens it at the answer (round 2, R2-5).
+  const open = (ord: number | null) => {
+    if (requestId !== null) onOpenSources(requestId, ord);
   };
 
   return (
@@ -171,10 +172,10 @@ function Answer({ turn, onOpenSources }: AnswerProps) {
         <AnswerBody
           blocks={answerBlocks(turn.text, turn.format)}
           sources={rows}
-          onCite={open}
+          onCite={(ord) => open(ord)}
         />
       )}
-      <SourcesRow count={rows.length} onOpen={open} />
+      <SourcesRow count={rows.length} onOpen={() => open(null)} />
       {requestId !== null && sources.error && (
         <p className={styles.line}>{sourcesProblemLine(workspaceErrorReason(sources.error))}</p>
       )}
@@ -187,7 +188,10 @@ function Answer({ turn, onOpenSources }: AnswerProps) {
   );
 }
 
-function Turns(props: { turns: readonly WorkspaceTurn[]; onOpenSources: (requestId: number) => void }) {
+function Turns(props: {
+  turns: readonly WorkspaceTurn[];
+  onOpenSources: (requestId: number, ord: number | null) => void;
+}) {
   return (
     <ol className={styles.turns} aria-label={MESSAGES_REGION_LABEL}>
       {props.turns.map((turn) => (
@@ -237,8 +241,8 @@ export interface MessageListProps {
    * has sent none. Its turn takes the column to its end (`useFollowTheEnd`).
    */
   askedQuestionId?: string | null;
-  /** A chip or a sources row was pressed: open the panel's Sources tab at that request. */
-  onOpenSources?: (requestId: number) => void;
+  /** A chip (its ord) or a sources row (null) was pressed: open the panel's Sources tab at that request. */
+  onOpenSources?: (requestId: number, ord: number | null) => void;
 }
 
 const NOWHERE = (): void => undefined;

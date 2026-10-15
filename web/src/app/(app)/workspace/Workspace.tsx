@@ -232,19 +232,23 @@ function blocksOf(conversation: Conversation, requestId: number | null): readonl
 function usePanel(conversationId: string | null, tab: PanelTab | null, conversation: Conversation) {
   const router = useRouter();
   const [lastTab, setLastTab] = useState<PanelTab>(FIRST_TAB);
-  const [picked, setPicked] = useState<{ conversationId: string | null; requestId: number } | null>(null);
+  const [picked, setPicked] = useState<{
+    conversationId: string | null;
+    requestId: number;
+    /** The chip's row (round 2, R2-5); null for a sources row, which picks the answer alone. */
+    ord: number | null;
+  } | null>(null);
   const go = (next: PanelTab | null) => {
     if (next !== null) setLastTab(next);
     router.replace(panelHref(conversationId, next), { scroll: false });
   };
-  const requestId =
-    picked !== null && picked.conversationId === conversationId
-      ? picked.requestId
-      : newestKnownRequestOf(conversation.turnRows);
+  const ours = picked !== null && picked.conversationId === conversationId ? picked : null;
+  const requestId = ours !== null ? ours.requestId : newestKnownRequestOf(conversation.turnRows);
 
   return {
     tab,
     requestId,
+    ord: ours?.ord ?? null,
     blocks: tab === 'sources' ? blocksOf(conversation, requestId) : NO_BLOCKS,
     open: (next: PanelTab) => go(next),
     hide: () => {
@@ -252,8 +256,8 @@ function usePanel(conversationId: string | null, tab: PanelTab | null, conversat
       go(null);
     },
     show: () => go(lastTab),
-    openSources: (id: number) => {
-      setPicked({ conversationId, requestId: id });
+    openSources: (id: number, ord: number | null) => {
+      setPicked({ conversationId, requestId: id, ord });
       go('sources');
     },
   };
@@ -338,6 +342,7 @@ function PanelOf(props: { panel: Panel; now: number; sheet: boolean }) {
   const shared = {
     tab: panel.tab,
     sourcesRequestId: panel.requestId,
+    sourcesOrd: panel.ord,
     sourcesBlocks: panel.blocks,
     now: props.now,
     onTab: panel.open,

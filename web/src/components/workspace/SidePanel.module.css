@@ -78,6 +78,12 @@
   border-bottom: 1px solid var(--color-divider);
 }
 
+/* The row a chip opened the tab at: the active fill, never red (red marks only the tab and the conversation). */
+.row[aria-current='true'] {
+  background: var(--color-active);
+  box-shadow: 0 0 0 var(--space-1) var(--color-active);
+}
+
 /* A source row's number: the chip's, set the same way. */
 .ord {
   composes: tagOutline from '@/styles/tokens.module.css';

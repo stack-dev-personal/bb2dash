@@ -23,7 +23,7 @@
  */
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FileOpenAction } from '@/components/materials/FileOpenAction';
 import type { AnswerBlock } from '@/lib/answer-format';
 import { useCurrentFiles, type BbFileRow } from '@/lib/queries.materials';
@@ -141,10 +141,16 @@ function OpenAction({ source, onMemory }: { source: WorkspaceSource; onMemory: (
   }
 }
 
-function SourceRow({ source, onMemory }: { source: WorkspaceSource; onMemory: () => void }) {
+function SourceRow(props: { source: WorkspaceSource; picked: boolean; onMemory: () => void }) {
+  const { source, onMemory } = props;
   const facts = [SOURCE_KIND_LABELS[source.kind], source.course_id, sourceLocationLine(source), originLabel(source)];
   return (
-    <li className={styles.row} data-source-row={source.ord}>
+    <li
+      className={styles.row}
+      data-source-row={source.ord}
+      data-source-ref={source.ord}
+      aria-current={props.picked ? 'true' : undefined}
+    >
       <span className={styles.ord} aria-label={sourceChipLabel(source.ord)}>
         {source.ord}
       </span>
@@ -159,18 +165,33 @@ function SourceRow({ source, onMemory }: { source: WorkspaceSource; onMemory: ()
   );
 }
 
+/** The picked row, scrolled into view once it is listed (jsdom has no `scrollIntoView`; the browser does). */
+function useScrollToPicked(pickedOrd: number | null, listed: boolean) {
+  const list = useRef<HTMLUListElement>(null);
+  useEffect(() => {
+    if (pickedOrd === null || !listed) return;
+    const row = list.current?.querySelector(`[data-source-ref="${pickedOrd}"]`);
+    if (row && typeof row.scrollIntoView === 'function') row.scrollIntoView({ block: 'nearest' });
+  }, [pickedOrd, listed]);
+  return list;
+}
+
 export interface SourcesTabProps {
   /** The answer whose sources are listed; null when none is picked. */
   requestId: number | null;
+  /** The row a chip opened the tab at: marked and scrolled into view (round 2, R2-5). */
+  pickedOrd?: number | null;
   /** That answer's blocks, for the cited order. */
   blocks: readonly AnswerBlock[];
   /** A remembered item's Open: the Memory tab. */
   onMemory: () => void;
 }
 
-export function SourcesTab({ requestId, blocks, onMemory }: SourcesTabProps) {
+export function SourcesTab({ requestId, pickedOrd = null, blocks, onMemory }: SourcesTabProps) {
   const hydrated = useHydrated();
   const sources = useWorkspaceSources(requestId);
+  const listed = hydrated && requestId !== null && (sources.data?.length ?? 0) > 0;
+  const list = useScrollToPicked(pickedOrd, listed);
 
   if (requestId === null) return <p className={styles.line}>{NO_ANSWER_PICKED_LINE}</p>;
   if (!hydrated || (sources.data === undefined && !sources.error)) {
@@ -188,9 +209,9 @@ export function SourcesTab({ requestId, blocks, onMemory }: SourcesTabProps) {
   const ordered = sourcesForPanel(rows, citedOrdsOf(blocks, rows));
 
   return (
-    <ul className={styles.rows} data-request-id={requestId}>
+    <ul ref={list} className={styles.rows} data-request-id={requestId}>
       {ordered.map((source) => (
-        <SourceRow key={source.ord} source={source} onMemory={onMemory} />
+        <SourceRow key={source.ord} source={source} picked={source.ord === pickedOrd} onMemory={onMemory} />
       ))}
     </ul>
   );
