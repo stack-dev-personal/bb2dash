@@ -69,6 +69,8 @@ function builtStrings(): string[] {
     labels.examplePromptLine('exam', { title: 'Quiz 3', course: 'IST 323', date: 'Tue Oct 21' }),
     labels.todayLine('Thursday, October 15, 2026'),
     labels.materialsProblemLine(reason),
+    // W-88 addition (for the PM to accept): see the heading at the end of this file.
+    labels.openProblemLine(reason),
   ];
 }
 
@@ -581,5 +583,15 @@ describe('rules every string keeps', () => {
       .filter(([name]) => name !== 'STOPPED_SENTENCE')
       .map(([, value]) => value as string);
     expect(new Set(own).size).toBe(own.length);
+  });
+});
+
+/* ===========================================================================
+ * W-88 additions (for the PM to accept)
+ * ======================================================================== */
+
+describe('W-88 additions (for the PM to accept)', () => {
+  it('says an Open that failed in the app`s own form, with its reason', () => {
+    expect(labels.openProblemLine('x')).toBe('Could not open this file: x');
   });
 });

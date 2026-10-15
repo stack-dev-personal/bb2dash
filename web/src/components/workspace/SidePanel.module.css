@@ -1,0 +1,218 @@
+/* The side panel and its three tabs (Phase 24b). Tokens only. A square card
+   with a clear edge; pill buttons, none primary (the composer's Ask is the
+   view's one primary). The picked tab carries the page's red mark of where he
+   is, an underline in --color-accent-500 (D-I); its words stay ink. */
+
+.panel {
+  composes: card from '@/styles/tokens.module.css';
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-4);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.tabs {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.tab {
+  composes: btnGhost from '@/styles/tokens.module.css';
+  min-height: var(--size-target);
+  border-radius: 0;
+  text-decoration: none;
+}
+.tab[aria-selected='true'] {
+  box-shadow: inset 0 calc(var(--size-underline-mark) * -1) 0 var(--color-accent-500);
+}
+.tab:focus-visible {
+  outline: var(--size-focus) solid var(--color-accent);
+  outline-offset: var(--size-focus-gap);
+}
+
+.hide {
+  composes: btnGhost from '@/styles/tokens.module.css';
+  font-size: var(--text-xs);
+}
+
+.body {
+  min-width: 0;
+}
+
+.tabBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.filter {
+  composes: input from '@/styles/tokens.module.css';
+  width: 100%;
+}
+
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-divider);
+}
+
+/* A source row's number: the chip's, set the same way. */
+.ord {
+  composes: tagOutline from '@/styles/tokens.module.css';
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.rowText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.rowTitle {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.rowFacts {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+.rowReason,
+.summary {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.rowActions {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.delete {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+}
+
+/* The line under Delete: what it does, and what it does not. */
+.note {
+  margin: 0;
+  max-width: var(--size-280);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  text-align: right;
+}
+
+.line {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+}
+
+.problem {
+  composes: errorNotice from '@/styles/tokens.module.css';
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+
+.subheading {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: var(--text-base);
+}
+
+.status,
+.aboutBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.statusLines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.aboutMe {
+  margin: 0;
+  font-size: var(--text-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.editor .rowActions {
+  flex-direction: row;
+  justify-content: flex-start;
+}
+
+.noteField {
+  composes: input from '@/styles/tokens.module.css';
+  min-height: calc(var(--space-12) * 3);
+  resize: vertical;
+  font-family: var(--font-body);
+}
+
+/* Under 1024 px the panel is a sheet from the right, through PopoutShell: the
+   frame's backdrop and dialog are its two children, set here by structure so
+   the shared frame is not edited. */
+.sheet > div {
+  justify-content: flex-end;
+  align-items: stretch;
+  padding: 0;
+}
+.sheet > div > [role='dialog'] {
+  width: min(100%, var(--size-panel-max));
+  min-height: 100%;
+  border-radius: 0;
+  padding: var(--space-8) var(--space-4) var(--space-4);
+}
+.sheet .panel {
+  box-shadow: none;
+  padding: 0;
+}
