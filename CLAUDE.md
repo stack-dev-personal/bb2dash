@@ -60,7 +60,16 @@ Supabase project: `goultdzqcavefcgnifdy` (us-east-1, Postgres 17). Full access v
   Search UIs must scrub/label PPTX `[notes]` speaker-note markers and `Page N` headers.
 * GUI: layout spec = the Nocturne artboards; styling = direction D "Charcoal" (Phase 22, merged 2026-10-14): the tokens in `web/src/app/globals.css` (dark by default, a light block, the Dark / Light / Auto control in the account menu), the design system under `design-system/bb2dash/`, the token audit as a ratchet in `npm test` (`web/test/token-audit.*`, baselines at 0); CSS Modules + custom properties, no Tailwind.
   No fabricated numbers anywhere — no grade display until real gradebook data exists.
-* Workspace (Phase 21, rebuilt behind the page in Phase 24a; live since the cut-over of 2026-10-15 and accepted the same day): a chat page at `/workspace`. A container runner
+* Workspace (Phase 21; rebuilt behind the page in Phase 24a, live since the cut-over of 2026-10-15 and accepted
+  the same day; the page itself rebuilt in Phase 24b): a chat page at `/workspace`. The page (24b): a lobby (the
+  greeting with no name, one composer, his routines as shortcuts, example prompts from his planner, Recent, and
+  today's New York date with its weekday), a composer that owns its chips (a plus menu for an upload from this
+  device or a course file, a course chip, a depth chip Auto / Quick / Standard / Deep that returns to Auto after
+  one Deep question, a routine chip) and its uploads, formatted answers (`AnswerBody.tsx` over `parseAnswer`,
+  React text nodes only, numbered source chips inline), a sources row under each answer, and a side panel
+  (Sources, Files, Memory) docked when the content pane is 1024 px or wider and a sheet under that; the
+  conversations rail is a sheet under 720 px; the picked tab and the picked conversation carry the red mark.
+  Its props seam is `web/src/components/workspace/composer-contract.ts` (ruling C-1). A container runner
   answers each question with one or two `claude -p` turns of the pinned CLI (2.1.289) on Stack's Claude
   subscription: no API key, never `--bare`, never the Agent SDK. A heuristic router picks Haiku, Sonnet or
   Opus. On a middle or heavy question a cheap planning turn (Haiku, no tool, no MCP server, thinking off)
@@ -78,8 +87,10 @@ Supabase project: `goultdzqcavefcgnifdy` (us-east-1, Postgres 17). Full access v
   files (`bb_file_text`, `bb_text_embeddings`), his uploads and the assistant's memory
   (`workspace_documents`, `workspace_document_text`, `workspace_text_embeddings`), all on gte-small at 384
   dimensions, each vector table with its HNSW index, behind one search (`workspace_search`) that names the
-  kind on every hit; `v_workspace_index_status` is the one status row. Memory summaries are built and stay
-  off until Phase 24b (`WORKSPACE_MEMORY_JOBS=off`); the page's new controls are 24b's. Migrations 140–143
+  kind on every hit; `v_workspace_index_status` is the one status row. The memory jobs (the remembered items
+  the Memory tab shows) are `WORKSPACE_MEMORY_JOBS` in `compose.yaml`: `on` since Phase 24b's PR, live once
+  `workspace` is rebuilt from `main` at that phase's cut-over, proven by `just accept 24` (steps 22 to 24); the
+  rolling summary is on from 24a whatever the value says. Migrations 140–143
   and 190–199 are frozen; nothing is left in the block, so a fix needs a ruling and a new block.
 * Inbox auto-apply (Phase 23): after a sync that closed done, the `sync` container files an
   `inbox_feedback` request when the Inbox's answered queue holds an answer that is not held (187: an

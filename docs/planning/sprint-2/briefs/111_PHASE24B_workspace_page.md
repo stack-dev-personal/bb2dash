@@ -8,7 +8,9 @@ Date 2026-10-08 · PM: the Fable session · Product manager: Stack · Requiremen
 line 13; the PM confirms the one numbering at the freeze) · No migration: the page uses 24a's
 objects; 24a used the whole block 190–199, so a database change here needs a ruling and a new block · One PR in
 bb2dash · Verification file
-`docs/planning/sprint-2/verification/111a_PHASE24B_VERIFICATION.md`, called 111a below · Status:
+`docs/planning/sprint-2/verification/111a_PHASE24B_VERIFICATION.md`, called 111a below · Status: **part 2, the page, built, reviewed and walked 2026-10-15; PR open on Stack's
+merge word; the cut-over turns memory on and `just accept 24` proves it** (111a "Part 2"; the desktop half of
+the walk waits for his sign-in); before that,
 **FROZEN 2026-10-15 at the gate** (the section "Frozen at the gate" below: Phase 22 as merged read
 again, token by token and class by class, every cited line number checked, probe Q-5 run, and
 amendments (f) to (h) folded into the Contract; W-87 and W-88 are cut from the freeze commit, whose
@@ -544,8 +546,8 @@ it. Nobody answers a running worker by message (ruling W-S).
 | worker | stream | branch | worktree | owns (disjoint) | tasks |
 |---|---|---|---|---|---|
 | W-86 | data layer (**done**: merged to `main` as PR #108, 022812c, 2026-10-15) | `feat/workspace-page-24b-data` | `bb2dash-wt-24b-data` | the nine new files under `web/src/lib/` and their tests; `use-workspace-stream.ts` and its three tests (since 2026-10-14 `AnswerBody.tsx`, its module and its test are W-88's: "The data layer's frozen exports") | 2 (Q-4), 4 to 6 |
-| W-87 | composer and lobby | `feat/workspace-page-24b-composer` | `bb2dash-wt-24b-composer` | `Composer`, `PlusMenu`, `DepthMenu`, `MaterialPicker`, `Lobby`, `ExamplePrompts`, their modules and tests; `Workspace.empty.test.tsx` | 7, 8 |
-| W-88 | thread and panel | `feat/workspace-page-24b-thread` | `bb2dash-wt-24b-thread` | `page.tsx`, `Workspace.tsx`, `Workspace.module.css`, `Thread`, `MessageList`, `ConversationList`, `TierBadge`, `ServiceStatus`, `SidePanel` and its tabs, `thread.ts`, `route.ts`, their modules; both layout checks; `Workspace.test.tsx`, `Workspace.thread.test.ts`, `Workspace.failures.test.tsx`, `Workspace.rereads.test.tsx`, `Workspace.service.test.tsx`, `workspace-harness.tsx` | 9 to 11 |
+| W-87 | composer and lobby (**done**: merged at 8a02fb2; rounds 2 and 3 at 7947566 and aa16c0e) | `feat/workspace-page-24b-composer` | `bb2dash-wt-24b-composer` | `Composer`, `PlusMenu`, `DepthMenu`, `MaterialPicker`, `Lobby`, `ExamplePrompts`, their modules and tests; `Workspace.empty.test.tsx` | 7, 8 |
+| W-88 | thread and panel (**done**: merged at 8a02fb2; rounds 2 and 3 at 05e942b and 27b099e) | `feat/workspace-page-24b-thread` | `bb2dash-wt-24b-thread` | `page.tsx`, `Workspace.tsx`, `Workspace.module.css`, `Thread`, `MessageList`, `ConversationList`, `TierBadge`, `ServiceStatus`, `SidePanel` and its tabs, `thread.ts`, `route.ts`, their modules; both layout checks; `Workspace.test.tsx`, `Workspace.thread.test.ts`, `Workspace.failures.test.tsx`, `Workspace.rereads.test.tsx`, `Workspace.service.test.tsx`, `workspace-harness.tsx` | 9 to 11 |
 | PM | integration | `feat/workspace-page-24b` | `bb2dash-wt-24b` | `workspace-labels.ts` and its test; `workspace-examples.ts`'s `todayWords` (added at the freeze); the pack and `accept24.spec.ts` with `accept24.lib.ts`; **the acceptance files pack 21 shares:** `web/e2e/accept.lib.ts`, `web/e2e/walk21.lib.ts` and `walk21.window.ts` (the lines that read the two changed attributes), `acceptance/21/playbook.md` (only a sentence the pack check would otherwise fail), `acceptance/README.md` (one line), and the other `walk21*` files with `accept21.spec.ts` and `workspace-acceptance-helpers.spec.ts` as read at the cut; Phase 22's fixture and phone cases (`web/e2e/phone-width.spec.ts`, `web/e2e/theme-walk.spec.ts`); the token baseline if a count moves; `design-system/bb2dash/pages/workspace.md` (rewritten to this page); `compose.yaml`'s one value; state docs and root `CLAUDE.md`'s Workspace paragraph; 111a | 1 to 3, 12 to 16 |
 
 Not edited by anyone in this phase: `acceptance/acceptance.test.mjs`, `acceptance/pack-check.mjs`,
