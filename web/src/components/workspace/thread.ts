@@ -1,10 +1,13 @@
 /**
- * bb2dash — the Workspace thread, as pure functions (Phase 21, task 16).
+ * bb2dash — the Workspace thread, as pure functions (Phase 21, task 16;
+ * Phase 24b, task 9).
  *
- * A conversation is three lists the page reads separately: the stored messages,
- * the requests, and the live stream of the one request still being written.
- * `buildTurns` joins them into what the message column shows, by the Contract's
- * rules (brief 102, "States, in words"):
+ * A conversation is lists the page reads separately: the stored messages, the
+ * requests, the live stream of the one request still being written, and since
+ * Phase 24b each request's turn row (`workspace_turns`) and options row
+ * (`workspace_request_options`). `buildTurns` joins them into what the message
+ * column shows, by the Contract's rules (brief 102, "States, in words"; brief
+ * 111, "Turn"):
  *
  *   * THE STATE under a question comes from its `workspace_requests` row
  *     (`queued`, `claimed`, `done`, `failed`, `cancelled`; in words: queued,
@@ -14,28 +17,43 @@
  *     `error_code`, so a failed or cancelled request with no assistant row
  *     still says why, under the question.
  *   * THE TEXT is the stored content once the assistant row is finished, and
- *     the live stream until then. The stored row is the record: it replaces
- *     whatever the stream showed, text held back behind a gap included.
+ *     the live stream until then, as it was written: the answer body formats it
+ *     (`answerBlocks`), by the request's format, and nothing here strips it.
+ *   * SEARCHING. A claimed request whose stream has had no `sources` event and
+ *     no text, and whose turn row is not known, says `SEARCHING_LINE`; the
+ *     event, the first delta or the row takes it away.
+ *   * THE FIXED LINES. A turn whose row says `empty` or `failed` shows the
+ *     line `retrievalLineOf` gives, once the answer is no longer open, and only
+ *     when the answer's first line is not already that sentence: the runner
+ *     writes the nothing-matched sentence as the answer's first line itself
+ *     (PM default R-1: no sentence twice).
  *
  * `emptyColumnOf` says which line the column shows when it has no turn.
  *
  * Nothing here reads a clock, the cache or the DOM.
  */
 
+import { parseAnswer, plainBlocks, type AnswerBlock } from '@/lib/answer-format';
 import {
   WORKSPACE_OPEN_STATES,
   type WorkspaceErrorCode,
   type WorkspaceMessage,
   type WorkspaceRequest,
   type WorkspaceRequestState,
-  type WorkspaceToolCall,
 } from '@/lib/queries.workspace';
+import type { WorkspaceFormat, WorkspaceRequestOptions } from '@/lib/queries.workspace-ask';
+import {
+  retrievalLineOf,
+  turnOf as turnRowOf,
+  type WorkspaceRetrievalState,
+  type WorkspaceTurn as WorkspaceTurnRow,
+} from '@/lib/queries.workspace-sources';
 import {
   ERROR_SENTENCES,
   LATE_STREAM_LINE,
   QUEUED_LINE,
+  SEARCHING_LINE,
   STOPPED_SENTENCE,
-  USED_PREFIX,
 } from '@/lib/workspace-labels';
 
 /** The Contract's five states, in its words. */
@@ -48,6 +66,8 @@ export interface LiveStream {
   text: string;
   /** Deltas arrived and the lowest is not seq 1. */
   late: boolean;
+  /** The `sources` event arrived: the runner has searched. Absent reads as not yet. */
+  searched?: boolean;
 }
 
 /** One question with what is known of its answer. */
@@ -61,10 +81,18 @@ export interface WorkspaceTurn {
   answer: WorkspaceMessage | null;
   /** Null while the request row is not known. */
   state: TurnState | null;
-  /** The answer's text: stored when finished, else live. */
+  /** The answer's text, as written: stored when finished, else live. */
   text: string;
-  /** The line under the turn: queued, late-stream, or an error sentence; null when none applies. */
+  /** The line under the turn: queued, searching, late-stream, or an error sentence; null when none applies. */
   line: string | null;
+  /** The request's `workspace_turns` row; null while it is not known. */
+  row: WorkspaceTurnRow | null;
+  /** What the row says the search found; null while the row is not known. */
+  retrieval: WorkspaceRetrievalState | null;
+  /** The fixed line under the answer (R-1), or null. */
+  retrievalLine: string | null;
+  /** How the answer is read: the request's options row, plain when it has none. */
+  format: WorkspaceFormat;
 }
 
 export interface BuildTurnsInput {
@@ -75,6 +103,10 @@ export interface BuildTurnsInput {
   live: LiveStream | null;
   /** Requests Stop was pressed on, before the database has answered. */
   stoppedRequestIds: ReadonlySet<number>;
+  /** The conversation's `workspace_turns` rows; absent or undefined while not read. */
+  turnRows?: readonly WorkspaceTurnRow[];
+  /** Each request's format, from its options row (`formatsOf`). */
+  formats?: ReadonlyMap<number, WorkspaceFormat>;
 }
 
 const STATE_IN_WORDS: Readonly<Record<WorkspaceRequestState, TurnState>> = {
@@ -87,6 +119,12 @@ const STATE_IN_WORDS: Readonly<Record<WorkspaceRequestState, TurnState>> = {
 
 /** A failed request that carries no code reads as the runner's own catch-all. */
 const UNRECOGNISED_FAILURE: WorkspaceErrorCode = 'cli_error';
+
+/** An answer with no options row is shown as it always was: plain text. */
+const DEFAULT_FORMAT: WorkspaceFormat = 'plain';
+
+/** The states in which an answer is still being written: no fixed line yet. */
+const OPEN_TURN_STATES: ReadonlySet<TurnState> = new Set(['queued', 'streaming']);
 
 /* ---------------------------------------------------------------------------
  * One turn
@@ -109,14 +147,24 @@ function isStored(answer: WorkspaceMessage | null): answer is WorkspaceMessage {
   return answer !== null && answer.finished;
 }
 
-function lineOf(turn: Omit<WorkspaceTurn, 'key' | 'line'>, live: LiveStream | null): string | null {
+type TurnBody = Pick<WorkspaceTurn, 'state' | 'request' | 'answer' | 'text' | 'row'>;
+
+/** A claimed request with no text yet: searching until the runner says it has searched. */
+function streamingLine(turn: TurnBody, live: LiveStream | null): string | null {
+  if (turn.text !== '') return null;
+  if (live?.late) return LATE_STREAM_LINE;
+  const searched = live?.searched === true || turn.row !== null;
+  return searched ? LATE_STREAM_LINE : SEARCHING_LINE;
+}
+
+function lineOf(turn: TurnBody, live: LiveStream | null): string | null {
   const { state, request, answer, text } = turn;
   switch (state) {
     case 'queued':
       if (text !== '') return null;
       return live?.late ? LATE_STREAM_LINE : QUEUED_LINE;
     case 'streaming':
-      return text === '' ? LATE_STREAM_LINE : null;
+      return streamingLine(turn, live);
     case 'done':
       // Done, and the stored row is still on its way: not blank, and not a guess.
       return isStored(answer) || text !== '' ? null : LATE_STREAM_LINE;
@@ -130,25 +178,25 @@ function lineOf(turn: Omit<WorkspaceTurn, 'key' | 'line'>, live: LiveStream | nu
   }
 }
 
-/**
- * A pair of Markdown bold markers around a run of text on one line: `**like this**`.
- * The opener stands at the start of a line or after a space, a bracket or a quote, and
- * the closer before the end of a line, a space or punctuation, so `a**b**c`,
- * `2 ** 3 ** 4` and `f(**kwargs)` are not pairs. The run holds no `*` and no line break.
- */
-const BOLD_PAIR = /(^|[\s([“‘"'])\*\*(?=[^*\s])([^*\n]*?[^*\s])\*\*(?=$|[\s.,;:!?)\]”’"'])/gm;
+/** The answer's first line that holds anything, trimmed; null for an empty answer. */
+function firstLineOf(text: string): string | null {
+  return (
+    text
+      .split('\n')
+      .map((line) => line.trim())
+      .find((line) => line !== '') ?? null
+  );
+}
 
 /**
- * An answer as it is shown: the text as typed, less Markdown's bold markers.
- *
- * The page shows plain text (brief 102, O-5) and the system prompt asks for it, but a
- * model sometimes writes `**bold**` all the same, and the asterisks then stood on the
- * page (the PM's walk, W-3). Stack's ruling of 2026-10-07: strip them. Only a closed
- * pair is dropped, so nothing is parsed into markup and the stored row is not changed;
- * while an answer streams, an opener shows until its closer arrives.
+ * The fixed line under a finished answer: the row's line for `empty` or
+ * `failed`, unless the answer already opens with that sentence (R-1).
  */
-export function withoutBoldMarkers(text: string): string {
-  return text.replace(BOLD_PAIR, '$1$2');
+function retrievalLineFor(turn: TurnBody): string | null {
+  if (turn.state === null || OPEN_TURN_STATES.has(turn.state)) return null;
+  const line = retrievalLineOf(turn.row);
+  if (line === null) return null;
+  return firstLineOf(turn.text) === line ? null : line;
 }
 
 interface TurnParts {
@@ -158,17 +206,25 @@ interface TurnParts {
   answer: WorkspaceMessage | null;
 }
 
-function turnOf(parts: TurnParts, input: BuildTurnsInput): WorkspaceTurn {
+function turnFrom(parts: TurnParts, input: BuildTurnsInput): WorkspaceTurn {
   const { request, answer } = parts;
   const live = request !== null && input.live?.requestId === request.id ? input.live : null;
-  const body = {
-    question: parts.question,
+  const body: TurnBody = {
     request,
     answer,
     state: stateOf(request, input.stoppedRequestIds),
-    text: withoutBoldMarkers(isStored(answer) ? answer.content : (live?.text ?? '')),
+    text: isStored(answer) ? answer.content : (live?.text ?? ''),
+    row: request === null ? null : turnRowOf(input.turnRows, request.id),
   };
-  return { key: parts.key, ...body, line: lineOf(body, live) };
+  return {
+    key: parts.key,
+    question: parts.question,
+    ...body,
+    line: lineOf(body, live),
+    retrieval: body.row?.retrieval_state ?? null,
+    retrievalLine: retrievalLineFor(body),
+    format: (request === null ? undefined : input.formats?.get(request.id)) ?? DEFAULT_FORMAT,
+  };
 }
 
 /* ---------------------------------------------------------------------------
@@ -211,7 +267,7 @@ export function buildTurns(input: BuildTurnsInput): WorkspaceTurn[] {
       const request = byQuestion.get(message.id) ?? null;
       const answer = request === null ? null : (answers.get(request.id) ?? null);
       if (request !== null) paired.add(request.id);
-      turns.push(turnOf({ key: message.id, question: message, request, answer }, input));
+      turns.push(turnFrom({ key: message.id, question: message, request, answer }, input));
     }
   }
 
@@ -219,7 +275,7 @@ export function buildTurns(input: BuildTurnsInput): WorkspaceTurn[] {
     .filter((request) => !paired.has(request.id))
     .map((request) => {
       const answer = answers.get(request.id) ?? null;
-      return turnOf({ key: `request-${request.id}`, question: null, request, answer }, input);
+      return turnFrom({ key: `request-${request.id}`, question: null, request, answer }, input);
     });
 
   // An answer a turn already carries does not also stand alone: it is shown once.
@@ -245,7 +301,7 @@ function withAnswersInPlace(
   if (alone.length === 0) return [...turns];
   const position = new Map(input.messages.map((message, index) => [message.id, index]));
   const standing = alone.map((answer) =>
-    turnOf({ key: answer.id, question: null, request: null, answer }, input),
+    turnFrom({ key: answer.id, question: null, request: null, answer }, input),
   );
   return [...turns, ...standing].sort(
     (left, right) => (position.get(left.key) ?? 0) - (position.get(right.key) ?? 0),
@@ -268,26 +324,55 @@ export function liveRequestOf(
 }
 
 /* ---------------------------------------------------------------------------
+ * The format, and the answer read in it
+ * ------------------------------------------------------------------------ */
+
+/** Each request's format, by request id, from its options rows. */
+export function formatsOf(
+  rows: readonly Pick<WorkspaceRequestOptions, 'request_id' | 'format'>[],
+): ReadonlyMap<number, WorkspaceFormat> {
+  return new Map(rows.map((row) => [row.request_id, row.format]));
+}
+
+/**
+ * The answer as blocks: parsed for `rich`, paragraphs of text for `plain`.
+ * Called on every render while an answer streams (probe Q-4 passed); nothing
+ * is kept between renders.
+ */
+export function answerBlocks(text: string, format: WorkspaceFormat): readonly AnswerBlock[] {
+  return format === 'rich' ? parseAnswer(text) : plainBlocks(text);
+}
+
+/**
+ * The answer the Sources tab shows when none is picked (PM default R-2): the
+ * newest request whose turn row is known; null when no row is.
+ */
+export function newestKnownRequestOf(rows: readonly WorkspaceTurnRow[] | undefined): number | null {
+  return (rows ?? []).reduce<number | null>(
+    (newest, row) => (newest === null || row.request_id > newest ? row.request_id : newest),
+    null,
+  );
+}
+
+/* ---------------------------------------------------------------------------
  * The column with no turn to show
  * ------------------------------------------------------------------------ */
 
 /**
- * The three states of an empty message column (the PM's ruling U1). Each has
+ * The two states of an empty message column (the PM's ruling U1; Phase 24b
+ * took away `start`: with no conversation the page shows the lobby). Each has
  * its own line in `workspace-labels.ts`:
- *   `start`    no conversation is selected;
  *   `loading`  the conversation's rows are still being read;
  *   `missing`  the id was not found.
  */
-export type EmptyColumn = 'start' | 'loading' | 'missing';
+export type EmptyColumn = 'loading' | 'missing';
 
 export interface EmptyColumnInput {
-  /** `?c=`, once parsed; null when no conversation is selected. */
-  conversationId: string | null;
   /** Both reads of the conversation have answered, from the saved cache or the database. */
   loaded: boolean;
   /** A read failed: the problem line says why, and the column claims nothing. */
   readFailed: boolean;
-  /** `workspace_ask` answered that the id does not exist (SQLSTATE 23503). */
+  /** The ask answered that the id does not exist (SQLSTATE 23503). */
   askedIntoMissing: boolean;
   /** How many turns the rows make. */
   turns: number;
@@ -302,31 +387,7 @@ export interface EmptyColumnInput {
  * (23503) outranks rows read before the conversation was gone.
  */
 export function emptyColumnOf(input: EmptyColumnInput): EmptyColumn | null {
-  if (input.conversationId === null) return 'start';
   if (input.askedIntoMissing) return 'missing';
   if (input.turns > 0 || input.readFailed) return null;
   return input.loaded ? 'missing' : 'loading';
-}
-
-/* ---------------------------------------------------------------------------
- * The "Used:" line
- * ------------------------------------------------------------------------ */
-
-/** Sits between a tool and its scope. */
-const SCOPE_SEPARATOR = ' · ';
-
-/**
- * "Used: tool · scope, tool": only the `ok: true` calls, in call order, an
- * identical entry once; null when there are none. The stored `query` is not
- * shown, and a tool's result is never stored at all, so no raw `[notes]`
- * speaker-note slice can reach the screen through this line.
- */
-export function usedLine(toolCalls: readonly WorkspaceToolCall[]): string | null {
-  const entries: string[] = [];
-  for (const call of toolCalls) {
-    if (!call.ok) continue;
-    const entry = call.scope ? `${call.tool}${SCOPE_SEPARATOR}${call.scope}` : call.tool;
-    if (!entries.includes(entry)) entries.push(entry);
-  }
-  return entries.length === 0 ? null : `${USED_PREFIX} ${entries.join(', ')}`;
 }
