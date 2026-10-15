@@ -130,6 +130,27 @@ describe('a read that fails is said', () => {
     );
   });
 
+  it('leaves a failed read of the options rows to the composer: it is not said twice (round 2, R2-4)', async () => {
+    fake.state.rows = ANSWERED_ROWS;
+    fake.state.readErrors = { workspace_request_options: DENIED };
+    open();
+    await screen.findByText('Quiz 2.');
+    await waitFor(() => expect(fake.state.log).toContain('from:workspace_request_options'));
+    await settle();
+
+    expect(alerts()).toEqual([]);
+    expect(screen.queryByText(/Could not load this conversation/)).toBeNull();
+  });
+
+  it('says a failed read of the turn rows once, above the column', async () => {
+    fake.state.rows = ANSWERED_ROWS;
+    fake.state.readErrors = { workspace_turns: DENIED };
+    open();
+    await screen.findByText('Quiz 2.');
+
+    await waitFor(() => expect(alerts()).toEqual(['Could not load this conversation: permission denied']));
+  });
+
   it('says an empty list is empty only once the list has answered', async () => {
     open('');
 

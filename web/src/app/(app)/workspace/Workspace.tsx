@@ -192,7 +192,8 @@ function useConversation(conversationId: string | null, hydrated: boolean) {
     formats: hydrated ? formats : NO_FORMATS,
     // Until both have answered, an id with no rows is still being read, not "not found".
     loaded: hydrated && requests.data !== undefined && messages.data !== undefined,
-    readError: hydrated ? (requests.error ?? messages.error ?? turns.error ?? options.error) : null,
+    // The options rows' failure is the composer's to say, under the box (round 2, R2-4): not said twice.
+    readError: hydrated ? (requests.error ?? messages.error ?? turns.error) : null,
   };
 }
 
