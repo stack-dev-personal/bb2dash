@@ -12,6 +12,7 @@
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
 import { usePopover, type PopoverAnchor } from '@/components/shell/usePopover';
+import { placementOf, type MenuPlacement } from './menu-placement';
 
 /** The entries of a `role="menu"`, in document order. */
 export const MENU_ITEMS = '[role="menuitem"]:not([disabled]), [role="menuitemradio"]:not([disabled])';
@@ -75,6 +76,8 @@ export function useFocusOnOpen(node: HTMLElement | null, selector: string): void
 
 export interface MenuButtonState {
   open: boolean;
+  /** Where the menu opens, measured when it opened (W-2). */
+  placement: MenuPlacement;
   toggle: () => void;
   /** Close the menu and put focus back on its button. */
   close: () => void;
@@ -98,13 +101,18 @@ export function useMenuButton(): [
   const trigger = useRef<HTMLButtonElement | null>(null);
   const [menuNode, setMenuNode] = useState<HTMLDivElement | null>(null);
   useFocusOnOpen(menuNode, MENU_ITEMS);
-  const { open, toggle, close: closePopover } = popover;
+  const [placement, setPlacement] = useState<MenuPlacement>('up');
+  const { open, toggle: togglePopover, close: closePopover } = popover;
   const state = useMemo<MenuButtonState>(() => {
     const close = () => {
       closePopover();
       trigger.current?.focus();
     };
-    return { open, toggle, close, onMenuKeyDown: (event) => handleListKeys(event, MENU_ITEMS, close) };
-  }, [open, toggle, closePopover]);
+    const toggle = () => {
+      if (!open) setPlacement(placementOf(trigger.current));
+      togglePopover();
+    };
+    return { open, placement, toggle, close, onMenuKeyDown: (event) => handleListKeys(event, MENU_ITEMS, close) };
+  }, [open, placement, togglePopover, closePopover]);
   return [state, trigger, anchor, setMenuNode];
 }

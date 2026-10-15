@@ -23,6 +23,7 @@ import {
   USE_ROUTINE_LABEL,
 } from '@/lib/workspace-labels';
 import { useMenuButton } from './menu-keys';
+import { placedClass } from './menu-placement';
 import { RoutineList } from './RoutineList';
 import { usePhoneWidth } from './use-phone-width';
 import menuStyles from './Menu.module.css';
@@ -128,12 +129,12 @@ export function PlusMenu({ onAttachFromMaterials, onUploadFromDevice, onPickRout
         <PlusGlyph />
       </button>
       {menu.open && routines.view === 'menu' && (
-        <div ref={menuRef} role="menu" aria-label={ADD_MENU_LABEL} className={menuStyles.panel} onKeyDown={menu.onMenuKeyDown}>
+        <div ref={menuRef} role="menu" aria-label={ADD_MENU_LABEL} className={placedClass(menuStyles.panel, menuStyles.down, menu.placement)} onKeyDown={menu.onMenuKeyDown}>
           <MenuEntries onMaterials={handOff(onAttachFromMaterials)} onUpload={handOff(onUploadFromDevice)} onRoutines={routines.open} />
         </div>
       )}
       {menu.open && routines.view === 'routines' && (
-        <div className={`${menuStyles.panel} ${styles.routines}`}>
+        <div className={placedClass(`${menuStyles.panel} ${styles.routines}`, menuStyles.down, menu.placement)}>
           <RoutineList onPick={pick} onEscape={routines.back} />
         </div>
       )}

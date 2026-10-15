@@ -13,6 +13,7 @@
 import { WORKSPACE_DEPTHS, type WorkspaceDepth } from '@/lib/queries.workspace-ask';
 import { DEPTH_LABELS, DEPTH_MENU_LABEL, DEPTH_NOTES } from '@/lib/workspace-labels';
 import { useMenuButton } from './menu-keys';
+import { placedClass } from './menu-placement';
 import menuStyles from './Menu.module.css';
 import styles from './DepthMenu.module.css';
 
@@ -60,7 +61,7 @@ export function DepthMenu({ depth, onPick, disabled }: DepthMenuProps) {
           ref={menuRef}
           role="menu"
           aria-label={DEPTH_MENU_LABEL}
-          className={menuStyles.panelEnd}
+          className={placedClass(menuStyles.panelEnd, menuStyles.down, menu.placement)}
           onKeyDown={menu.onMenuKeyDown}
         >
           <DepthItems

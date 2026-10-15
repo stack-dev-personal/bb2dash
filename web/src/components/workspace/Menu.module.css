@@ -1,8 +1,8 @@
 /* The composer's pop-downs (Phase 24b, W-87): the plus menu, the course menu and
    the depth menu. A floating panel is a large card on the surface with the
    floating shadow; its entries are quiet rows that take the hover tint. Tokens
-   only. The panel opens upwards, because the composer sits at the foot of the
-   column. */
+   only. A panel opens by the room there is (menu-placement.ts): up at the foot
+   of a thread, down (.down) in the lobby. */
 
 .anchor {
   position: relative;
@@ -30,6 +30,12 @@
   composes: panel;
   left: auto;
   right: 0;
+}
+
+/* Opened down, when the room below the button is the larger: in the lobby (W-2). */
+.down {
+  top: calc(100% + var(--space-1));
+  bottom: auto;
 }
 
 /* What scrolls inside a panel is positioned, so what it holds scrolls with it. */

@@ -516,3 +516,35 @@ describe('the routine sheet and focus (R2-3)', () => {
     }
   });
 });
+
+describe('the menus open by the room there is (W-2)', () => {
+  function placeButton(button: HTMLElement, top: number): void {
+    button.getBoundingClientRect = () =>
+      ({ top, bottom: top + 32, left: 0, right: 40, width: 40, height: 32, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+  }
+
+  it('opens the depth menu down near the top of the window and up near its foot', async () => {
+    const menuStyles = (await import('@/components/workspace/Menu.module.css')).default;
+    const { container } = mount();
+    placeButton(depthButton(container), 100);
+    fireEvent.click(depthButton(container));
+    expect(screen.getByRole('menu', { name: labels.DEPTH_MENU_LABEL })).toHaveClass(menuStyles.down);
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+
+    placeButton(depthButton(container), window.innerHeight - 40);
+    fireEvent.click(depthButton(container));
+    expect(screen.getByRole('menu', { name: labels.DEPTH_MENU_LABEL })).not.toHaveClass(menuStyles.down);
+  });
+
+  it('opens the plus menu and its routine list down near the top of the window', async () => {
+    const menuStyles = (await import('@/components/workspace/Menu.module.css')).default;
+    mount();
+    const add = screen.getByRole('button', { name: labels.ADD_MENU_LABEL });
+    placeButton(add, 100);
+    fireEvent.click(add);
+    expect(screen.getByRole('menu', { name: labels.ADD_MENU_LABEL })).toHaveClass(menuStyles.down);
+    fireEvent.click(screen.getByRole('menuitem', { name: labels.USE_ROUTINE_LABEL }));
+    const search = await screen.findByRole('searchbox', { name: labels.ROUTINE_FILTER_PLACEHOLDER });
+    expect(search.closest(`.${menuStyles.down}`)).not.toBeNull();
+  });
+});
