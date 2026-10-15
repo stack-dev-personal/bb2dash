@@ -29,11 +29,14 @@ vi.mock('@/lib/supabase/client', async () =>
   (await import('./workspace-harness')).supabaseClientMock(),
 );
 vi.mock('next/navigation', async () => (await import('./workspace-harness')).navigationMock());
+vi.mock('@/components/workspace/Composer', async () => (await import('./workspace-harness')).composerMock());
+vi.mock('@/components/workspace/Lobby', async () => (await import('./workspace-harness')).lobbyMock());
 
 const labels = await import('@/lib/workspace-labels');
 const { SidePanel, tabForKey } = await import('@/components/workspace/SidePanel');
 const { panelHref, parsePanelTab } = await import('@/components/workspace/route');
 const { parseAnswer } = await import('@/lib/answer-format');
+const { Workspace } = await import('@/app/(app)/workspace/Workspace');
 
 type PanelTab = 'sources' | 'files' | 'memory';
 
@@ -172,6 +175,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe('the panel`s route', () => {
@@ -562,5 +566,85 @@ describe('the Memory tab', () => {
     fake.state.readErrors = { v_workspace_memory: { code: '42501', message: 'permission denied' } };
     mount({ tab: 'memory' });
     expect(await screen.findByText('Could not load what is remembered: permission denied')).toBeInTheDocument();
+  });
+});
+
+describe('the fold, on the mounted screen (the route)', () => {
+  const C = '6f1c2a54-9b1e-4c0d-8a55-0d2f3b7c9e11';
+
+  function openScreen(search: string) {
+    fake.state.search = search;
+    return render(
+      <QueryClientProvider client={newQueryClient()}>
+        <Workspace />
+      </QueryClientProvider>,
+    );
+  }
+
+  /** A window under 1024 px: the panel is a sheet. */
+  function narrowWindow(): void {
+    vi.stubGlobal(
+      'matchMedia',
+      (query: string) =>
+        ({
+          matches: query === '(max-width: 1023.98px)',
+          media: query,
+          addEventListener: () => undefined,
+          removeEventListener: () => undefined,
+        }) as unknown as MediaQueryList,
+    );
+  }
+
+  it('folds the panel away by dropping the parameter, and the same button brings its tab back', async () => {
+    openScreen(`c=${C}&panel=memory`);
+    const panel = await screen.findByRole('region', { name: labels.PANEL_REGION_LABEL });
+    expect(panel).toHaveAttribute('data-panel', 'memory');
+
+    fireEvent.click(within(panel).getByRole('button', { name: labels.HIDE_PANEL_LABEL }));
+
+    expect(fake.state.router.replace).toHaveBeenLastCalledWith(`/workspace?c=${C}`, { scroll: false });
+    await waitFor(() => expect(screen.queryByRole('region', { name: labels.PANEL_REGION_LABEL })).toBeNull());
+
+    fireEvent.click(screen.getByRole('button', { name: labels.SHOW_PANEL_LABEL }));
+
+    expect(fake.state.router.replace).toHaveBeenLastCalledWith(`/workspace?c=${C}&panel=memory`, { scroll: false });
+    expect(await screen.findByRole('region', { name: labels.PANEL_REGION_LABEL })).toHaveAttribute('data-panel', 'memory');
+    expect(screen.queryByRole('button', { name: labels.SHOW_PANEL_LABEL })).toBeNull();
+  });
+
+  it('moves to another tab through the route', async () => {
+    openScreen(`c=${C}&panel=sources`);
+    const panel = await screen.findByRole('region', { name: labels.PANEL_REGION_LABEL });
+    fireEvent.click(within(panel).getByRole('tab', { name: 'Files' }));
+    expect(fake.state.router.replace).toHaveBeenLastCalledWith(`/workspace?c=${C}&panel=files`, { scroll: false });
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: labels.PANEL_REGION_LABEL })).toHaveAttribute('data-panel', 'files'),
+    );
+  });
+
+  it('is a sheet under 1024 px, which Esc, its Close and the scrim each fold', async () => {
+    narrowWindow();
+    openScreen(`c=${C}&panel=files`);
+    const sheet = await screen.findByRole('dialog', { name: labels.PANEL_REGION_LABEL });
+    expect(within(sheet).getByRole('region', { name: labels.PANEL_REGION_LABEL })).toHaveAttribute('data-panel', 'files');
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(fake.state.router.replace).toHaveBeenLastCalledWith(`/workspace?c=${C}`, { scroll: false });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    act(() => fake.state.router.replace(`/workspace?c=${C}&panel=files`));
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: labels.CLOSE_LABEL }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    act(() => fake.state.router.replace(`/workspace?c=${C}&panel=files`));
+    const backdrop = (await screen.findByRole('dialog')).parentElement as HTMLElement;
+    fireEvent.mouseDown(backdrop);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('opens on a tab in the lobby too, where the Sources tab has no answer to show', async () => {
+    openScreen('panel=sources');
+    const panel = await screen.findByRole('region', { name: labels.PANEL_REGION_LABEL });
+    expect(within(panel).getByText(labels.NO_ANSWER_PICKED_LINE)).toBeInTheDocument();
   });
 });

@@ -1,0 +1,32 @@
+/* The thread (Phase 24b): what went wrong, the message column, and the dock
+   that holds the composer and the service line. Tokens only. */
+
+.thread {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* A read or a write that failed, in the app's own words for it (the Inbox's form). */
+.problem {
+  composes: errorNotice from '@/styles/tokens.module.css';
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+
+/* The composer, docked: it stays at the bottom of the pane on the pane's own
+   ground while a long thread scrolls past it (frozen (f)). Sticky is
+   positioned, so it contains what it places. */
+.dock {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-block: var(--space-3);
+  background: var(--color-bg);
+}

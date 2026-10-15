@@ -414,6 +414,11 @@ describe('buildTurns: the searching line (brief 111, "Turn": searching)', () => 
     expect(turns[0].line).toBe(LATE_STREAM_LINE);
   });
 
+  it('takes it away once the answer row is begun: `workspace_begin()` comes after the search', () => {
+    const begun = answer(2, 42, { finished: false });
+    expect(turn([question(1), begun], claimed()).line).toBe(LATE_STREAM_LINE);
+  });
+
   it('is never shown for a queued request: no runner has claimed it', () => {
     expect(turn([question(1)], [request(42, 1, 'queued')]).line).toBe(QUEUED_LINE);
   });

@@ -1,4 +1,6 @@
-/* The conversation list. Existing tokens only; Phase 22 restyles. */
+/* The conversation list (Phase 21; Phase 24b). Tokens only. The picked
+   conversation carries the page's red mark of where he is, a bar on its
+   reading edge in --color-accent-500, over the grey fill it had (D-I). */
 
 .list {
   display: flex;
@@ -62,6 +64,7 @@
 }
 .rowLink[aria-current='page'] {
   background: var(--color-active);
+  box-shadow: inset var(--size-underline-mark) 0 0 var(--color-accent-500);
 }
 
 .rowTitle {

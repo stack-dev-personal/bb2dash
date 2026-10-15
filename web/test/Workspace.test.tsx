@@ -4,24 +4,29 @@
  * What brief 102's "Routes and screens" says the page shows, read off the
  * mounted screen over the fake client in `workspace-harness.tsx`:
  *
- *   * the message column: one tier badge per assistant row; a "Used:" line
- *     built from the `ok: true` tool calls; content as plain text; never a
- *     tool's result, the stored query or the cost estimate;
- *   * the composer: "Ask", and "Stop" only while a request is open; Enter asks
- *     and Shift+Enter is a new line; while a request is open Enter does not
- *     send, and the database's refusal (23505) is the backstop for a request
- *     this page had not read; each refusal has its one sentence;
+ *   * the message column: one tier badge per assistant row; no "Used:" line
+ *     (Phase 24b: the Sources tab holds the tools); a stored answer with no
+ *     options row as plain text; never a tool's result, the stored query or
+ *     the cost estimate;
+ *   * the composer, through its contract (ruling C-1; W-87's composer is
+ *     stood in for by `composerMock()`, and its own keys and refusals are
+ *     W-87's tests): it is told when a request is open, a first question in
+ *     the lobby moves the page to its conversation, and a 23503 is the column's
+ *     not-found line;
  *   * the state under a question, from its `workspace_requests` row, with one
  *     sentence per `error_code`, and the stopped sentence at once after Stop;
  *   * the conversation list: archived rows left out, "Archive" on each row,
  *     and a "Show archived" toggle, off by default, whose rows read "Unarchive";
  *   * exactly one private channel: `workspace:<uuid>` or `workspace:lobby`;
  *   * the service line: offline once the clock passes `polled_at` + 120 s,
- *     said only from a status row that was read recently.
+ *     said only from a status row that was read recently. It is the thread's
+ *     (in the composer's dock) and the lobby's (W-87's), so it is read here on
+ *     a thread.
  *
  * The stream's own cases (the end of a stream, a gap, hydration) are in
  * `use-workspace-stream.screen.test.tsx`; the pure thread rules in
- * `Workspace.thread.test.ts`.
+ * `Workspace.thread.test.ts`; the answer body, the sources and the searching
+ * line in `Workspace.sources.test.tsx`.
  */
 
 import { QueryClientProvider, focusManager, type QueryClient } from '@tanstack/react-query';
@@ -43,6 +48,8 @@ vi.mock('@/lib/supabase/client', async () =>
   (await import('./workspace-harness')).supabaseClientMock(),
 );
 vi.mock('next/navigation', async () => (await import('./workspace-harness')).navigationMock());
+vi.mock('@/components/workspace/Composer', async () => (await import('./workspace-harness')).composerMock());
+vi.mock('@/components/workspace/Lobby', async () => (await import('./workspace-harness')).lobbyMock());
 
 const labels = await import('@/lib/workspace-labels');
 const { WORKSPACE_ERROR_CODES, WORKSPACE_STATUS_REFETCH_MS, workspaceKeys } = await import(
@@ -154,40 +161,19 @@ describe('the message column', () => {
     expect(badges.map((badge) => badge.getAttribute('data-tier'))).toEqual(['low', 'mid', 'high']);
   });
 
-  it('builds the "Used:" line from the ok calls only, in call order, each entry once', async () => {
+  it('prints no "Used:" line under an answer: the tools it used are the Sources tab`s (brief 111)', async () => {
     seedAnswered({
       tool_calls: [
         { tool: 'search_context', query: 'quiz 2', scope: 'bb2dash-inbox-decisions', ok: true },
-        { tool: 'get_document', query: null, scope: null, ok: false },
-        { tool: 'list_courses', query: null, scope: null, ok: true },
-        { tool: 'search_context', query: 'quiz two', scope: 'bb2dash-inbox-decisions', ok: true },
         { tool: 'search_materials', query: 'late work', scope: 'IST.323', ok: true },
-        { tool: 'search_materials', query: 'late work', scope: null, ok: true },
       ],
     });
     const { container } = open();
     await screen.findByText('Quiz 2.');
 
-    expect(container.querySelector('[data-used]')?.textContent).toBe(
-      'Used: search_context · bb2dash-inbox-decisions, list_courses, search_materials · IST.323, search_materials',
-    );
-  });
-
-  it('shows no "Used:" line when no call was ok, or none was made', async () => {
-    fake.state.rows = {
-      workspace_messages: [
-        question(1, 'one'),
-        answer(2, 41, { content: 'first', tool_calls: [{ tool: 'search_context', scope: 'stack', ok: false }] }),
-        question(3, 'two'),
-        answer(4, 42, { content: 'second', tool_calls: [] }),
-      ],
-      workspace_requests: [request(41, 1, 'done'), request(42, 3, 'done')],
-    };
-    const { container } = open();
-    await screen.findByText('second');
-
     expect(container.querySelector('[data-used]')).toBeNull();
     expect(container.textContent).not.toContain('Used:');
+    expect(container.textContent).not.toContain('search_context');
   });
 
   it('labels a status line with no answer text "Status" for a screen reader, and an answer "The assistant answered"', async () => {
@@ -248,7 +234,6 @@ describe('the message column', () => {
     const { container } = open();
     await screen.findByText('Quiz 2.');
 
-    expect(container.querySelector('[data-used]')?.textContent).toBe('Used: search_materials · IST.323');
     expect(container.textContent).not.toContain('the-stored-query');
     expect(container.textContent).not.toContain('speaker-note');
     expect(container.textContent).not.toContain('0.0213');
@@ -256,13 +241,14 @@ describe('the message column', () => {
   });
 });
 
-describe('the composer', () => {
-  it('reads "Ask", and "Stop" only while a request is open', async () => {
+describe('the composer, through its contract (ruling C-1)', () => {
+  it('is told a request is open: the button reads "Ask", and "Stop" only while one is', async () => {
     seedAnswered();
     const view = open();
     await screen.findByText('Quiz 2.');
     expect(composer().ask).toBeInTheDocument();
     expect(composer().stop).toBeNull();
+    expect(fake.state.composer).toMatchObject({ conversationId: A, requestIds: [41], requestOpen: false, busy: false });
     view.unmount();
 
     fake.state.rows = {
@@ -272,86 +258,13 @@ describe('the composer', () => {
     open();
     await waitFor(() => expect(composer().stop).toBeInTheDocument());
     expect(composer().ask).toBeNull();
+    expect(fake.state.composer).toMatchObject({ requestOpen: true, disabled: false });
   });
 
-  it('asks on Enter, and leaves Shift+Enter to make a new line', async () => {
-    seedAnswered();
-    open();
-    await screen.findByText('Quiz 2.');
-    const box = type('  What is due this week?  ');
-
-    // A key the page does not handle is not cancelled, so the browser adds the line.
-    expect(fireEvent.keyDown(box, { key: 'Enter', shiftKey: true })).toBe(true);
-    expect(fake.state.rpcCalls).toEqual([]);
-
-    expect(fireEvent.keyDown(box, { key: 'Enter' })).toBe(false);
-    await waitFor(() =>
-      expect(fake.state.rpcCalls).toEqual([
-        { fn: 'workspace_ask', args: { p_conversation_id: A, p_text: 'What is due this week?' } },
-      ]),
-    );
-    await waitFor(() => expect(box).toHaveValue(''));
-  });
-
-  it('refuses an empty question with its sentence, before any request is sent', async () => {
-    seedAnswered();
-    open();
-    await screen.findByText('Quiz 2.');
-    type('   ');
-
-    fireEvent.click(screen.getByRole('button', { name: labels.ASK_LABEL }));
-
-    expect(await screen.findByText('Write a question of 1 to 8000 characters.')).toBeInTheDocument();
-    expect(fake.state.rpcCalls).toEqual([]);
-  });
-
-  it.each(['queued', 'claimed'])(
-    'does not send on Enter while a request is open (%s): the button reads Stop',
-    async (state) => {
-      fake.state.rows = {
-        workspace_messages: [question(1, 'What is due?')],
-        workspace_requests: [request(42, 1, state)],
-      };
-      open();
-      await waitFor(() => expect(composer().stop).toBeInTheDocument());
-      const box = type('and next week?');
-
-      // Enter is still the page's key: no new line is added, and nothing is sent.
-      expect(fireEvent.keyDown(box, { key: 'Enter' })).toBe(false);
-      await settle();
-
-      expect(fake.state.rpcCalls).toEqual([]);
-      expect(box).toHaveValue('and next week?');
-      expect(screen.queryByText(labels.REFUSAL_STILL_ANSWERING)).toBeNull();
-      // Shift+Enter is still the browser's new line.
-      expect(fireEvent.keyDown(box, { key: 'Enter', shiftKey: true })).toBe(true);
-    },
-  );
-
-  it('says the conversation is still answering when the database refuses a second question (23505, the backstop)', async () => {
-    seedAnswered();
-    open();
-    await screen.findByText('Quiz 2.');
-    // Asked from another tab since this page last read: open in the database, and the
-    // button here still reads Ask. Enter sends, and the database refuses it.
-    fake.state.rows = {
-      workspace_messages: [...fake.state.rows.workspace_messages, question(3, 'And the reading?')],
-      workspace_requests: [...fake.state.rows.workspace_requests, request(42, 3, 'queued')],
-    };
-    expect(composer().ask).toBeInTheDocument();
-
-    fireEvent.keyDown(type('and next week?'), { key: 'Enter' });
-
-    expect(await screen.findByText('This conversation is still answering.')).toBeInTheDocument();
-    expect(fake.state.rpcCalls.map((call) => call.fn)).toEqual(['workspace_ask']);
-    expect(composer().box).toHaveValue('and next week?');
-    // The refused question brought the open request into view: the button reads Stop now.
-    await waitFor(() => expect(composer().stop).toBeInTheDocument());
-  });
-
-  it('opens the new conversation after a first question', async () => {
+  it('opens the new conversation after a first question asked in the lobby', async () => {
     open('');
     await joined('workspace:lobby');
+    expect(document.querySelector('[data-lobby]')).not.toBeNull();
     type('spike');
 
     fireEvent.click(screen.getByRole('button', { name: labels.ASK_LABEL }));
@@ -359,12 +272,17 @@ describe('the composer', () => {
     await waitFor(() =>
       expect(fake.state.router.replace).toHaveBeenCalledWith(`/workspace?c=${NEW_CONVERSATION}`),
     );
-    expect(fake.state.rpcCalls[0].args).toEqual({ p_conversation_id: null, p_text: 'spike' });
+    expect(fake.state.rpcCalls[0]).toMatchObject({
+      fn: 'workspace_ask_with',
+      args: { p_conversation_id: null, p_text: 'spike' },
+    });
+    // The route moved: the thread of the new conversation is shown, with its question.
+    expect(await screen.findByText('spike', { selector: 'p' })).toBeInTheDocument();
   });
 
   it('says the conversation was not found when its id does not exist (23503), never the database`s sentence', async () => {
     seedAnswered();
-    fake.state.rpc.workspace_ask = () => ({
+    fake.state.rpc.workspace_ask_with = () => ({
       data: null,
       error: { code: '23503', message: 'violates foreign key constraint' },
     });
@@ -377,8 +295,9 @@ describe('the composer', () => {
     expect(await screen.findByText('This conversation was not found.')).toBeInTheDocument();
     expect(container.textContent).not.toContain('violates foreign key constraint');
     expect(container.textContent).not.toContain('Could not load this conversation');
-    expect(screen.queryByText(labels.REFUSAL_QUESTION_LENGTH)).toBeNull();
     expect(composer().box).toHaveValue('hello?');
+    // Not found: the composer is told so, and nothing more is sent into it.
+    await waitFor(() => expect(fake.state.composer).toMatchObject({ disabled: true }));
   });
 });
 
@@ -614,10 +533,18 @@ describe('the service line', () => {
     });
   }
 
+  /** An answered conversation, its status rows as the test set them: the service line is in its dock. */
+  function openThread(client?: QueryClient) {
+    const status = fake.state.rows.v_workspace_status;
+    seedAnswered();
+    if (status) fake.state.rows = { ...fake.state.rows, v_workspace_status: status };
+    return open(`c=${A}`, client);
+  }
+
   it('turns offline once the clock passes polled_at + 120 s with no new data, and back when a newer one arrives', async () => {
     vi.useFakeTimers({ now: START });
     fake.state.rows = { v_workspace_status: heartbeat(START - 10_000) };
-    open('');
+    openThread();
     await advance(100);
     expect(screen.queryByText('The Workspace service is offline.')).toBeNull();
 
@@ -629,7 +556,7 @@ describe('the service line', () => {
     await advance(30_000);
     expect(screen.getByText('The Workspace service is offline.')).toBeInTheDocument();
 
-    fake.state.rows = { v_workspace_status: heartbeat(Date.now()) };
+    fake.state.rows = { ...fake.state.rows, v_workspace_status: heartbeat(Date.now()) };
     await advance(30_000);
     expect(screen.queryByText('The Workspace service is offline.')).toBeNull();
   });
@@ -652,7 +579,7 @@ describe('the service line', () => {
     // The service is up: the database holds a heartbeat from this second.
     fake.state.rows = { v_workspace_status: heartbeat(START) };
 
-    open('', clientWithStatus(restored, TEN_MINUTES_MS));
+    openThread(clientWithStatus(restored, TEN_MINUTES_MS));
 
     // The first paint: the read has been sent and has not answered.
     expect(fake.state.log).toContain('from:v_workspace_status');
@@ -696,11 +623,11 @@ describe('the service line', () => {
     vi.useFakeTimers({ now: START });
     fake.state.rows = { v_workspace_status: [NEVER_POLLED] };
 
-    const recent = open('', clientWithStatus(NEVER_POLLED, 2 * WORKSPACE_STATUS_REFETCH_MS));
+    const recent = openThread(clientWithStatus(NEVER_POLLED, 2 * WORKSPACE_STATUS_REFETCH_MS));
     expect(screen.getByText(OFFLINE)).toBeInTheDocument();
     recent.unmount();
 
-    open('', clientWithStatus(NEVER_POLLED, 2 * WORKSPACE_STATUS_REFETCH_MS + 1));
+    openThread(clientWithStatus(NEVER_POLLED, 2 * WORKSPACE_STATUS_REFETCH_MS + 1));
     expect(screen.queryByText(OFFLINE)).toBeNull();
     // The fresh read answers: the service never polled, and now the page may say so.
     await advance(100);
@@ -709,14 +636,14 @@ describe('the service line', () => {
 
   it('reads a service that never polled as offline', async () => {
     fake.state.rows = { v_workspace_status: [{ polled_at: null, runner: null, open_requests: 0 }] };
-    open('');
+    openThread();
 
     expect(await screen.findByText('The Workspace service is offline.')).toBeInTheDocument();
   });
 
   it('says nothing about the service before the status has been read', async () => {
     fake.state.readErrors = { v_workspace_status: { code: '42501', message: 'permission denied' } };
-    open('');
+    openThread();
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('permission denied');

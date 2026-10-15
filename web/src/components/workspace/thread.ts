@@ -20,8 +20,8 @@
  *     the live stream until then, as it was written: the answer body formats it
  *     (`answerBlocks`), by the request's format, and nothing here strips it.
  *   * SEARCHING. A claimed request whose stream has had no `sources` event and
- *     no text, and whose turn row is not known, says `SEARCHING_LINE`; the
- *     event, the first delta or the row takes it away.
+ *     no text, and whose turn row and begun answer row are not known, says
+ *     `SEARCHING_LINE`; the event, the first delta or either row takes it away.
  *   * THE FIXED LINES. A turn whose row says `empty` or `failed` shows the
  *     line `retrievalLineOf` gives, once the answer is no longer open, and only
  *     when the answer's first line is not already that sentence: the runner
@@ -153,7 +153,8 @@ type TurnBody = Pick<WorkspaceTurn, 'state' | 'request' | 'answer' | 'text' | 'r
 function streamingLine(turn: TurnBody, live: LiveStream | null): string | null {
   if (turn.text !== '') return null;
   if (live?.late) return LATE_STREAM_LINE;
-  const searched = live?.searched === true || turn.row !== null;
+  // The sources event, the turn row or the begun answer row (`workspace_begin()`) each say the search is over.
+  const searched = live?.searched === true || turn.row !== null || turn.answer !== null;
   return searched ? LATE_STREAM_LINE : SEARCHING_LINE;
 }
 
