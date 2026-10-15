@@ -130,7 +130,7 @@ function UploadRow({ document }: { document: WorkspaceDocument }) {
   const removing = document.state === 'deleting';
 
   return (
-    <li className={styles.row} data-upload-state={document.state}>
+    <li className={`${styles.row} ${styles.stacked}`} data-upload-state={document.state}>
       <div className={styles.rowText}>
         <span id={titleId} className={styles.rowTitle}>
           {document.title}

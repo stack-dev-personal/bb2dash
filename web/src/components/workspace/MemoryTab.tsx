@@ -184,7 +184,7 @@ function MemoryRow({ item, now }: { item: WorkspaceMemoryItem; now: number }) {
   const facts = [DOCUMENT_STATE_LABELS[item.state], relativeTime(item.updated_at, new Date(now))];
 
   return (
-    <li className={styles.row} data-memory-state={item.state}>
+    <li className={`${styles.row} ${styles.stacked}`} data-memory-state={item.state}>
       <div className={styles.rowText}>
         <span id={titleId} className={styles.rowTitle}>
           {item.title}
