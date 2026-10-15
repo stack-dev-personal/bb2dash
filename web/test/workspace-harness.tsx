@@ -121,6 +121,8 @@ function freshState() {
     rows: {} as Record<string, Row[]>,
     /** When set, every read of a table waits on it before it answers: the rows are still being read. */
     readGate: null as Promise<void> | null,
+    /** Per table: every read of it waits on this before it answers (the other tables answer at once). */
+    tableGates: {} as Record<string, Promise<void>>,
     /** Per table: every read of it answers with this error. */
     readErrors: {} as Record<string, { code: string; message: string }>,
     /** Per table: every `.update()` of it answers with this error; its reads still work. */
@@ -263,7 +265,7 @@ function tableChain(table: string): Record<string, unknown> {
     },
     then: (onFulfilled: (value: Answer) => unknown, onRejected?: (reason: unknown) => unknown) => {
       // A write is never held. With no gate the answer is as immediate as it always was.
-      const held = patch === null ? state.readGate : null;
+      const held = patch === null ? (state.tableGates[table] ?? state.readGate) : null;
       const answered = held === null ? Promise.resolve(settle()) : held.then(settle);
       return answered.then(onFulfilled, onRejected);
     },

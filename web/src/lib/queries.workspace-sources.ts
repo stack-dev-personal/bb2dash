@@ -16,7 +16,7 @@
  * that cannot be identified is dropped.
  */
 
-import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query';
+import { keepPreviousData, queryOptions, useQuery, type QueryClient } from '@tanstack/react-query';
 import { asRecord } from './json-record';
 import { parseConversationId, toRequestId, type WorkspaceTier } from './queries.workspace';
 import { WORKSPACE_DEPTHS, type WorkspaceDepth } from './queries.workspace-ask';
@@ -215,6 +215,9 @@ export function turnsOptions(conversationId: string | null, requestIds: readonly
   return queryOptions({
     queryKey: [...workspaceSourceKeys.turns(id ?? NO_CONVERSATION), sortedIds] as const,
     enabled: id !== null && sortedIds.length > 0,
+    // Round 2 (R2-2a): a new request is a new key; the rows before it stay while it is read, so the
+    // fixed lines and `data-retrieval` do not blink off on each ask.
+    placeholderData: keepPreviousData,
     queryFn: async (): Promise<WorkspaceTurn[]> => {
       const ids = sortedIds.map(assertRequestId);
       const { data, error } = await untypedClient()

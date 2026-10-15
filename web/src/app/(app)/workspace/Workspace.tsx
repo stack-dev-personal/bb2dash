@@ -71,7 +71,11 @@ import {
   type WorkspaceMessage,
   type WorkspaceRequest,
 } from '@/lib/queries.workspace';
-import { useWorkspaceRequestOptions, type WorkspaceRequestOptions } from '@/lib/queries.workspace-ask';
+import {
+  useWorkspaceRequestOptions,
+  type WorkspaceFormat,
+  type WorkspaceRequestOptions,
+} from '@/lib/queries.workspace-ask';
 import { useWorkspaceTurns } from '@/lib/queries.workspace-sources';
 import { useHydrated } from '@/lib/use-hydrated';
 import { useNow } from '@/lib/use-now';
@@ -83,7 +87,19 @@ import styles from './Workspace.module.css';
 const NO_REQUESTS: readonly WorkspaceRequest[] = [];
 const NO_MESSAGES: readonly WorkspaceMessage[] = [];
 const NO_OPTIONS: readonly WorkspaceRequestOptions[] = [];
+
+/**
+ * Rows of this conversation's requests only. The turn and options reads keep their previous rows while a new
+ * id list is read (round 2, R2-2a), and a disabled read (the lobby, another conversation) can still hold the
+ * last conversation's: those never reach this one.
+ */
+function ofRequests<T extends { request_id: number }>(rows: readonly T[] | undefined, requestIds: readonly number[]) {
+  if (rows === undefined) return undefined;
+  const known = new Set(requestIds);
+  return rows.filter((row) => known.has(row.request_id));
+}
 const NO_BLOCKS: readonly AnswerBlock[] = [];
+const NO_FORMATS: ReadonlyMap<number, WorkspaceFormat> = new Map();
 
 /** The width under which the panel is a sheet: the shell's own drawer step (frozen (f)). */
 const PANEL_SHEET_QUERY = '(max-width: 1023.98px)';
@@ -151,6 +167,11 @@ function useConversation(conversationId: string | null, hydrated: boolean) {
   const requestIds = useMemo(() => requestRows.map((request) => request.id), [requestRows]);
   const turns = useWorkspaceTurns(conversationId, requestIds);
   const options = useWorkspaceRequestOptions(conversationId, requestIds);
+  const turnRows = useMemo(() => ofRequests(turns.data, requestIds), [turns.data, requestIds]);
+  const formats = useMemo(
+    () => formatsOf(ofRequests(options.data, requestIds) ?? NO_OPTIONS),
+    [options.data, requestIds],
+  );
 
   // The newest request is followed until its stored answer has landed.
   const followed = liveRequestOf(requestRows, messageRows);
@@ -167,8 +188,8 @@ function useConversation(conversationId: string | null, hydrated: boolean) {
     openRequest,
     stream,
     live,
-    turnRows: hydrated ? turns.data : undefined,
-    formats: formatsOf(hydrated ? (options.data ?? NO_OPTIONS) : NO_OPTIONS),
+    turnRows: hydrated ? turnRows : undefined,
+    formats: hydrated ? formats : NO_FORMATS,
     // Until both have answered, an id with no rows is still being read, not "not found".
     loaded: hydrated && requests.data !== undefined && messages.data !== undefined,
     readError: hydrated ? (requests.error ?? messages.error ?? turns.error ?? options.error) : null,

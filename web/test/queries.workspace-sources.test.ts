@@ -8,7 +8,7 @@
  * only; one call invalidates both keys. The Supabase client is a recording stub.
  */
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, keepPreviousData } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -193,6 +193,10 @@ describe('the reads', () => {
     expect(two).not.toEqual(one);
     expect(turnsOptions(CONVERSATION, [11, 10]).queryKey).toEqual(two);
     expect(two.slice(0, 3)).toEqual(workspaceSourceKeys.turns(CONVERSATION));
+  });
+
+  it('keeps the previous rows while a new id list is read (round 2, R2-2a): the fixed lines do not blink off', () => {
+    expect(turnsOptions(CONVERSATION, [10, 11]).placeholderData).toBe(keepPreviousData);
   });
 
   it('is still matched by the frozen prefix key the provenance invalidation uses (R2-1)', async () => {

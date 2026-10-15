@@ -15,7 +15,7 @@
  * a pure normaliser.
  */
 
-import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { asRecord } from './json-record';
 import {
   invalidateWorkspaceConversation,
@@ -277,6 +277,9 @@ export function requestOptionsOptions(conversationId: string | null, requestIds:
   return queryOptions({
     queryKey: [...workspaceAskKeys.options(id ?? NO_CONVERSATION), sortedIds] as const,
     enabled: id !== null && sortedIds.length > 0,
+    // Round 2 (R2-2a): a new request is a new key; the rows before it stay while it is read, so an
+    // answer already shown rich does not blink to plain text on each ask.
+    placeholderData: keepPreviousData,
     queryFn: async (): Promise<WorkspaceRequestOptions[]> => {
       const ids = assertRequestIds(sortedIds);
       const { data, error } = await untypedClient()

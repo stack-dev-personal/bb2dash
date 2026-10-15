@@ -225,6 +225,35 @@ describe('the answer`s format', () => {
   });
 });
 
+describe('a new question does not unformat the answers before it (round 2, R2-2a)', () => {
+  it('keeps a rich answer formatted, and its fixed line, while the new ids` rows are read', async () => {
+    seedDone('# Plan\n\n- **Quiz 2** on Friday', { retrieval: 'empty' });
+    const { container } = open();
+    const body = await answerBody(container);
+    await waitFor(() => expect(body.querySelector('h2')).toHaveTextContent('Plan'));
+    await waitFor(() => expect(turn(container)).toHaveAttribute('data-retrieval', 'empty'));
+    // The options and turn rows of the new id list are held: only the requests and messages answer.
+    const held = gate();
+    fake.state.tableGates = { workspace_request_options: held.promise, workspace_turns: held.promise };
+
+    fireEvent.change(screen.getByRole('textbox', { name: labels.QUESTION_FIELD_LABEL }), {
+      target: { value: 'And the reading?' },
+    });
+    fireEvent.keyDown(screen.getByRole('textbox', { name: labels.QUESTION_FIELD_LABEL }), { key: 'Enter' });
+    await screen.findByText('And the reading?', { selector: 'p' });
+    await waitFor(() => expect(container.querySelectorAll('li[data-turn]')).toHaveLength(2));
+
+    expect(turn(container).querySelector('[data-answer-text] h2')).toHaveTextContent('Plan');
+    expect(turn(container).querySelector('[data-answer-text]')).not.toHaveTextContent('**');
+    expect(turn(container)).toHaveAttribute('data-retrieval', 'empty');
+    expect(turn(container).querySelector('[data-turn-line]')).toHaveTextContent(labels.RETRIEVAL_LINES.empty);
+    await act(async () => {
+      held.release();
+      await held.promise;
+    });
+  });
+});
+
 describe('the fixed lines', () => {
   it('shows the nothing-matched line under an `empty` answer that does not already open with it', async () => {
     seedDone('Quiz 2 is on Friday.', { retrieval: 'empty' });
