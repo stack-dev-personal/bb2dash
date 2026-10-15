@@ -288,6 +288,9 @@ written keep what they quoted from it. 24a gives the browser no way to change a 
 * The parser never throws. An unclosed form shows as text while the answer streams. Blocks are kept
   between flushes.
 * `withoutBoldMarkers` goes (`thread.ts:150`) with its test (`web/test/Workspace.thread.test.ts:391`).
+  **Amended in round 2 (R2-6, 2026-10-15):** it goes for `rich` answers, which the parser formats; a `plain`
+  answer and a stored answer with no options row (every conversation before 24b) keep Stack's ruling of
+  2026-10-07, the closed bold pairs stripped before `plainBlocks`.
 * The composer sends `format: "rich"`. A stored answer of a request with no options row, or with
   `plain`, is shown as plain text, as today.
 

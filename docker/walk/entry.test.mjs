@@ -253,6 +253,9 @@ function makeBox({ constants = {}, login = true } = {}) {
   made.push(dir);
   write(dir, 'src/web/package.json', '{}\n');
   write(dir, 'src/web/src/app/page.tsx', '// the app\n');
+  // What outside web/ the web build type-checks: the runner's lines and its contract fixtures (Phase 24b's tests import them).
+  write(dir, 'src/workspace/src/lines.ts', '// the runner\'s lines\n');
+  write(dir, 'src/workspace/test/fixtures/contract24/lines.txt', 'empty: a line\n');
   write(dir, 'src/web/e2e/login.mjs', '// the sign-in\n');
   write(dir, 'src/web/e2e/harness.spec.ts', '// the spec, first cut\n');
   write(dir, 'src/web/node_modules/left/index.js');
