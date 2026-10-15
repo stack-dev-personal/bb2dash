@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useRef } from 'react';
-import { courseCode, useCourses } from '@/lib/queries';
+import { courseCode, courseKindLabel, useCourses } from '@/lib/queries';
 import { SIDEBAR_ID } from '@/lib/sidebar-preference';
+import { Mark } from './icons';
 import { useSidebar } from './SidebarProvider';
 import styles from './CourseSidebar.module.css';
 
@@ -96,23 +97,41 @@ export function CourseSidebar() {
           )}
 
           {courses && courses.length > 0 && (
-            <ul className={styles.list}>
-              {courses.map((course) => {
-                const current = isCurrentCourse(pathname, course.id);
-                return (
-                  <li key={course.id}>
-                    <Link
-                      href={`/course/${encodeURIComponent(course.id)}`}
-                      className={current ? styles.rowCurrent : styles.row}
-                      aria-current={current ? 'page' : undefined}
-                    >
-                      <span className={styles.code}>{courseCode(course)}</span>
-                      <span className={styles.title}>{course.title_short}</span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
+            <div className={styles.group}>
+              <ul className={styles.list}>
+                {courses.map((course) => {
+                  const current = isCurrentCourse(pathname, course.id);
+                  const kind = courseKindLabel(course.kind);
+                  return (
+                    <li key={course.id}>
+                      <Link
+                        href={`/course/${encodeURIComponent(course.id)}`}
+                        className={current ? styles.rowCurrent : styles.row}
+                        aria-current={current ? 'page' : undefined}
+                      >
+                        {/* The tile and the chevron are drawn, not read: the row's name is the
+                            title and the code line. */}
+                        <span className={styles.tile} aria-hidden="true">
+                          {course.subject}
+                        </span>
+                        <span className={styles.text}>
+                          <span className={styles.title}>{course.title_short}</span>
+                          <span className={styles.sub}>
+                            {/* Its own element, so the code reads as one unit. */}
+                            <span>{courseCode(course)}</span>
+                            {kind && ` · ${kind}`}
+                            {course.section && ` · ${course.section}`}
+                          </span>
+                        </span>
+                        <span className={styles.caret} aria-hidden="true">
+                          <Mark name="caretRight" />
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           )}
         </div>
       </aside>
