@@ -564,6 +564,16 @@ export function forgetProblemLine(reason: string): string {
 
 /** The greeting holds no name: the app holds none of his (brief 111, "The lobby"). */
 export const GREETING_LINE = 'What are you working on?';
+
+/**
+ * Today's date with its weekday, on every visit, lobby and thread (brief 111,
+ * frozen at the gate, amendment (g)): the words come from
+ * `workspace-examples.ts`'s `todayWords`, "Thursday, October 15, 2026".
+ */
+export function todayLine(words: string): string {
+  return `Today is ${words}.`;
+}
+
 export const ROUTINES_HEADING = 'Routines';
 export const EXAMPLES_HEADING = 'From your planner';
 export const REFRESH_EXAMPLES_LABEL = 'Other examples';

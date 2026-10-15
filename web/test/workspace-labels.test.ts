@@ -67,6 +67,7 @@ function builtStrings(): string[] {
     labels.memoryProblemLine(reason),
     labels.forgetProblemLine(reason),
     labels.examplePromptLine('exam', { title: 'Quiz 3', course: 'IST 323', date: 'Tue Oct 21' }),
+    labels.todayLine('Thursday, October 15, 2026'),
     labels.materialsProblemLine(reason),
   ];
 }
@@ -491,6 +492,10 @@ describe('the lobby (brief 111, "The lobby")', () => {
   it('greets with no name in it', () => {
     expect(labels.GREETING_LINE).toBe('What are you working on?');
     expect(labels.GREETING_LINE).not.toMatch(/stack/i);
+  });
+
+  it("states today's weekday and date from the words it is given (amendment (g))", () => {
+    expect(labels.todayLine('Thursday, October 15, 2026')).toBe('Today is Thursday, October 15, 2026.');
   });
 
   it('has the four headings and the two links', () => {

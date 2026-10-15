@@ -20,6 +20,7 @@ import {
   exampleCandidates,
   examplePages,
   examplesShown,
+  todayWords,
   type ExamplePrompt,
 } from '@/lib/workspace-examples';
 
@@ -161,6 +162,21 @@ describe('courseCodeOf and dateWords', () => {
     expect(dateWords('2026-11-01')).toBe('Sun Nov 1'); // the day the clocks go back
     expect(dateWords('2026-03-08')).toBe('Sun Mar 8');
     expect(() => dateWords('21 Oct')).toThrow();
+  });
+});
+
+describe("todayWords (amendment (g): the page states today's weekday and date)", () => {
+  it('writes the full weekday, month, day and year in New York', () => {
+    expect(todayWords('2026-10-15')).toBe('Thursday, October 15, 2026');
+    expect(todayWords('2026-10-16')).toBe('Friday, October 16, 2026'); // the weekday step 6's answer got wrong
+    expect(todayWords('2026-11-01')).toBe('Sunday, November 1, 2026');
+    expect(todayWords('2026-01-01')).toBe('Thursday, January 1, 2026');
+  });
+
+  it('throws for a string that is not a YYYY-MM-DD date', () => {
+    expect(() => todayWords('15 Oct 2026')).toThrow();
+    expect(() => todayWords('2026-02-30')).toThrow();
+    expect(() => todayWords('')).toThrow();
   });
 });
 
