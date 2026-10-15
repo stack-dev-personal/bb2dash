@@ -255,7 +255,9 @@ describe('the answer`s format', () => {
     const { container } = open();
     const body = await answerBody(container);
     await waitFor(() => expect(fake.state.log).toContain('from:workspace_request_options'));
-    expect(body).toHaveTextContent('# Plan **Quiz 2** on Friday');
+    // The bold pair goes (Stack, 2026-10-07; round 2, R2-6); nothing else is read as markup.
+    expect(body).toHaveTextContent('# Plan Quiz 2 on Friday');
+    expect(body).not.toHaveTextContent('**');
     expect(body.querySelector('h2, h3, h4, strong, ul')).toBeNull();
   });
 });

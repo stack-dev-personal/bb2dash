@@ -25,6 +25,7 @@ import {
   formatsOf,
   liveRequestOf,
   newestKnownRequestOf,
+  withoutBoldMarkers,
 } from '@/components/workspace/thread';
 import { normalizeTurn, type WorkspaceTurn as WorkspaceTurnRow } from '@/lib/queries.workspace-sources';
 import {
@@ -515,5 +516,53 @@ describe('newestKnownRequestOf: the answer the Sources tab shows when none is pi
   it('is nothing with no row', () => {
     expect(newestKnownRequestOf(undefined)).toBeNull();
     expect(newestKnownRequestOf([])).toBeNull();
+  });
+});
+
+/* Round 2, R2-6: Stack's ruling of 2026-10-07 stands for every answer that is not rich. */
+describe('withoutBoldMarkers: an answer is shown without Markdown`s bold markers (Stack, 2026-10-07)', () => {
+  it('drops a pair of ** around a run of text and keeps the text', () => {
+    expect(withoutBoldMarkers('**Decision 434 (September 17).** You chose "Keep mine".')).toBe(
+      'Decision 434 (September 17). You chose "Keep mine".',
+    );
+  });
+
+  it('drops every pair, on every line, and leaves the lines as they are', () => {
+    expect(withoutBoldMarkers('**A.** one\n**B.** two\nplain')).toBe('A. one\nB. two\nplain');
+    expect(withoutBoldMarkers('**a** **b**')).toBe('a b');
+  });
+
+  it('drops a pair inside a sentence, and one that stands beside punctuation', () => {
+    expect(withoutBoldMarkers('Late work is **not** accepted (**firm**).')).toBe('Late work is not accepted (firm).');
+  });
+
+  it.each([
+    ['def f(**kwargs):'],
+    ['2 ** 3 ** 4'],
+    ['a**b**c'],
+    ['**open\nclose**'],
+    ['****'],
+    ['*****'],
+    ['** spaced **'],
+    ['one *emphasis* stays as typed'],
+    ['a lone ** here'],
+    ['**Decision 43'],
+    [''],
+  ])('leaves %j as it was typed', (text) => {
+    expect(withoutBoldMarkers(text)).toBe(text);
+  });
+});
+
+describe('answerBlocks: a plain answer loses its bold pairs, a rich one is parsed (round 2, R2-6)', () => {
+  it('strips the pairs before a plain answer is set as paragraphs', () => {
+    expect(answerBlocks('**Decision 434.** You chose "Keep mine".', 'plain')).toEqual([
+      { type: 'paragraph', children: [{ type: 'text', text: 'Decision 434. You chose "Keep mine".' }] },
+    ]);
+  });
+
+  it('parses a rich answer`s bold as bold', () => {
+    expect(answerBlocks('**Decision 434.**', 'rich')).toEqual([
+      { type: 'paragraph', children: [{ type: 'strong', children: [{ type: 'text', text: 'Decision 434.' }] }] },
+    ]);
   });
 });
