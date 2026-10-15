@@ -78,6 +78,12 @@ export interface AnswerSpec {
   question: string;
   /** The badge the answer must carry. */
   badge: string;
+  /**
+   * The one line the done turn carries under its answer: the fixed sentence of an empty retrieval,
+   * which the page shows once, there, and not as the answer's first line (Phase 24b, R-1). Absent,
+   * the turn carries no line.
+   */
+  line?: string;
 }
 
 export interface Answered {
@@ -112,7 +118,9 @@ export async function settleAsked(page: Page, rec: Recorder, turn: Locator, spec
   await expect(turn).toHaveAttribute('data-turn', 'done');
   await expect(turn.locator('[data-tier]')).toHaveText(spec.badge);
   await expect(turn.locator('[data-answer-text]')).not.toBeEmpty();
-  await expect(turn.locator('[data-turn-line]')).toHaveCount(0);
+  // A done turn carries no status line; the fixed sentence of an empty retrieval is its one line.
+  if (spec.line === undefined) await expect(turn.locator('[data-turn-line]')).toHaveCount(0);
+  else await expect(turn.locator('[data-turn-line]')).toHaveText([spec.line]);
   await expectShotsShowTheTurn(turn, spec.question, shots);
   return { turn, conversation, reading };
 }

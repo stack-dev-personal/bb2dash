@@ -87,8 +87,8 @@ to that question: the question and the badge.
 
 For each of the six steps, pass when all of this is true:
 
-- In `<step>.json`: `state` is `done`, `line` is null, `answer_chars` is 1 or more, and `badge` is
-  what the list below gives for the step.
+- In `<step>.json`: `state` is `done`, `line` is null (step 8: `line` is the fixed sentence, see its
+  condition below), `answer_chars` is 1 or more, and `badge` is what the list below gives for the step.
 - `<step>-start.png` shows the step's question and, between that question and the answer's text,
   a badge with the same text as `badge` in `<step>.json`.
 - `<step>-end.png` shows the last lines of the answer's text.
@@ -118,6 +118,16 @@ A picture in which the answer's text runs past the edge of the message column is
 view. That is not a cut-off answer and not a fault: whether the answer is whole is judged from
 `answer` in `<step>.json`.
 
+The answer is laid out as text: headings, lists, tables and paragraphs. A source the answer cites by
+its number shows as a small round chip with that number. A label in square brackets, such as
+`[M820]`, that no source row of the answer resolves stays as those characters in the text. Chips
+and such labels in one answer are not a fault: which passages the model names beyond the ones
+stored with the answer is the model's choice. In `answer` of `<step>.json` every citation is its
+label in brackets; that is the stored text, not a fault.
+
+A panel headed `Courses` on the right of a picture is the shell's course rail, not the Workspace's;
+open or closed, it is not a fault.
+
 Steps 4 to 8 also archive the conversation they started (step 7: the one step 3 started). For each
 of those five steps, pass needs this too: in `<step>.json`, `archived_ids` holds the step's
 conversation (`conversation_id` for steps 4, 5, 6 and 8; the `conversation_id` of step 3 for
@@ -125,11 +135,13 @@ step 7), and `archive_writes` equals the number of ids in `archived_ids`.
 
 Step 7 has one more condition: `3.json` and `7.json` hold the same `conversation_id`.
 
-Step 8 has one more condition: `first_line_is_the_fixed_sentence` in `8.json` is true, and the
-first line of `answer` is one sentence that says no passage of the owner's course files or uploads
-matched the question, so the answer comes from general knowledge. In `saw`, say that the first line
-was that sentence; do not copy it. The test has already compared it, word for word, with the
-sentence of the app: you judge that it stands as the first line of the answer.
+Step 8 has one more condition: in `8.json`, `line` is one sentence that says no passage of the
+owner's course files or uploads matched the question, so the answer comes from general knowledge;
+`fixed_sentence_is_the_turn_line` is true and `fixed_sentence_in_answer_text` is false; and
+`8-end.png` shows that sentence once, as a small muted line under the answer's text (under its
+sources row, when it has one), not as the answer's own first line. In `saw`, say that the line
+under the answer was that sentence; do not copy it. The test has already compared it, word for
+word, with the sentence of the app: you judge that it stands under the answer, once.
 
 ### Step 9: `9 stop then answer`
 
@@ -155,8 +167,11 @@ Pass when all of this is true:
 Two things about `9-stopped.png` are not faults. The button may look dimmed: the picture is taken
 straight after the press, and the page dims the button while it waits for the stop to be
 confirmed. A dimmed button that reads `Ask` meets the condition. And the facts in `9.json` about the
-stopped answer are taken a moment before the picture, so a sources row may be in the facts and not
-in the picture. In `9-after.png`, with both answers finished, the button that reads `Ask` is not
+stopped answer are taken at the press, a moment before the picture, while the runner's stored answer
+replaces the live text as soon as the runner has finished: so the picture may hold more text than
+`answer_chars`, laid out with headings or a table, and a sources row may be in the facts and not
+in the picture, or in the picture and not in the facts. The turn stays stopped and its line stays;
+none of that is a fault. In `9-after.png`, with both answers finished, the button that reads `Ask` is not
 dimmed: `ask_enabled_after_stop` in `9.json` is true, which the test checked.
 
 If the test failed and `test_error` in `9.json` begins `inconclusive:`, the answer was finished
