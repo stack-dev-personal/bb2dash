@@ -381,8 +381,10 @@ acceptStep('18 sources and panel', { shots: ['start', 'end', 'panel'] }, async (
     await sourcesRow.first().click();
     await expect(page.locator('[data-panel]')).toHaveAttribute('data-panel', 'sources');
     const openButtons = panel(page).getByRole('button', { name: OPEN_SOURCE_LABEL, exact: true });
-    rec.note({ panel_open_controls: await openButtons.count() });
     await expect(openButtons.first(), 'the Sources tab lists at least one row with Open').toBeVisible();
+    // Counted after the wait: `count()` reads the page as it is, and the rows come after the tab's
+    // attribute (the counting run 20261015T222036Z read 0 here and the operator rightly failed the step).
+    rec.note({ panel_open_controls: await openButtons.count() });
     await rec.shot(page, 'panel');
     await hidePanel(page);
     rec.note({ panel_folded: true });
