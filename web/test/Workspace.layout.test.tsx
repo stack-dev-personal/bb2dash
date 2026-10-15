@@ -1,20 +1,27 @@
 /**
  * The Workspace screen: nothing it positions absolutely is left outside the
- * box that scrolls it (the PM's walk of 2026-10-07, W-1).
+ * box that scrolls it (the PM's walk of 2026-10-07, W-1; rewritten for Phase
+ * 24b, task 11).
  *
  * A screen-reader label is `.sr-only`: `position: absolute` with no offsets
  * (`src/app/globals.css`). What contains such a box is its nearest positioned
  * ancestor, and a box that scrolls clips and moves only what it contains. The
- * message column scrolled without being positioned, so the labels of its turns
- * were the page's: each stayed where the unscrolled column would have put it,
- * as far down as the column's whole content, and the document grew to hold
- * them (a body of 901 px in a document of 4662 px, on the walk).
+ * message column once scrolled without being positioned, so the labels of its
+ * turns were the page's, and the document grew to hold them. Phase 24b adds
+ * more boxes that scroll: a wide table and a code block scroll sideways inside
+ * the answer body, and the dock is sticky. The rule is the same for each.
  *
  * jsdom lays nothing out and does not apply the CSS Modules, so the
- * stylesheets are read here, the way `GradesTables.layout.test.tsx` reads its
- * own: which classes scroll, which are positioned, which are absolute. The
- * rule is then checked twice, on the stylesheets and on the mounted screen.
- * `e2e/workspace-layout.spec.ts` measures the same column in a browser.
+ * stylesheets are read here: which classes scroll, which are positioned, which
+ * are absolute. The folder's sheets are read by `import.meta.glob` (probe Q-5
+ * passed), so a new module in the folder is read without a hand-written list;
+ * `readdirSync` holds the glob to the folder. The rule is then checked on the
+ * stylesheets and on the screen, mounted twice: the lobby, and a thread with
+ * the panel open. `e2e/workspace-layout.spec.ts` measures the same in a browser.
+ *
+ * THE LOBBY MOUNTED HERE is the stand-in of `workspace-harness.tsx` while
+ * W-87's `Lobby.tsx` is not merged into this branch: it waits for integration
+ * (W-88's record). The stylesheets case reads W-87's modules as they stand.
  */
 
 import { readFileSync, readdirSync } from 'node:fs';
@@ -23,11 +30,9 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import screenStyles from '@/app/(app)/workspace/Workspace.module.css';
-import composerStyles from '@/components/workspace/Composer.module.css';
-import listStyles from '@/components/workspace/ConversationList.module.css';
+import answerStyles from '@/components/workspace/AnswerBody.module.css';
 import messageStyles from '@/components/workspace/MessageList.module.css';
-import statusStyles from '@/components/workspace/ServiceStatus.module.css';
-import badgeStyles from '@/components/workspace/TierBadge.module.css';
+import dockStyles from '@/components/workspace/ThreadView.module.css';
 import { newQueryClient } from './hydration-harness';
 import { fake, resetFake, type Row } from './workspace-harness';
 
@@ -35,6 +40,8 @@ vi.mock('@/lib/supabase/client', async () =>
   (await import('./workspace-harness')).supabaseClientMock(),
 );
 vi.mock('next/navigation', async () => (await import('./workspace-harness')).navigationMock());
+vi.mock('@/components/workspace/Composer', async () => (await import('./workspace-harness')).composerMock());
+vi.mock('@/components/workspace/Lobby', async () => (await import('./workspace-harness')).lobbyMock());
 
 const labels = await import('@/lib/workspace-labels');
 const { Workspace } = await import('@/app/(app)/workspace/Workspace');
@@ -48,23 +55,33 @@ const { Workspace } = await import('@/app/(app)/workspace/Workspace');
 const SRC = join(process.cwd(), 'src');
 const COMPONENTS = 'components/workspace';
 
+type ClassMap = Readonly<Record<string, string>>;
+
 interface Sheet {
   readonly file: string;
   /** Source class name → the class name the module renders; null for a sheet that renames nothing. */
-  readonly names: Readonly<Record<string, string>> | null;
+  readonly names: ClassMap | null;
 }
 
 /** Where `.sr-only` is written. Its classes render as they are written. */
 const GLOBAL_SHEET: Sheet = { file: 'app/globals.css', names: null };
 
-/** Every stylesheet the screen lays itself out with (the first case below holds the list to the folder). */
+/** The folder's modules, as the bundler loads them: path → module. */
+const FOLDER_MODULES = import.meta.glob('../src/components/workspace/*.module.css', { eager: true });
+
+/** A loaded CSS module's class map: its default export, or the module itself. */
+function classMapOf(loaded: unknown): ClassMap {
+  const sheet = loaded as { default?: ClassMap } & ClassMap;
+  return sheet.default ?? sheet;
+}
+
+/** Every stylesheet the screen lays itself out with: the folder's, read by glob, and the screen's own. */
 const SCREEN_SHEETS: readonly Sheet[] = [
   { file: 'app/(app)/workspace/Workspace.module.css', names: screenStyles },
-  { file: `${COMPONENTS}/Composer.module.css`, names: composerStyles },
-  { file: `${COMPONENTS}/ConversationList.module.css`, names: listStyles },
-  { file: `${COMPONENTS}/MessageList.module.css`, names: messageStyles },
-  { file: `${COMPONENTS}/ServiceStatus.module.css`, names: statusStyles },
-  { file: `${COMPONENTS}/TierBadge.module.css`, names: badgeStyles },
+  ...Object.entries(FOLDER_MODULES).map(([path, loaded]) => ({
+    file: `${COMPONENTS}/${path.split('/').at(-1)}`,
+    names: classMapOf(loaded),
+  })),
 ];
 
 interface Facts {
@@ -150,7 +167,7 @@ function leftOutside(root: Element): string[] {
 }
 
 /* ---------------------------------------------------------------------------
- * A conversation with each of the three labels in it
+ * A conversation with each of the labels in it, a wide table and its sources
  * ------------------------------------------------------------------------ */
 
 const A = '6f1c2a54-9b1e-4c0d-8a55-0d2f3b7c9e11';
@@ -163,7 +180,13 @@ function question(n: number, content: string): Row {
   return { id: uuid(n), conversation_id: A, role: 'user', content, finished: true };
 }
 
-/** An answered question, then one that was stopped before the runner began: a status, not an answer. */
+const WIDE_TABLE = [
+  '| Week | Reading | Quiz | Project | Notes |',
+  '|---|---|---|---|---|',
+  '| 5 | Chapter 4 | Quiz 2 | Draft due | [M12] |',
+].join('\n');
+
+/** An answered question (a table and a chip in it), then one stopped before the runner began. */
 const CONVERSATION: Record<string, Row[]> = {
   workspace_conversations: [{ id: A, title: 'spike', archived: false, updated_at: '2026-10-06T15:00:00+00:00' }],
   workspace_messages: [
@@ -174,8 +197,8 @@ const CONVERSATION: Record<string, Row[]> = {
       role: 'assistant',
       request_id: 41,
       tier: 'low',
-      content: 'Quiz 2.',
-      tool_calls: [{ tool: 'search_materials', scope: 'IST.323', ok: true }],
+      content: `Quiz 2.\n\n${WIDE_TABLE}\n\n\`\`\`text\na long line of code\n\`\`\``,
+      tool_calls: [],
       finished: true,
       error_code: null,
     },
@@ -185,14 +208,42 @@ const CONVERSATION: Record<string, Row[]> = {
     { id: 41, conversation_id: A, user_message_id: uuid(1), state: 'done', error_code: null },
     { id: 42, conversation_id: A, user_message_id: uuid(3), state: 'cancelled', error_code: 'cancelled' },
   ],
+  workspace_request_options: [
+    { request_id: 41, depth: 'auto', format: 'rich', routine_id: null, course_display_id: null, course_ids: null },
+  ],
+  workspace_sources: [
+    {
+      request_id: 41,
+      ord: 1,
+      kind: 'material',
+      origin: 'auto',
+      file_id: 7,
+      text_id: 12,
+      document_id: null,
+      doc_text_id: null,
+      course_id: 'IST.323',
+      title: 'Week 5 slides.pptx',
+      unit_kind: 'slide',
+      unit_no: 3,
+    },
+  ],
 };
+
+function mount(search: string) {
+  fake.state.search = search;
+  return render(
+    <QueryClientProvider client={newQueryClient()}>
+      <Workspace />
+    </QueryClientProvider>,
+  );
+}
 
 beforeEach(() => {
   resetFake();
 });
 
 describe('what the stylesheets say', () => {
-  it('reads every stylesheet of the screen: the list here is the folder', () => {
+  it('reads every stylesheet of the folder: the glob is the folder', () => {
     const inFolder = readdirSync(join(SRC, COMPONENTS))
       .filter((name) => name.endsWith('.module.css'))
       .map((name) => `${COMPONENTS}/${name}`);
@@ -200,6 +251,7 @@ describe('what the stylesheets say', () => {
     expect(SCREEN_SHEETS.map((sheet) => sheet.file).filter((file) => file.startsWith(COMPONENTS)).sort()).toEqual(
       inFolder.sort(),
     );
+    expect(inFolder.length).toBeGreaterThanOrEqual(8);
   });
 
   it('writes a screen-reader label as an absolute box, and the message column as one that scrolls', () => {
@@ -210,24 +262,44 @@ describe('what the stylesheets say', () => {
   it('positions every box that scrolls on the Workspace screen, so it contains what it scrolls', () => {
     const scrollers = [...FACTS.values()].filter((facts) => facts.scrolls);
 
-    expect(scrollers.map((facts) => facts.source)).toContain(`${COMPONENTS}/MessageList.module.css: .column`);
+    expect(scrollers.map((facts) => facts.source)).toEqual(
+      expect.arrayContaining([
+        `${COMPONENTS}/MessageList.module.css: .column`,
+        `${COMPONENTS}/AnswerBody.module.css: .tableBox`,
+        `${COMPONENTS}/AnswerBody.module.css: .code`,
+      ]),
+    );
     expect(scrollers.filter((facts) => !facts.positioned).map((facts) => facts.source)).toEqual([]);
+  });
+
+  it('docks the composer: its wrapper is sticky at the bottom, on the page`s ground', () => {
+    const css = readFileSync(join(SRC, `${COMPONENTS}/ThreadView.module.css`), 'utf8');
+    const dock = /\.dock\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(dock).toMatch(/position:\s*sticky/);
+    expect(dock).toMatch(/bottom:\s*0/);
+    expect(dock).toMatch(/background:\s*var\(--color-bg\)/);
+    expect(FACTS.get(dockStyles.dock)?.positioned).toBe(true);
+    expect(FACTS.get(answerStyles.tableBox)?.positioned).toBe(true);
+  });
+
+  it('folds only on the two steps the audit allows, 1023.98 px and 720 px', () => {
+    const widths = SCREEN_SHEETS.filter((sheet) => !sheet.file.includes('Composer') && !sheet.file.includes('Lobby'))
+      .flatMap((sheet) => [...readFileSync(join(SRC, sheet.file), 'utf8').matchAll(/@media[^{]*\(\s*max-width:\s*([\d.]+px)\s*\)/g)])
+      .map((match) => match[1]);
+    expect(new Set(widths)).toEqual(new Set(['1023.98px', '720px']));
   });
 });
 
 describe('the mounted screen', () => {
-  it('leaves no screen-reader label of a conversation outside the column that scrolls it', async () => {
+  it('leaves no screen-reader label of a conversation outside the column that scrolls it, with the panel open', async () => {
     fake.state.rows = CONVERSATION;
-    fake.state.search = `c=${A}`;
-    const { container } = render(
-      <QueryClientProvider client={newQueryClient()}>
-        <Workspace />
-      </QueryClientProvider>,
-    );
+    const { container } = mount(`c=${A}&panel=sources`);
     await screen.findByText('You stopped this answer.');
     await screen.findByRole('link', { name: /spike/ });
+    await screen.findByRole('region', { name: labels.PANEL_REGION_LABEL });
+    await screen.findByRole('button', { name: labels.sourceChipLabel(1) });
 
-    // The three labels, each inside the column: the check below has something to check.
+    // The labels, each inside the column: the check below has something to check.
     const column = container.querySelector(`.${messageStyles.column}`);
     const inColumn = [...(column?.querySelectorAll('.sr-only') ?? [])].map((label) => label.textContent);
     expect(inColumn).toEqual([
@@ -236,6 +308,17 @@ describe('the mounted screen', () => {
       labels.QUESTION_ROLE_LABEL,
       labels.STATUS_ROLE_LABEL,
     ]);
+    // The wide table is inside its own box that scrolls sideways.
+    expect(container.querySelector(`.${answerStyles.tableBox} > table`)).not.toBeNull();
+
+    expect(leftOutside(container)).toEqual([]);
+  });
+
+  it('leaves none outside in the lobby', async () => {
+    fake.state.rows = { workspace_conversations: CONVERSATION.workspace_conversations };
+    const { container } = mount('');
+    await screen.findByRole('link', { name: /spike/ });
+    expect(container.querySelector('[data-lobby]')).not.toBeNull();
 
     expect(leftOutside(container)).toEqual([]);
   });

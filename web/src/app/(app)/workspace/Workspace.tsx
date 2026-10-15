@@ -323,7 +323,7 @@ function PanelOf(props: { panel: Panel; now: number; sheet: boolean }) {
   };
   if (props.sheet) return <SidePanelSheet {...shared} />;
   return (
-    <aside className={styles.panel}>
+    <aside className={styles.panelTrack}>
       <SidePanel {...shared} />
     </aside>
   );
@@ -354,7 +354,7 @@ export function Workspace() {
     <>
       <div className={styles.workspace} data-panel-docked={panel.tab !== null && !sheet ? '' : undefined}>
         <div className={styles.rail}>{list}</div>
-        <div className={styles.column}>
+        <div className={styles.pageColumn}>
           <ColumnBar now={now} hydrated={hydrated} panel={panel} onRail={() => setRailOpenOn(route)} />
           <StreamArea stream={conversation.stream} openRequestId={openRequestId}>
             {conversationId === null ? (
