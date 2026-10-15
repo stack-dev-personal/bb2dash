@@ -127,13 +127,16 @@ describe('an upload', () => {
     fireEvent.click(askButton());
     await settle();
     expect(askCalls()).toEqual([]);
-    expect(askButton()).toBeEnabled();
+    // W-4: the disabled look while an attached upload is not indexed.
+    expect(askButton()).toBeDisabled();
+    expect(askButton()).toHaveAccessibleDescription(labels.UPLOAD_NOT_READY_LINE);
 
     db.state.rows = { ...db.state.rows, workspace_documents: [upload(31, 'indexed', { title: 'notes.md' })] };
     // The query re-reads every 5 s while a row settles; the test re-reads at once.
     await act(() => client.invalidateQueries({ queryKey: workspaceFileKeys.uploads() }));
     await waitFor(() => expect(uploadChip(container)).toHaveAttribute('data-upload-state', 'indexed'));
     expect(screen.queryByText(labels.UPLOAD_NOT_READY_LINE)).toBeNull();
+    expect(askButton()).toBeEnabled();
     fireEvent.click(askButton());
     await waitFor(() => expect(onAsked).toHaveBeenCalled());
     expect(askCalls()[0].args.p_options).toMatchObject({ uploads: [31], files: [] });

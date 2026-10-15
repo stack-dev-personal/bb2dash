@@ -236,10 +236,13 @@ describe('a routine', () => {
     fireEvent.keyDown(box(), { key: 'Enter' });
     await settle();
     expect(askCalls()).toEqual([]);
-    expect(askButton()).toHaveAttribute('aria-disabled', 'true');
+    // W-4: Ask takes the disabled look while the need is unmet, and names the line as its description.
+    expect(askButton()).toBeDisabled();
+    expect(askButton()).toHaveAccessibleDescription(line);
 
     await attachFile('Week 11 slides.pptx');
     expect(screen.queryByText(line)).toBeNull();
+    expect(askButton()).toBeEnabled();
     fireEvent.click(askButton());
     await waitFor(() => expect(onAsked).toHaveBeenCalled());
     expect(askCalls()[0].args.p_options).toMatchObject({ routine: 'explain', files: [11] });

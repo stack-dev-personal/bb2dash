@@ -16,11 +16,12 @@
  *
  * Enter asks and Shift+Enter breaks the line; while a request is open the
  * button reads Stop and Enter sends nothing (the PM's ruling U1). Backspace in
- * an empty box removes the last chip. Ask is disabled only while a question or
- * a Stop is on its way, or when the conversation was not found (amendment (h));
- * a routine's unmet need or an upload not yet indexed keeps it from sending,
- * says why in one line under the box and marks it `aria-disabled`, but does not
- * dim it. Deep applies to one question: after it the menu reads Auto again.
+ * an empty box removes the last chip. Ask is disabled (Phase 22's flat grey
+ * pill) while a question or a Stop is on its way, when the conversation was not
+ * found, and while a routine's need is unmet or an attached upload is not yet
+ * indexed (Round 2, W-4), the last two saying why in one line under the box,
+ * which is the button's description. After a Stop and after an answer it is
+ * enabled again (amendment (h)). Deep applies to one question: after it the menu reads Auto again.
  * After an accepted question the box and the attachments are cleared.
  *
  * A file can be dropped on the composer, and the plus menu opens the file
@@ -91,8 +92,7 @@ function AskButton({ props, model, gateId }: { props: ComposerProps; model: Comp
     <button
       type="button"
       className={styles.ask}
-      disabled={props.busy || model.pending || props.disabled}
-      aria-disabled={gated ? true : undefined}
+      disabled={props.busy || model.pending || props.disabled || gated}
       aria-describedby={gated ? gateId : undefined}
       onClick={() => (props.requestOpen ? props.onStop() : void model.submit())}
     >
