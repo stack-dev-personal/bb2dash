@@ -951,8 +951,9 @@ fixed build is the end-to-end proof: `update-now.log` should read `app started o
 
 **Accepted on 2026-10-08** by the acceptance run `20261008T041753Z` (`just accept 21` from `main`, green; Stack's
 answer of 2026-10-07 that a green run counts). The record is the last section of 102a, and the run's own report is
-`C:/Users/stack/.bb2dash-accept/21/20261008T041753Z/REPORT.md` on the laptop. Not checked by the run and still
-Stack's: step 1 (Usage credits off, his `/usage` numbers). What follows in this section is the phase as it stood at
+`C:/Users/stack/.bb2dash-accept/21/20261008T041753Z/REPORT.md` on the laptop. Step 1, which the run does not check, Stack
+answered himself later that day: "usage credits are off." (he did not read out his `/usage` percentages, so none
+is on record). All fifteen steps are now walked, proved, waived or answered. What follows in this section is the phase as it stood at
 the merge; where it says the acceptance is owed, read it as history.
 
 Brief `docs/planning/sprint-2/briefs/102_PHASE21_workspace.md`, frozen 2026-10-05 with Stack's answers ("defaults, usage
@@ -1092,8 +1093,9 @@ is answered when the service is back.
 the test container, added `COMPOSE_PROFILES=workspace` to bb2dash-stack's `.env` and started the service alone;
 `bb2dash-workspace-1` (compose project `bb2dash`) has answered production's questions since 04:18 UTC and was
 restarted once by the run's own offline step. No conversation is listed: the run archived 'spike' and its own
-through the page. The old test container `bb2dash-wt21-workspace-1` is stopped, not removed: removing it, its
-network and its volume is owed (see "Next"). The paragraph below is the state before the run.
+through the page. The old test project `bb2dash-wt21` is gone: its container, network and volume were removed by
+name on 2026-10-08 on Stack's word, with the sync container's id and start time the same before and after. The
+paragraph below is the state before the run.
 
 **Where the product was (2026-10-07):** the phase is on `main` since the merge of 2026-10-07, and production shows the Workspace link. Until acceptance
 step 13 starts the Workspace from bb2dash-stack, a question asked there is answered by the PM's test container on
@@ -1109,8 +1111,8 @@ Workspace's.
 **Not done yet:**
 1. ~~**Stack's acceptance walk**, all fifteen steps, now on `main`: he said "Merge." before walking part A. Before
    step 13 the PM stops the test container; after step 15 it removes the test project and writes the acceptance
-   record.~~ Done by the acceptance run on 2026-10-08 (green; 102a, last section). Step 1 stays his, and the
-   test project's removal is owed.
+   record.~~ Done by the acceptance run on 2026-10-08 (green; 102a, last section). Step 1 he answered the
+   same day, and the test project is removed.
 2. **Two things the walk did not show live.** Both are recorded as not shown, not as passed:
    * **The health check through a long answer (task 21 (d)).** The task wants the container read as healthy 60 s
      and 120 s into one answer, to show that an answer longer than the 90 s "alive" window does not make the service
@@ -1185,19 +1187,22 @@ Workspace's.
      sitting's three had any. Strip the emphasis markers on the page, press the prompt harder, or leave it?
      (DECISIONS 2026-10-07; Known issues.)
   4. **`/usage`.** Only he can type it. At acceptance step 1, when he confirms Usage credits are off, he also reads
-     his plan's session and weekly percentages and tells the PM, who writes them into 102a.
+     his plan's session and weekly percentages and tells the PM, who writes them into 102a. On 2026-10-08 he
+     confirmed the credits ("usage credits are off.") and gave no percentages; none is on record, and nothing
+     waits on them.
   5. **`npm ci` in the harness checkout** (`C:/Users/stack/agentic-harness/mcp-server`), which still holds the older
      fastembed in `node_modules` (Known issues). His to run or to ask for.
   6. **Three SQL units fail on prod's course data** from any checkout, `main` included. They are not this phase's
      to fix. The question for him: which session takes them? Two went stale when a later sync superseded files
      149 and 967; the third is two assignments with no grade component (Known issues).
 
-**Next:** merged on 2026-10-07 and accepted on 2026-10-08 (this docs-only PR is the acceptance record, PR #76's
-precedent). Owed: Stack's step 1 (Usage credits off, `/usage`); then the cleanup: the stopped `bb2dash-wt21` test
-project (container `bb2dash-wt21-workspace-1`, network `bb2dash-wt21_workspace-net`, volume
-`bb2dash-wt21_workspace-claude-home`, each by name; the session's safety check refused the removal on 2026-10-08,
-so it waits for Stack to run it or allow it), the worktrees and branches in both repos, and task 9's raw
-recordings (ORCHESTRATOR §6, D2).
+**Next:** nothing of the phase's own. Merged on 2026-10-07 and accepted on 2026-10-08 (record: PR #83, `a58be34`,
+PR #76's precedent). Closed the same day: step 1 by Stack's word ("usage credits are off."); the `bb2dash-wt21`
+test project (container, network and volume, each by name, on his word after the session's safety check had
+refused it on the standing answer alone); every Phase 21 and acceptance-run worktree and branch in both repos.
+Left on the laptop: task 9's raw recordings (`C:/Users/stack/.bb2dash-w64-rec-out`,
+`C:/Users/Public/bb2dash-w64-rec/`), which are deleted only on his word. Still his, as before: items 5 and 6
+above (`npm ci` in the harness checkout's `mcp-server`; which session takes the three SQL units).
 
 ### Phase 21: not in v1
 
@@ -2207,7 +2212,7 @@ date hold all 59 answers (departures from the defaults: item 10, item 45) and ap
 | 19 | Content identity, per-crawl history, sync honesty | `99_PHASE19_content_history.md` | 130–139, 170–172 live | **merged 2026-10-03** ([PR #60](https://github.com/emstacho-su/bb2dash/pull/60), 206ee3a; row 21 above) |
 | 14 | Containers (R-28) | `100_PHASE14_containers.md` | 091, 093, 094 live; 092 struck | **merged 2026-10-04** on Stack's word, before his acceptance sitting (#62, #67, harness #39, bb2dash-stack #1; section "Phase 14" above); A1–A9 owed |
 | 20 | Harness closure (V-2 on record, note quality, checkpoint redaction) | `101_PHASE20_harness_closure.md` | none here | **PR-A (#39), PR-B (harness #36, + #37) and PR-C (#48) merged 2026-09-30**; V-2 closed on Stack's word (2026-09-30); tasks 2 and 29 done (row 20 above) |
-| 21 | Workspace chat on the subscription | `102_PHASE21_workspace.md` | 140–143 live (144–149 its slack) | **merged 2026-10-07 on Stack's word (bb2dash #78, then bb2dash-stack #3), walked by the PM, accepted 2026-10-08 by the acceptance run `20261008T041753Z`** (sections "Phase 21" and "Acceptance run" above): green from `main` against production; step 1 (Usage credits off, `/usage`) stays Stack's; the stopped test project's removal and the worktree cleanup are owed |
+| 21 | Workspace chat on the subscription | `102_PHASE21_workspace.md` | 140–143 live (144–149 its slack) | **merged 2026-10-07 on Stack's word (bb2dash #78, then bb2dash-stack #3), walked by the PM, accepted 2026-10-08 by the acceptance run `20261008T041753Z`** (sections "Phase 21" and "Acceptance run" above): green from `main` against production; step 1 answered by Stack the same day ("usage credits are off."); the test project, the worktrees and the branches removed |
 | 22 | Styling | `103_PHASE22_styling.md` | none | **merged 2026-10-14** on Stack's word ([PR #93](https://github.com/stack-dev-personal/bb2dash/pull/93), `dff1e05`; section "Phase 22" above); **closed 2026-10-14** on his word ("call everything good. merge everything to main and close out this phase."): both specs once against production (run 20261014T191444Z: 118 passed, 0 failed, 8.1 minutes: the 54 phone-width cases with their 24 pane measures and the 64 theme cases, against production at dff1e05), the worktrees and worker branches removed, taste calls T-1 to T-18 ruled good (`walks/walk-22/WALK.md`) |
 | 24a | Workspace assistant, behind the page | `109_PHASE24_workspace_assistant.md` | 190–199 live, the block used up | **merged 2026-10-14 on Stack's word (bb2dash #97 `2b7c388`, bb2dash-stack #8 `22f35a3`), cut over 2026-10-15 on his word, ACCEPTED 2026-10-15 by acceptance run `20261015T141817Z`** (green from `main` against production; section "Phase 24a" above) |
 | 24ab | Finish 24a and make 24b ready | `118_PHASE24AB_walk_and_handover.md` | none | **done 2026-10-15**: tasks 1 to 12 (the merge of `main`, the list after it, the images, the walk, the docs, brief 111 with the walk and the page's start prompt, the two PRs merged 2026-10-14, the cut-over and `just accept 24` green 2026-10-15, the old volume and the worker worktrees removed); left of task 11: the phase worktrees and `feat/workspace-24`, once 24b's branch has merged `origin/main` |
