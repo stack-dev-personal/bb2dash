@@ -786,3 +786,105 @@ bb2dash-stack suite read 359 of 359 at 21:12Z on Stack's word), the cut-over and
 **`main` merged a third time (25fc603, 21:2xZ): migration 164.** Eighteen commits of the redirect-outside-links fix (ingest, sync, web, db tests, docs) landed on `main` while the stack suite ran. Conflicts: STATUS (the header and the known-issues block), DECISIONS (rows) and `sync/src/files.ts` (the return line: 164's `linked` count and 24a's `unitsPosted`, both kept). The types file regenerated from prod again (10 lines of 164's objects). Gates touched by the merge, re-run: sync typecheck and build clean, 181 tests (one of 164's expected no embed loop after a linked-only pass; it now expects 24a's one loop per pass; `test/integration.test.ts`'s end-to-end replay timed out in three of five full runs while the web suite or another run shared the laptop, and passed four times alone and in two full runs, serial and parallel, once the laptop was quiet: its wait is a count of 5,000 event-loop turns against real disk reads, Phase 14's test, unchanged by 164 or by 24a, noted under STATUS's known issues); `ingest/fetch_signed.test.mjs` 45; web typecheck, lint and build clean and 3,465 tests in 192 files after the merge (164 brought twelve), typecheck clean again on the regenerated types file.
 
 **`main` merged a fourth time (f8759c1, 21:4xZ): PR #103, Blackboard's file store as a signed host.** Seven commits (ingest's downloader and its test, eleven lines of `sync/test/files.test.ts`, STATUS, DECISIONS). Conflicts in STATUS (the 164 known-issue bullet, edited on both sides: main's newer wording kept, the branch's older tail removed) and DECISIONS (both rows). Gates touched, re-run: `ingest/fetch_signed.test.mjs` 51 of 51; the sync suite 182 of 182. The stale known-issue bullet on `phase18_123_file_sessions.sql` (corrected by the audit of 2026-10-09) is struck in the same commit.
+
+## Phase 24ab: the cut-over (2026-10-15, 14:12Z to 14:17Z, on Stack's word "cut over")
+
+**Checked at 14:12:20Z, the moment before:** no `agent_requests` row queued or claimed (the newest, 5785, a
+sync of 10:09Z, done), no Workspace request open (the newest 842, the walk's last), no `accept.lock`, no
+`bb2dash-accept-` and no `bb2dash-walk22-` container. Both main checkouts were at `origin/main`: bb2dash
+already at `93dedbc` (PR #105, another session's test fix, had moved `main` past the merge commit `2b7c388`
+and the checkout had been fast-forwarded by that session); bb2dash-stack fast-forwarded from `f1e9178` to
+`22f35a3` (five commits, PR #8). Neither checkout is committed to.
+
+**Before.** Four live images, three containers, every one of them restarted at 21:03Z the evening before
+(Docker itself restarted on Stack's side; `harness-jobs` and `harness-postgres` read the same start):
+`workspace` `42c552c05ad6` (Phase 21's image, container `9a02c3ccd37b`, runner `workspace@9a02c3ccd37b`),
+`apply` `535b7075cb79` (`af7a71fbca26`), `sync` `216b7d8dee2d` (container `8e5927587bda`, started 21:19Z:
+the redirect-links session's rebuild for migration 164, not this phase's). No `workspace-ingest` and no
+`workspace-extract` container: the cut-over is their first start on this machine. The runner's heartbeat
+row read `workspace@9a02c3ccd37b` at 14:11:51Z; the upload worker's row still held the walk's test worker
+(`workspace-ingest@b99cf0482b74`, 2026-10-14T20:21:31Z).
+
+**One service at a time, from bb2dash-stack, each by name** (`SECRETS_DIR` exported, as `just` does):
+
+| at | command | result |
+|---|---|---|
+| 14:12:58Z | `docker compose up -d --build workspace` | image `611e0c34a516` built from `main` in 17 s (every layer but the last few from cache), container `8bbd677f2c60` recreated (new tmpfs, the same three secrets), started 14:13:14Z, healthy 14:13:35Z; the firewall raised with 3 names; `runner started as workspace@8bbd677f2c60`, `db: connected as workspace_runner` |
+| 14:13:35Z | `docker compose up -d --build workspace-extract` | **refused**: `pull access denied for bb2dash-workspace-ingest`. The parser service names the worker's image and has no `build:` of its own (the two services are one image, brief 109); `--build` on it makes compose pull. On a machine that has the image, which every later restart is, the documented order holds; the first start must build the image first |
+| 14:14:21Z | `docker compose build workspace-ingest` | image `bb2dash-workspace-ingest:local` `6bcae1182bee` built in 12 s; nothing started |
+| 14:14:36Z | `docker compose up -d workspace-extract` | container `f7d304b1a027` created and started 14:14:38Z, healthy 14:14:46Z; `parser: started` |
+| 14:14:47Z | `docker compose up -d workspace-ingest` | container `fd847f1f2ea0` started 14:14:48Z, healthy 14:14:57Z; the firewall raised with 2 names (the project host on 443, the session pooler on 5432), `db: connected as workspace_ingest_runner`; the heartbeat row rewritten by the live worker at 14:15:16Z (`workspace_ingest_heartbeat` holds one row, upserted: the proof is its runner name and time, not a count) |
+| 14:15:18Z | `docker compose up -d --build apply` | image `d59f7672c8ac` (it copies the runner's modules), container `87b106d6cd35` started 14:15:27Z, healthy 14:15:36Z; `db: connected as inbox_apply_runner`. The queue read again at 14:15:37Z: nothing open |
+| 14:16:00Z | `docker compose up -d --build sync` | image `0efd6a64c324` (its files pass now embeds on every pass), container `e21c069f5e62` started 14:16:12Z, healthy 14:16:22Z, on the same `bb2dash_bb-profile` and `bb2dash_course-files` volumes; `login: users/me 200 … alive`, `sync_enqueue('login') -> nothing queued (already synced today)`: no sign-in needed and no `sync-login-required` item |
+
+**After (14:16Z to 14:17Z).** Five healthy containers of the compose project `bb2dash` plus the harness's two.
+`just doctor`: every row green that it has (14 of 14 secrets, `blackboard users/me 200`, `workspace` and `apply`
+"running, healthy", `exports` exit 0); the doctor has no row for the two ingest services (W-85 added the secret,
+not a row; noted for 24b or a doctor follow-up). `v_workspace_index_status`: 1,035 course units indexed, 0
+waiting, 4 course files with text pending (the four 164 flagged), 0 uploads, 0 memory, the ingest worker polled
+29 s ago. The runner's heartbeat `workspace@8bbd677f2c60`. Volumes: `bb2dash_ingest-exchange` (tmpfs) is new;
+`bb2dash_workspace-claude-home` (Phase 21's transcript volume, unmounted by the new image) stays until the
+acceptance run is green; `bb2dash-wt23_apply-claude-home`, a volume of Phase 23's test project, was found beside
+them and is not this phase's to remove.
+
+**`just accept 24 --check` at 14:17:49Z** (exit 0): phase 24, bb2dash at `93dedbc` (`origin/main`), against
+production; "a green run would count as acceptance"; ten stages in the pack's order; step 1 (Usage credits)
+named as Stack's. The run itself was started at 14:18:17Z as `20261015T141817Z`, detached from the session's
+shell (the harness had stopped a long background shell the day before), its output in the session's scratch
+folder.
+
+## Phase 24ab: `just accept 24`, green: Phase 24a accepted (2026-10-15, 14:18Z to 14:27Z)
+
+**The run.** `20261015T141817Z`, started 14:18:17.567Z and finished 14:25:45.321Z (7.5 minutes), from
+bb2dash-stack `main` (`22f35a3`) on bb2dash `93dedbc` (`origin/main`; harness `57ee51f`) against production, the
+sandbox image `ae2cd9559fe5` with Claude Code 2.1.293 in it; `verdict.json` sha256
+`f0c6f769f9b3fde94e2aab2e81f4844437d4fb1427429000c33428c9ca23d809`; the folder
+`C:/Users/stack/.bb2dash-accept/24/20261015T141817Z/` (`REPORT.md`, `host.log`, the pictures and the step files;
+it stays on the laptop, since answers quote course text). **Verdict green: "this run counts as acceptance."**
+Nine stages in the pack's order, every one passed; twelve automated steps, ten with a proof the host read itself,
+two (step 2, the open page; step 11, the upload's own facts) on the sandbox's record; step 1 (Usage credits) is
+Stack's and the run does not check it. The sync container read the same id and start time before and after
+(`e21c069f5e62`, 14:16:12Z). The Workspace answering at the start was `bb2dash-workspace-1` and nothing was put
+back: the go-live stage found the profile line in place, the Workspace healthy "0 s after its start" (its
+`up -d --build` rebuilt from cache and kept the container) and the two ingest services the same.
+
+| step | stage | what stood behind it |
+|---|---|---|
+| 0 | go-live (host) | `planner-fingerprint` saved (`ap=2026-10-15T10:12:00Z, rp=2026-10-14T18:00:15Z, n=101, apn=88, rpn=76`; no request open, newest 5785 done); the Workspace's doctor row `running, healthy`; `workspace-extract` and `workspace-ingest` healthy |
+| 2 | walk | the page as Phase 22 draws it: `Workspace` the one underlined link, `Conversations`, the empty line, the box and `Ask`; channel joined, no offline line (the sandbox's record) |
+| 3 to 8 | walk | requests 939 to 944, every one `done`, each with its host proof: `Haiku · lookup` on 3 (a late-work policy quoted from a named slide file), 4 (the syllabus headings), 6 (assignments by due date through October 29), 7 (the grading policy, in step 3's conversation) and 8 (the first line the fixed "no course material matched" sentence, the flag true, `retrieval_state empty`: D-1 stays fixed on the live floor); `Sonnet · standard` on 5, a full explanation from the slides; each conversation archived once |
+| 9 | walk | request 945 `cancelled` (stopped partway, `You stopped this answer.` under the text, `Ask` back), then 946 `done` in the same conversation: proofs `turn-stopped` and `turn-done-after-stop` |
+| 10 | walk-proofs (host) | `planner-unchanged`: the fingerprint read the same at 14:23:58Z as at 14:18:57Z |
+| 11 | upload | document 216, 189 bytes `text/plain`, key `u/<sha256>`, `stored`, `existing` false (the sandbox's record) |
+| 12 | indexed (host) | `upload-indexed`: 216 `indexed`, one row holding the hash the proof derives from the nonce (`ca007041…`), `attempts` 0, no error, made in this run: **the live worker's first real file**, through its firewall |
+| 13, 14 | find | request 947 `done`, `Haiku · lookup`, 207 characters naming the memo's lamp, hinges and shade, `Used: search, planner_feed`; sent twice, one row (`existing` true) |
+| 15 | delete | `deleting` with one object removed, then `deleted`, 0 rows; `conversations-unarchived` 0 |
+| 16 | store-proofs (host) | pgvector 0.8.2 in `extensions`; two vector columns at 384, two indexes; 1,035 course units indexed, 0 waiting, 0 uploads, 0 memory, none indexed without a vector; no foreign server, foreign table, link extension or store function that calls out |
+
+**The operator's notes** (text written inside the sandbox; read as claims): from step 3 on every picture has the
+Courses side panel open on the right, not step 2's (the ☰ state the page keeps between loads); step 6's answer
+named weekdays that do not match the dates (October 16, 2026 called a Wednesday; it is a Friday), which the
+operator did not investigate: the feed carries dates and the model worked the day names out itself (brief 111,
+(g)); in `9.json` `stopped_at` 14:23:08Z is earlier than `asked_at` 14:23:18Z, which is the second question's
+time as the test records it; in `9-after.png` the Ask button looks slightly dimmed with both answers finished; the
+stopped answer is cut mid-sentence, as a stop should leave it; step 13's two pictures are identical because the
+answer fit on one screen. None is a defect of 24a; the first, second and fourth are noted for 24b's page.
+
+**After the run (14:26Z to 14:27Z).** No `accept.lock`; the five containers the same ids as after the cut-over,
+all healthy; the store 0 documents (the run's file deleted); `workspace_requests` 939 to 947 are the run's nine;
+the heartbeats `workspace@8bbd677f2c60` 14:27:13Z and `workspace-ingest@4832e8481aa7` 14:27:16Z; no
+`agent_requests` row since 14:12Z. **The old transcript volume `bb2dash_workspace-claude-home`** (made
+2026-10-08T04:18Z by Phase 21's acceptance go-live, mounted by no container since the new image) **removed at
+14:27:01Z**, on Stack's answer 4 of 2026-10-14 ("wait until its accepted to delete old transcripts"). What stays:
+the phase worktrees `bb2dash-wt-24` and `bb2dash-stack-wt-24` and the branch `feat/workspace-24`, until the 24b
+session has merged `origin/main` (checked at 14:11Z: not yet); a volume of Phase 23's test project,
+`bb2dash-wt23_apply-claude-home`, which that phase's close-out did not list and is Stack's to remove; bb2dash PR
+#84 (Phase 21's step-1 docs) still open with its worktree `bb2dash-wt-21-step1`.
+
+**Phase 24a is accepted, and Phase 24ab is done**: tasks 1 to 12 of brief 118 are done but the last part of task
+11 named above. The record is this file's last four sections, STATUS "Phase 24a" and the DECISIONS rows of
+2026-10-15.
+
+**Step 1 (2026-10-15, after the record merged as `0d630ac`).** Stack: "usage credits are off." No `/usage`
+percentages given, as in Phase 21, and nothing waits on them. Pack 24 has no step left; Phase 24a has nothing of
+its own open.

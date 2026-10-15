@@ -114,7 +114,14 @@ this section is current.** The reference for every shape is
   the Standard question in 15 s after a 1.8 s planning turn, so the page's waiting state must read well
   at those lengths; (d) Phase 22's page needed no change to pack 24's spec, and task 14 moves the steps
   to the new page as written; (e) a hand walk of the pack reads the go-live stage's `planner-fingerprint`
-  before the first question.
+  before the first question. From the acceptance run of 2026-10-15 (`20261015T141817Z`, green, Phase 24a accepted; 109c):
+  (f) the operator saw the Courses side panel open on the right in every picture from step 3 on and not in step
+  2's, the ☰ state the page keeps; the new page decides what the panel does beside the chat; (g) step 6's answer
+  named weekdays that do not match their dates (October 16, 2026 called a Wednesday; it is a Friday): the feed
+  carries dates and the model worked the day names out itself, so the feed should carry the weekday, or the page
+  should, and the prompt should state today's date; (h) after a Stop and a second finished answer, the Ask button
+  looked a shade dim in the picture with both answers done: the composer's state after a Stop is W-88's to get
+  right.
 * **Stack's answers of 2026-10-14** to the four questions Phase 24ab put to him (his words in quotes):
   1. **Workers: Opus.** "Workers on opus for phase 24 only (keep sonnet on for the default workflow)."
      So W-86 to W-88, and any extra worker of 24b, are Opus; other phases keep Sonnet.
