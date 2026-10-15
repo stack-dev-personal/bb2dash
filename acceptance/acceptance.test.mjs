@@ -759,15 +759,17 @@ test('README.md says what the saved session file holds, where it lives and when 
  * ------------------------------------------------------------------------------------------ */
 
 /** The stages: 24a's nine, with 24b's page stages between them (brief 111, task 14): `page` first after go-live, so step 17's conversation is quiet by the memory stages. */
-const PACK_24_STAGES = ['prepare', 'go-live', 'page', 'walk', 'walk-proofs', 'upload', 'indexed', 'find', 'delete', 'page-upload', 'page-memory', 'memory-proofs', 'page-forget', 'store-proofs'];
+const PACK_24_STAGES = ['prepare', 'go-live', 'page', 'walk', 'walk-proofs', 'upload', 'indexed', 'find', 'delete', 'page-upload', 'page-delete', 'page-memory', 'memory-proofs', 'page-forget', 'store-proofs'];
 const PACK_24_WALK = ['2 open workspace', '3 course question', '4 lookup one turn', '5 standard plan', '6 planner feed', '7 follow-up', '8 nothing matches', '9 stop then answer'];
 const PACK_24_UPLOAD_TITLES = ['11 upload file', '13 find upload', '14 send twice', '15 delete upload'];
 /** Phase 24b's page steps, by sandbox stage. */
 const PACK_24_PAGE = ['17 lobby and options', '18 sources and panel'];
-const PACK_24_PAGE_UPLOAD = ['19 upload through the page', '20 ask with the file attached', '21 delete through the files tab'];
+/** The delete is a stage of its own, after the host has read step 20's proof of the attached file: a proof is read after its step's stage. */
+const PACK_24_PAGE_UPLOAD = ['19 upload through the page', '20 ask with the file attached'];
+const PACK_24_PAGE_DELETE = ['21 delete through the files tab'];
 const PACK_24_PAGE_MEMORY = ['22 memory item shown'];
 const PACK_24_PAGE_FORGET = ['24 memory item deleted'];
-const PACK_24_PAGE_TITLES = [...PACK_24_PAGE, ...PACK_24_PAGE_UPLOAD, ...PACK_24_PAGE_MEMORY, ...PACK_24_PAGE_FORGET];
+const PACK_24_PAGE_TITLES = [...PACK_24_PAGE, ...PACK_24_PAGE_UPLOAD, ...PACK_24_PAGE_DELETE, ...PACK_24_PAGE_MEMORY, ...PACK_24_PAGE_FORGET];
 /** The proofs the store's five reads are carried as (task 49, proofs 1, 2, 3, 6 and 7). */
 const PACK_24_STORE_PROOFS = ['store-extension', 'store-vector-columns', 'store-vector-indexes', 'store-counts', 'store-no-links'];
 
@@ -800,6 +802,7 @@ test("Phase 24: the stages are the brief's, in order, and the go-live stage stop
   assert.deepEqual(stageOf(manifest, 'delete').tests, ['15 delete upload']);
   assert.deepEqual(stageOf(manifest, 'page').tests, PACK_24_PAGE);
   assert.deepEqual(stageOf(manifest, 'page-upload').tests, PACK_24_PAGE_UPLOAD);
+  assert.deepEqual(stageOf(manifest, 'page-delete').tests, PACK_24_PAGE_DELETE);
   assert.deepEqual(stageOf(manifest, 'page-memory').tests, PACK_24_PAGE_MEMORY);
   assert.deepEqual(stageOf(manifest, 'page-forget').tests, PACK_24_PAGE_FORGET);
   assert.deepEqual(specTitles(readText('web/e2e/accept24.spec.ts')), [...PACK_24_WALK, ...PACK_24_UPLOAD_TITLES, ...PACK_24_PAGE_TITLES]);
@@ -984,9 +987,13 @@ test("Phase 24b: the page's file is step 19's nonce for steps 20 and 21, and the
   // Step 17: the options row, by the picked course; its conversation is what the memory stages carry.
   assert.deepEqual(stepOf(manifest, '17').proofs.map((proof) => [proof.name, proof.with.course]), [['options-stored', 'IST.323']]);
   assert.equal(proofs['options-stored'].params.course, 'text');
-  // Steps 20 and 21 work from the file step 19 made through the page.
+  // Steps 20 and 21 work from the file step 19 made through the page; the delete is a later stage than the ask,
+  // so the host reads step 20's proof of the attached file while the row still exists.
   assert.equal(stepOf(manifest, '20').proofs[0].with.nonce, 'carry:19.nonce_id');
   assert.deepEqual(stepOf(manifest, '21').proofs, [{ name: 'page-upload-gone', with: { nonce: 'carry:19.nonce_id' } }]);
+  assert.ok(order.indexOf('page-delete') > order.indexOf('page-upload'), 'the delete runs in a stage after the ask with the file attached');
+  assert.equal(stepOf(manifest, '20').stage, 'page-upload');
+  assert.equal(stepOf(manifest, '21').stage, 'page-delete');
   // The host reads the item itself, again until it passes, after the page step waited for it; the delete's proof is step 24's own.
   assert.deepEqual(stageOf(manifest, 'memory-proofs').actions, [{ action: 'db.proofUntil', with: { name: 'memory-item', conversation: 'carry:17.conversation_id', since: RUN_START } }]);
   assert.deepEqual(stepOf(manifest, '23').proofs, [{ name: 'memory-item', with: { conversation: 'carry:17.conversation_id', since: RUN_START } }]);

@@ -112,7 +112,13 @@
       "kind": "sandbox",
       "tests": [
         "19 upload through the page",
-        "20 ask with the file attached",
+        "20 ask with the file attached"
+      ]
+    },
+    {
+      "id": "page-delete",
+      "kind": "sandbox",
+      "tests": [
         "21 delete through the files tab"
       ]
     },
@@ -590,7 +596,7 @@
       "id": "21",
       "kind": "auto",
       "text": "The file is deleted through the Files tab in two presses and leaves the list; no row holds its hash.",
-      "stage": "page-upload",
+      "stage": "page-delete",
       "test": "21 delete through the files tab",
       "evidence": [
         "21-files.png",

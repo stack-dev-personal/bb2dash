@@ -78,7 +78,7 @@ import {
   waitClosed,
   waitStreaming,
 } from './accept.lib';
-import { readCarry, readFacts, requireCarried } from './accept.env';
+import { carried, readCarry, readFacts, requireCarried } from './accept.env';
 import {
   BADGE_LOW,
   BADGE_MID,
@@ -411,10 +411,13 @@ acceptStep('19 upload through the page', { shots: ['chip', 'files'] }, async ({ 
   await hidePanel(page);
 });
 
-/** Step 19's file, rebuilt from the nonce its facts hold (the same stage), and the title the page gave it. */
+/**
+ * Step 19's file, rebuilt from the nonce its facts hold (step 20, the same stage) or from the carry-over
+ * (step 21, a later stage), and the title the page gave it.
+ */
 function fileOfPageUpload(outDir: string | undefined) {
-  const facts = outDir === undefined ? null : readFacts(outDir, PAGE_UPLOAD_STEP);
-  const nonce = facts?.['nonce_id'];
+  const here = outDir === undefined ? null : readFacts(outDir, PAGE_UPLOAD_STEP)?.['nonce_id'];
+  const nonce = typeof here === 'string' ? here : carried(readCarry(process.env['ACCEPT_IN']), PAGE_UPLOAD_STEP, 'nonce_id', 'uuid');
   if (typeof nonce !== 'string') throw new Error(`step ${PAGE_UPLOAD_STEP} left no nonce_id to work from`);
   const file = syntheticFile(nonce);
   return { file, title: pageFileName(file) };

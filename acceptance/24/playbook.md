@@ -333,9 +333,8 @@ after one press reads `Press again to delete`.
 
 The Workspace service and the ingest worker, the program that indexes uploads, are running. This
 stage asks the live assistant one question (step 20). Run each title one time, in the order of
-your list of titles. Steps 20 and 21 work from the file step 19 made and read its facts file; if
-`19.json` holds no `nonce_id`, give steps 20 and 21 the verdict `blocked` and say in `saw` that
-they waited on step 19.
+your list of titles. Step 20 works from the file step 19 made and takes its facts file; if `19.json`
+holds no `nonce_id`, give step 20 the verdict `blocked` and say in `saw` that it waited on step 19.
 
 ### Step 19: `19 upload through the page`
 
@@ -380,6 +379,17 @@ Pass when all of this is true:
 Guidance, not a pass condition: the answer should speak of a lamp and its hinges or shade. The
 host checks in the database that the file was attached and read; you check that the answer is
 whole. Write in `notes` whether the answer spoke of a lamp.
+
+## Stage: page-delete
+
+The page under test is the Workspace, a chat page of the app, as Phase 24b built it. The side
+panel's tab that reads `Files` lists every upload with its state, a field at the top of that tab reads
+`Filter by title`, and each row has a button that reads `Delete`, which after one press reads
+`Press again to delete`. The host has read in the database that the file step 19 made was attached
+to step 20's question; `carry.json` holds step 19's `nonce_id`, from which the test rebuilds the
+file's name.
+
+This stage asks no question. Run the one title one time.
 
 ### Step 21: `21 delete through the files tab`
 
