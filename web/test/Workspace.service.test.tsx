@@ -27,6 +27,8 @@ vi.mock('@/lib/supabase/client', async () =>
   (await import('./workspace-harness')).supabaseClientMock(),
 );
 vi.mock('next/navigation', async () => (await import('./workspace-harness')).navigationMock());
+vi.mock('@/components/workspace/Composer', async () => (await import('./workspace-harness')).composerMock());
+vi.mock('@/components/workspace/Lobby', async () => (await import('./workspace-harness')).lobbyMock());
 
 const { Workspace } = await import('@/app/(app)/workspace/Workspace');
 const { workspaceKeys } = await import('@/lib/queries.workspace');
@@ -62,8 +64,28 @@ async function advance(ms: number): Promise<void> {
   });
 }
 
+/** A conversation with one answered question: since Phase 24b the service line is the thread's, in the composer's dock. */
+const A = '6f1c2a54-9b1e-4c0d-8a55-0d2f3b7c9e11';
+const QUESTION = 'c9a7d3e2-55aa-4f10-b1d2-7e8f9a0b1c2d';
+const CONVERSATION_ROWS: Record<string, Row[]> = {
+  workspace_messages: [
+    { id: QUESTION, conversation_id: A, role: 'user', content: 'What is due?', finished: true },
+    {
+      id: 'a7c1d2e3-55aa-4f10-b1d2-7e8f9a0b1c2d',
+      conversation_id: A,
+      role: 'assistant',
+      request_id: 41,
+      tier: 'low',
+      content: 'Quiz 2.',
+      finished: true,
+    },
+  ],
+  workspace_requests: [{ id: 41, conversation_id: A, user_message_id: QUESTION, state: 'done' }],
+};
+
 function open(client: QueryClient = newQueryClient()) {
-  fake.state.search = '';
+  fake.state.search = `c=${A}`;
+  fake.state.rows = { ...CONVERSATION_ROWS, ...fake.state.rows };
   return render(
     <QueryClientProvider client={client}>
       <Workspace />

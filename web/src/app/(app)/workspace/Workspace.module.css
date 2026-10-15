@@ -1,8 +1,11 @@
-/* The Workspace screen (Phase 21). Existing tokens only, no new colour;
-   Phase 22 restyles. The parts carry their own modules under
-   components/workspace/. */
+/* The Workspace screen (Phase 21; Phase 24b, frozen (f)). Tokens only. The
+   parts carry their own modules under components/workspace/.
 
-/* The list beside the thread; one column under the phone fold. */
+   It lays itself out in the pane the shell gives it: the conversations rail,
+   the column at a reading measure, and while the panel is open and docked a
+   third track for it. Under 1024 px the panel is a sheet (two tracks); under
+   720 px the rail is a sheet too (one track). */
+
 .workspace {
   display: grid;
   grid-template-columns: minmax(var(--size-conversations-min), var(--size-conversations-max)) minmax(0, 1fr);
@@ -10,9 +13,20 @@
   align-items: start;
   min-width: 0;
 }
+.workspace[data-panel-docked] {
+  grid-template-columns:
+    minmax(var(--size-conversations-min), var(--size-conversations-max)) minmax(0, 1fr)
+    minmax(var(--size-280), var(--size-panel-max));
+}
 
-/* The message column, the composer and the service line, at a reading measure. */
-.thread {
+.rail {
+  min-width: 0;
+}
+
+/* The column: the date line, then the lobby or the thread, at 80ch at most.
+   Named apart from MessageList's `.column`, so the layout spec can set the
+   sheets side by side as written. */
+.pageColumn {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -20,18 +34,83 @@
   max-width: 80ch;
 }
 
-/* A read or a write that failed, in the app's own words for it (the Inbox's form). */
-.problem {
-  composes: errorNotice from '@/styles/tokens.module.css';
+.stream {
+  min-width: 0;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* Today's New York date and its weekday (amendment (g)). */
+.today {
+  flex: 1;
+  min-width: 0;
   margin: 0;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
   font-size: var(--text-sm);
+  color: var(--color-muted);
+}
+
+/* The rail's button: only where the rail is a sheet. */
+.railButton {
+  composes: btnSecondary from '@/styles/tokens.module.css';
+  display: none;
+  flex: none;
+}
+
+.showPanel {
+  composes: btnGhost from '@/styles/tokens.module.css';
+  flex: none;
+  font-size: var(--text-xs);
+}
+
+.panelTrack {
+  min-width: 0;
+}
+
+/* The rail as a sheet from the reading edge, through PopoutShell: the frame's
+   backdrop and dialog are its two children, set here by structure so the
+   shared frame is not edited. */
+.railSheet > div {
+  justify-content: flex-start;
+  align-items: stretch;
+  padding: 0;
+}
+.railSheet > div > [role='dialog'] {
+  width: min(100%, var(--size-panel-max));
+  min-height: 100%;
+  border-radius: 0;
+  padding: var(--space-8) var(--space-4) var(--space-4);
+}
+
+@media (max-width: 1023.98px) {
+  .workspace,
+  .workspace[data-panel-docked] {
+    grid-template-columns: minmax(var(--size-conversations-min), var(--size-conversations-max)) minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 720px) {
-  .workspace {
+  .workspace,
+  .workspace[data-panel-docked] {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--space-6);
+  }
+  .rail {
+    display: none;
+  }
+  .railButton {
+    display: inline-flex;
+    min-height: var(--size-44);
+  }
+}
+
+/* A phone's press area: 44 px. Kept apart from the step above for clarity. */
+@media (max-width: 720px) {
+  .showPanel {
+    min-height: var(--size-44);
   }
 }
