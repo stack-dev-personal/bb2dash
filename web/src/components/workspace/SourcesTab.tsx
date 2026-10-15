@@ -87,7 +87,11 @@ function OpenUpload({ documentId }: { documentId: number }) {
     const tab = window.open('about:blank', '_blank');
     try {
       const url = await createSignedUploadUrl(storageKey);
-      if (tab) tab.location.href = url;
+      if (tab) {
+        // The new page gets no handle on this one (round 2, S-1): the opener goes before the address.
+        tab.opener = null;
+        tab.location.href = url;
+      }
       else window.open(url, '_blank', 'noopener,noreferrer');
     } catch (failure) {
       tab?.close();

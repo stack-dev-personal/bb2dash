@@ -305,6 +305,42 @@ describe('the Sources tab', () => {
     expect(fake.state.storage.signed).toEqual([`workspace-uploads/u/${SHA}`]);
   });
 
+  it('cuts the new tab`s opener before its address is set (round 2, S-1)', async () => {
+    const seen: { href: string; opener: unknown }[] = [];
+    const tab = {
+      opener: window as unknown,
+      close: vi.fn(),
+      location: {
+        set href(value: string) {
+          seen.push({ href: value, opener: tab.opener });
+        },
+      },
+    };
+    vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
+    mount();
+    await screen.findByText('My notes.pdf');
+
+    fireEvent.click(await within(rowOf('My notes.pdf')).findByRole('button', { name: labels.OPEN_SOURCE_LABEL }));
+
+    await waitFor(() => expect(seen).toHaveLength(1));
+    expect(seen[0]).toEqual({ href: `https://storage.test/workspace-uploads/u/${SHA}?seconds=3600`, opener: null });
+  });
+
+  it('opens the link with no opener and no referrer when the blank tab was blocked', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    mount();
+    await screen.findByText('My notes.pdf');
+
+    fireEvent.click(await within(rowOf('My notes.pdf')).findByRole('button', { name: labels.OPEN_SOURCE_LABEL }));
+
+    await waitFor(() => expect(open).toHaveBeenCalledTimes(2));
+    expect(open).toHaveBeenLastCalledWith(
+      `https://storage.test/workspace-uploads/u/${SHA}?seconds=3600`,
+      '_blank',
+      'noopener,noreferrer',
+    );
+  });
+
   it('says so when the upload`s link cannot be made, and closes the blank tab', async () => {
     const tab = { location: { href: '' }, close: vi.fn() };
     vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
