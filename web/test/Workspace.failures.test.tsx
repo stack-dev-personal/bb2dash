@@ -326,6 +326,71 @@ describe('the composer after a Stop (amendment (h))', () => {
   });
 });
 
+/**
+ * Round 2, R2-2b: the stream is marked stopped only when `workspace_cancel` answers true. The stopped
+ * sentence still shows at the press (the turn's own mark); a cancel that failed marks nothing, so the
+ * answer the runner keeps writing still reaches the page.
+ */
+describe('the stream`s stop mark follows the cancel`s answer (round 2, R2-2b)', () => {
+  function seedWriting(): void {
+    fake.state.rows = {
+      workspace_messages: [
+        QUESTION_ROW,
+        { id: ANSWER, conversation_id: A, role: 'assistant', request_id: 42, tier: 'mid', content: '', finished: false },
+      ],
+      workspace_requests: [requestRow('claimed')],
+    };
+  }
+
+  function answerText(container: HTMLElement): string {
+    return container.querySelector('li[data-request-id="42"] [data-answer-text]')?.textContent ?? '';
+  }
+
+  it('marks it once the cancel answers true: a later delta changes nothing', async () => {
+    seedWriting();
+    const { container } = open();
+    const channel = await joined(TOPIC_A);
+    act(() => channel.emit('delta', { request_id: 42, seq: 1, delta: 'Week one.' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Stop' }));
+    await waitFor(() => expect(fake.state.rows.workspace_requests[0]).toMatchObject({ state: 'cancelled' }));
+    await waitFor(() => expect(fake.state.composer).toMatchObject({ busy: false }));
+
+    act(() => channel.emit('delta', { request_id: 42, seq: 2, delta: ' Week two.' }));
+
+    expect(answerText(container)).toBe('Week one.');
+    expect(screen.getByText(labels.STOPPED_SENTENCE)).toBeInTheDocument();
+  });
+
+  it('marks nothing when the cancel fails: the answer keeps arriving under the reopened turn', async () => {
+    seedWriting();
+    fake.state.rpc.workspace_cancel = () => ({ data: null, error: DENIED });
+    const { container } = open();
+    const channel = await joined(TOPIC_A);
+    act(() => channel.emit('delta', { request_id: 42, seq: 1, delta: 'Week one.' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Stop' }));
+    await waitFor(() => expect(alerts()).toEqual(['Could not stop this answer: permission denied']));
+
+    act(() => channel.emit('delta', { request_id: 42, seq: 2, delta: ' Week two.' }));
+
+    expect(answerText(container)).toBe('Week one. Week two.');
+    expect(container.querySelector('li[data-request-id="42"]')).toHaveAttribute('data-turn', 'streaming');
+  });
+
+  it('marks nothing when the request had already finished (the cancel answers false)', async () => {
+    seedWriting();
+    fake.state.rpc.workspace_cancel = () => ({ data: false, error: null });
+    const { container } = open();
+    const channel = await joined(TOPIC_A);
+    act(() => channel.emit('delta', { request_id: 42, seq: 1, delta: 'Week one.' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Stop' }));
+    await waitFor(() => expect(fake.state.composer).toMatchObject({ busy: false, requestOpen: true }));
+
+    act(() => channel.emit('delta', { request_id: 42, seq: 2, delta: ' Week two.' }));
+
+    expect(answerText(container)).toBe('Week one. Week two.');
+  });
+});
+
 describe('archiving', () => {
   const ROWS = [{ id: A, title: 'spike', archived: false, updated_at: null }];
 

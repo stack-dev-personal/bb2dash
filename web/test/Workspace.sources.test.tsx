@@ -326,7 +326,7 @@ describe('the searching line', () => {
 });
 
 describe('Stop', () => {
-  it('leaves the page as it was for a delta that arrives after the press', async () => {
+  it('leaves the page as it was for a delta that arrives after the cancel answered (R2-2b)', async () => {
     fake.state.rows = {
       workspace_messages: [questionRow('Draft a plan'), answerRow('', { finished: false })],
       workspace_requests: [requestRow('claimed')],
@@ -340,15 +340,20 @@ describe('Stop', () => {
     fake.state.rpcGate = held.promise;
 
     fireEvent.click(screen.getByRole('button', { name: labels.STOP_LABEL }));
+    // The stopped sentence at the press, before the database has answered.
+    expect(turn(container)).toHaveAttribute('data-turn', 'stopped');
+    await act(async () => {
+      held.release();
+      await held.promise;
+    });
+    await waitFor(() => expect(fake.state.rows.workspace_requests[0]).toMatchObject({ state: 'cancelled' }));
+    await waitFor(() => expect(fake.state.composer).toMatchObject({ busy: false }));
+
     act(() => channel.emit('delta', { request_id: 42, seq: 2, delta: ' Week two: the quiz.' }));
 
     expect(turn(container)).toHaveAttribute('data-turn', 'stopped');
     expect(turn(container).querySelector('[data-answer-text]')).toHaveTextContent('Week one: reading.');
     expect(container.textContent).not.toContain('Week two');
-    await act(async () => {
-      held.release();
-      await held.promise;
-    });
   });
 });
 
