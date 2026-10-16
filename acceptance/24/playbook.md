@@ -323,12 +323,13 @@ Pass when all of this is true:
 
 - In `18.json`: `state` is `done`, `line` is null, `answer_chars` is 1 or more, `badge` reads
   `Haiku · lookup`; `sources_row` is a text of the form `N sources` or `1 source` with N above 0;
-  `forbidden_elements_in_answer` is 0; `panel_rows` is 1 or more and `panel_open_controls` is 1 or more; `panel_folded` is true;
+  `forbidden_elements_in_answer` is 0; `panel_rows` is 1 or more and `panel_open_controls` equals `panel_rows`; `panel_folded` is true;
   `archived_ids` holds `conversation_id`, and `archive_writes` equals the number of ids in
   `archived_ids`.
 - `18-end.png` shows the last lines of the answer's text and, under them, the sources row.
 - `18-panel.png` shows, on the right of the page, a panel whose picked tab reads `Sources`, with at
-  least one row in it, and each row has a control that reads `Open`. A row may be a course file
+  least one row in it, and each row has a control that reads `Open` (a button on a course file's, an
+  upload's and a remembered row; a link on the planner's row). A row may be a course file
   (`Course file`), an upload, a remembered conversation (`Remembered`: an earlier conversation the
   assistant's memory kept, an earlier run of this pack's among them) or the planner (`Planner`);
   each kind is a source and none is a fault. The answer's text is still on the page, to the left of
