@@ -89,7 +89,7 @@ Supabase project: `goultdzqcavefcgnifdy` (us-east-1, Postgres 17). Full access v
   dimensions, each vector table with its HNSW index, behind one search (`workspace_search`) that names the
   kind on every hit; `v_workspace_index_status` is the one status row. The memory jobs (the remembered items
   the Memory tab shows) are `WORKSPACE_MEMORY_JOBS` in `compose.yaml`: `on` since Phase 24b's PR, live once
-  `workspace` is rebuilt from `main` at that phase's cut-over, proven by `just accept 24` (steps 22 to 24); the
+  `workspace` is rebuilt from `main` at that phase's cut-over, proven 2026-10-16 by `just accept 24` run `20261016T041410Z` (steps 22 to 24); the
   rolling summary is on from 24a whatever the value says. Migrations 140–143
   and 190–199 are frozen; nothing is left in the block, so a fix needs a ruling and a new block.
 * Inbox auto-apply (Phase 23): after a sync that closed done, the `sync` container files an
