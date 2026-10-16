@@ -25,7 +25,8 @@ import { PASSAGES_MAX, MEMORY_ITEMS_MAX } from './context/budget.js';
 import { QUERY_MAX_CHARS, type Plan } from './plan.js';
 import { parseBatchAnswer, type AttachmentRead, type Hit, type QueryAnswer } from './store-types.js';
 
-export const RETRIEVE_TIMEOUT_MS = 10_000;
+/** The whole batch: its calls run side by side, each inside the batch's own 20 s (mcp-server/src/batch.ts). */
+export const RETRIEVE_TIMEOUT_MS = 30_000;
 export const FAILURES_BEFORE_PAUSE = 3;
 export const PAUSE_MS = 5 * 60 * 1000;
 export const SIMILARITY_FLOOR = 0.81;
