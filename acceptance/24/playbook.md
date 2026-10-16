@@ -381,9 +381,9 @@ the page did not catch is not a fault. `chip_waited_ms` is how long the chip too
 ### Step 20: `20 ask with the file attached`
 
 The test hands the same file to the page a second time, through the same menu entry; the page
-finds the row the file already has and shows the chip as `Indexed` at once. The test then types a
-question about the file and sends it. It waits until the answer is finished, takes the two pictures
-of the walk, and archives the conversation it started.
+finds the row the file already has and shows the chip as `Indexed` at once. The test takes a
+picture of the chip, then types a question about the file and sends it. It waits until the answer
+is finished, takes the two pictures of the walk, and archives the conversation it started.
 
 Pass when all of this is true:
 
@@ -391,8 +391,13 @@ Pass when all of this is true:
   is 1 or more; `badge` reads `Haiku · lookup`; `sources_row` is a text of the form `N sources` or
   `1 source` with N above 0; `archived_ids` holds `conversation_id`, and `archive_writes` equals
   the number of ids in `archived_ids`.
-- `20-start.png` shows the question, the badge between the question and the answer's text, and
-  above the question box a chip that names the file.
+- `20-chip.png` shows, above the question box, one chip that names the file and reads `Indexed`,
+  before the question is sent.
+- `20-start.png` shows the question and the badge between the question and the answer's text. The
+  question box under them is empty: the page clears the chip once the question is sent, since the
+  file then belongs to the request (the host's proof `turn-attached` finds its attachment row).
+  `names_file` in `20.json` may be true or false: whether the answer names the file is the
+  model's choice, and a short answer may stand whole in both pictures.
 - `20-end.png` shows the last lines of the answer's text and, under them, the sources row.
 - `answer` in `20.json` is text that answers the question. It is not an error message.
 

@@ -443,7 +443,7 @@ function fileOfPageUpload(outDir: string | undefined) {
 }
 
 // Step 20: the same file sent again through the page shows the row it already has, and a question asked with it attached draws on it.
-acceptStep('20 ask with the file attached', { shots: ['start', 'end'] }, async ({ page, context }, rec) => {
+acceptStep('20 ask with the file attached', { shots: ['chip', 'start', 'end'] }, async ({ page, context }, rec) => {
   const { file, title } = fileOfPageUpload(process.env['ACCEPT_OUT']);
   rec.note({ nonce_id: file.nonce, sha256: file.sha256, file_name: title });
   const opened: string[] = [];
@@ -454,6 +454,9 @@ acceptStep('20 ask with the file attached', { shots: ['start', 'end'] }, async (
     const states = await watchUploadStates(page, chip);
     rec.note({ chip_states: states.seen, chip_last_state: states.last, chip_waited_ms: states.waitedMs });
     expect(states.last, 'the row the file already has is indexed').toBe('indexed');
+    // The chip, before the send: the page clears it once the question is accepted, since the file
+    // then belongs to the request (the counting run 20261016T034110Z looked for it after the send).
+    await rec.shot(page, 'chip');
     const turn = await askHere(page, rec, QUESTION_ATTACHED);
     await settleAsked(page, rec, turn, { conversation: null, question: QUESTION_ATTACHED, badge: BADGE_LOW }, opened);
     rec.note({ sources_row: (await turn.locator('[data-sources]').count()) === 0 ? null : (await turn.locator('[data-sources]').first().textContent())?.trim() });
