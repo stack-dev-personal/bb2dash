@@ -398,7 +398,10 @@ acceptStep('18 sources and panel', { shots: ['start', 'end', 'panel'] }, async (
       await expect(fileRows.first().getByRole('button', { name: OPEN_SOURCE_LABEL, exact: true }), 'a course-file row shows Open once the files are read').toBeVisible({ timeout: FILES_READ_MS });
     }
     await page.waitForTimeout(OPEN_SETTLE_MS);
-    rec.note({ panel_rows: await panel(page).locator('li').count(), panel_open_controls: await openButtons.count() });
+    // Every row's Open: a button on a course file's, an upload's and a remembered row, a link on the
+    // planner's (the run 20261016T033116Z counted buttons alone, 11 of 12 rows, and the operator doubted it).
+    const openControls = openButtons.or(panel(page).getByRole('link', { name: OPEN_SOURCE_LABEL, exact: true }));
+    rec.note({ panel_rows: await panel(page).locator('li').count(), panel_open_controls: await openControls.count() });
     await rec.shot(page, 'panel');
     await hidePanel(page);
     rec.note({ panel_folded: true });
