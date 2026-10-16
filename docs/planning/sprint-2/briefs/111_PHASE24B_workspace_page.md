@@ -8,8 +8,8 @@ Date 2026-10-08 · PM: the Fable session · Product manager: Stack · Requiremen
 line 13; the PM confirms the one numbering at the freeze) · No migration: the page uses 24a's
 objects; 24a used the whole block 190–199, so a database change here needs a ruling and a new block · One PR in
 bb2dash · Verification file
-`docs/planning/sprint-2/verification/111a_PHASE24B_VERIFICATION.md`, called 111a below · Status: **part 2, the page, built, reviewed and walked 2026-10-15; PR #109 open on Stack's
-merge word; the cut-over turns memory on and `just accept 24` proves it** (111a "Part 2"; the desktop half of
+`docs/planning/sprint-2/verification/111a_PHASE24B_VERIFICATION.md`, called 111a below · Status: **MERGED 2026-10-15 as PR #109 (`aa4f702`), cut over 21:52Z (memory on), ACCEPTED
+2026-10-16 by acceptance run `20261016T041410Z`, green from `main` at `7590d54`** (111a "Part 2"; the desktop half of
 the walk waits for his sign-in); before that,
 **FROZEN 2026-10-15 at the gate** (the section "Frozen at the gate" below: Phase 22 as merged read
 again, token by token and class by class, every cited line number checked, probe Q-5 run, and
