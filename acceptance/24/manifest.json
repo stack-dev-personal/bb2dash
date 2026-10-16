@@ -576,6 +576,7 @@
       "stage": "page-upload",
       "test": "20 ask with the file attached",
       "evidence": [
+        "20-chip.png",
         "20-start.png",
         "20-end.png",
         "20.json"
