@@ -255,7 +255,7 @@ describe('the real child', () => {
     const stopped = await pending;
     expect(stopped.timedOut).toBe(false);
     expect(stopped.exitCode).not.toBe(0);
-    expect(RETRIEVE_TIMEOUT_MS).toBe(10_000);
+    expect(RETRIEVE_TIMEOUT_MS).toBe(30_000);
   });
 
   it('reports a command that is not there as a start error', async () => {

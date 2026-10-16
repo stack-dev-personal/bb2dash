@@ -33,8 +33,14 @@ import {
   batchRequestSchema,
 } from './workspace-shapes.js';
 
-/** Each call inside the child, so it answers inside the runner's 10 s with what it has. */
-export const BATCH_CALL_TIMEOUT_MS = 8_000;
+/**
+ * Each call inside the child, so it answers inside the runner's 30 s with what it has. A cold
+ * instance of the search function loads its embedding model first: 10.4 s was seen on
+ * 2026-10-15 (acceptance run 20261015T233524Z, step 13) against the 8 s this once was, and the
+ * question lost its sources for that. The calls of one batch run side by side, so one cold call
+ * costs the batch its own time only once.
+ */
+export const BATCH_CALL_TIMEOUT_MS = 20_000;
 
 const EXIT_OK = 0;
 const EXIT_NO_ANSWER = 1;

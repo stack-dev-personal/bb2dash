@@ -198,8 +198,8 @@ describe('batch entry — states', () => {
     });
   });
 
-  it('gives each call the 8 s limit', () => {
-    expect(BATCH_CALL_TIMEOUT_MS).toBe(8_000);
+  it('gives each call the 20 s limit, room for a cold search instance', () => {
+    expect(BATCH_CALL_TIMEOUT_MS).toBe(20_000);
   });
 });
 
