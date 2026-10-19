@@ -161,16 +161,17 @@ begin
     end if;
   end loop;
 
-  -- The twelve (196's eleven and 207's workspace_search_timing) are exactly the SECURITY DEFINER
-  -- functions the role can execute in public.
+  -- The thirteen (196's eleven, 207's workspace_search_timing and 202's workspace_claim_v3) are
+  -- exactly the SECURITY DEFINER functions the role can execute in public. RED against prod until 202
+  -- is applied (25b's cut-over).
   select string_agg(p.proname, ',' order by p.proname collate "C") into v_got
     from pg_proc p
    where p.pronamespace = 'public'::regnamespace and p.prosecdef
      and has_function_privilege('workspace_runner', p.oid, 'execute');
   if v_got is distinct from
-     'workspace_begin,workspace_claim,workspace_claim_v2,workspace_finish,workspace_heartbeat,'
-     'workspace_job_claim,workspace_job_finish,workspace_planner_feed,workspace_search_timing,'
-     'workspace_stream,workspace_turn_context,workspace_turn_put' then
+     'workspace_begin,workspace_claim,workspace_claim_v2,workspace_claim_v3,workspace_finish,'
+     'workspace_heartbeat,workspace_job_claim,workspace_job_finish,workspace_planner_feed,'
+     'workspace_search_timing,workspace_stream,workspace_turn_context,workspace_turn_put' then
     v_fail := v_fail || format('workspace_runner executes the SECURITY DEFINER functions [%s]', v_got);
   end if;
 
