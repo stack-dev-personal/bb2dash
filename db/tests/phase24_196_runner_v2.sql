@@ -3,9 +3,9 @@
 -- store's memory write (answer 17, point 4). Worker W-76.
 -- Tests migration 196: the runner's six new SECURITY DEFINER functions (`workspace_claim_v2`,
 -- `workspace_turn_context`, `workspace_turn_put`, `workspace_planner_feed`, `workspace_job_claim`,
--- `workspace_job_finish`) and the role's list of eleven.
+-- `workspace_job_finish`) and the role's list, twelve since 207 added `workspace_search_timing`.
 --
---   0. installed, shaped and fenced: the eleven, no table grant, nobody else executes the six, a
+--   0. installed, shaped and fenced: the twelve (RED against prod until 207 is applied), no table grant, nobody else executes the six, a
 --      select on assignment_progress or reading_progress is still 42501
 --   1. claim_v2: one question at a time across runners, the caller's own dead turn closed at once, the
 --      10-minute sweep, a fresh claim of another runner blocks
@@ -161,15 +161,16 @@ begin
     end if;
   end loop;
 
-  -- The eleven are exactly the SECURITY DEFINER functions the role can execute in public.
+  -- The twelve (196's eleven and 207's workspace_search_timing) are exactly the SECURITY DEFINER
+  -- functions the role can execute in public.
   select string_agg(p.proname, ',' order by p.proname collate "C") into v_got
     from pg_proc p
    where p.pronamespace = 'public'::regnamespace and p.prosecdef
      and has_function_privilege('workspace_runner', p.oid, 'execute');
   if v_got is distinct from
      'workspace_begin,workspace_claim,workspace_claim_v2,workspace_finish,workspace_heartbeat,'
-     'workspace_job_claim,workspace_job_finish,workspace_planner_feed,workspace_stream,'
-     'workspace_turn_context,workspace_turn_put' then
+     'workspace_job_claim,workspace_job_finish,workspace_planner_feed,workspace_search_timing,'
+     'workspace_stream,workspace_turn_context,workspace_turn_put' then
     v_fail := v_fail || format('workspace_runner executes the SECURITY DEFINER functions [%s]', v_got);
   end if;
 
