@@ -5,6 +5,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -12,17 +13,26 @@ import { describe, expect, it } from 'vitest';
 
 import type { PgClientLike, QueryResult } from '../src/db.js';
 import {
+  DOCTOR_EXEC_TIMEOUT_MS,
+  PROBE_CLOSE_MS,
+  PROBE_DEADLINE_MS,
+  PROBE_EXEC_MARGIN_MS,
   PROBE_EXIT,
   SEARCH_TIMING_CALLS,
+  SEARCH_TIMING_FUNCTION_BUDGET_MS,
   SEARCH_TIMING_SQL,
   SEARCH_TIMING_STATEMENT_TIMEOUT_MS,
   isNotDeployed,
+  isOverBudget,
   measureSearch,
   parseTimings,
 } from '../src/search-timing.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BUILT_PROBE = path.resolve(HERE, '..', 'dist', 'search-probe.js');
+const MIGRATION_207 = path.resolve(HERE, '..', '..', 'db', 'migrations', '207_workspace_search_timing.sql');
+/** A promise that never settles: a connect or a close that hangs. */
+const never = (): Promise<never> => new Promise<never>(() => undefined);
 
 const DSN = 'postgresql://workspace_runner.ref:s3cret-pass@aws-0-us-east-1.pooler.supabase.com:5432/postgres?sslmode=verify-full';
 const CA = '-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----\n';
@@ -84,15 +94,17 @@ describe('isNotDeployed', () => {
   });
 });
 
+/** measureSearch's deps over a fake client, checking it is handed the runner's DSN and CA. */
+const deps = (fake: ReturnType<typeof fakeClient>, loadDb = () => ({ dsn: DSN, ca: CA })) => ({
+  loadDb,
+  newClient: (dsn: string, ca: string) => {
+    expect(dsn).toBe(DSN);
+    expect(ca).toBe(CA);
+    return fake.client;
+  },
+});
+
 describe('measureSearch', () => {
-  const deps = (fake: ReturnType<typeof fakeClient>, loadDb = () => ({ dsn: DSN, ca: CA })) => ({
-    loadDb,
-    newClient: (dsn: string, ca: string) => {
-      expect(dsn).toBe(DSN);
-      expect(ca).toBe(CA);
-      return fake.client;
-    },
-  });
 
   it('sets the session limit, makes the one call, prints the eleven times and exits 0', async () => {
     const fake = fakeClient();
@@ -116,13 +128,30 @@ describe('measureSearch', () => {
     expect(fake.steps.at(-1)).toBe('end');
   });
 
-  it('a refusal, a timeout or a bad result is failed, exit 1', async () => {
+  it("a search stopped for time (57014: 207's budget or the session's limit) is over_budget, exit 4", async () => {
+    const cases: Array<[Partial<Record<Step, () => unknown>>, RegExp]> = [
+      [{ select: () => { throw pgError('workspace_search_timing: past its 5000 ms budget after 4 of 11 calls', '57014'); } }, /past its 5000 ms budget/],
+      [{ select: () => { throw pgError('canceling statement due to statement timeout', '57014'); } }, /statement timeout/],
+    ];
+    for (const [script, message] of cases) {
+      const fake = fakeClient(script);
+      const { line, exitCode } = await measureSearch(deps(fake));
+      expect(exitCode).toBe(PROBE_EXIT.overBudget);
+      expect(line).toMatchObject({ error: 'over_budget' });
+      expect((line as { message: string }).message).toMatch(message);
+      expect(fake.steps.at(-1)).toBe('end');
+    }
+    expect(isOverBudget(pgError('x', '57014'))).toBe(true);
+    expect(isOverBudget(pgError('x', '57P01'))).toBe(false);
+    expect(isOverBudget(null)).toBe(false);
+  });
+
+  it('a refusal or a bad result is failed, exit 1', async () => {
     const cases: Array<[Partial<Record<Step, () => unknown>>, RegExp]> = [
       [{ select: () => { throw pgError('permission denied for function workspace_search_timing', '42501'); } }, /permission denied/],
-      [{ select: () => { throw pgError('workspace_search_timing: past its 5000 ms budget after 4 of 11 calls', '57014'); } }, /budget/],
       [{ select: () => ({ rows: [{ calls_ms: [1, 2, 3] }] }) }, /returned 3 times/],
       [{ select: () => ({ rows: [] }) }, /no array/],
-      [{ set: () => { throw pgError('canceling statement', '57014'); } }, /canceling/],
+      [{ set: () => { throw pgError('terminating connection due to administrator command', '57P01'); } }, /terminating/],
     ];
     for (const [script, message] of cases) {
       const fake = fakeClient(script);
@@ -158,6 +187,47 @@ describe('measureSearch', () => {
     const { line, exitCode } = await measureSearch(deps(fake));
     expect(exitCode).toBe(PROBE_EXIT.ok);
     expect(line).toEqual({ calls_ms: [...ELEVEN] });
+  });
+});
+
+describe('the time budget', () => {
+  it('a connect that hangs is given up at the deadline: failed, exit 1, and the close is not waited on forever', async () => {
+    const fake = fakeClient({ connect: never, end: never });
+    const started = Date.now();
+    const { line, exitCode } = await measureSearch({ ...deps(fake), deadlineMs: 50, closeMs: 20 });
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(exitCode).toBe(PROBE_EXIT.failed);
+    expect(line).toEqual({ error: 'failed', message: 'the probe gave up after 50 ms (connect and call together)' });
+  });
+
+  it('a call that hangs is given up at the deadline too', async () => {
+    const fake = fakeClient({ select: never });
+    const { line, exitCode } = await measureSearch({ ...deps(fake), deadlineMs: 50, closeMs: 20 });
+    expect(exitCode).toBe(PROBE_EXIT.failed);
+    expect((line as { message: string }).message).toMatch(/gave up after 50 ms/);
+  });
+
+  it('a close that hangs after a good measurement keeps the measurement and returns', async () => {
+    const fake = fakeClient({ end: never });
+    const { line, exitCode } = await measureSearch({ ...deps(fake), closeMs: 20 });
+    expect(exitCode).toBe(PROBE_EXIT.ok);
+    expect(line).toEqual({ calls_ms: [...ELEVEN] });
+  });
+
+  it("the probe is done well inside the doctor's exec limit: deadline + close + margin <= 30 s", () => {
+    expect(DOCTOR_EXEC_TIMEOUT_MS).toBe(30_000);
+    expect(PROBE_EXEC_MARGIN_MS).toBeGreaterThanOrEqual(5_000);
+    expect(PROBE_DEADLINE_MS + PROBE_CLOSE_MS + PROBE_EXEC_MARGIN_MS).toBeLessThanOrEqual(DOCTOR_EXEC_TIMEOUT_MS);
+  });
+
+  it("inside the probe: 207's budget < the session's statement_timeout < the probe's deadline", () => {
+    expect(SEARCH_TIMING_FUNCTION_BUDGET_MS).toBeLessThan(SEARCH_TIMING_STATEMENT_TIMEOUT_MS);
+    expect(SEARCH_TIMING_STATEMENT_TIMEOUT_MS).toBeLessThan(PROBE_DEADLINE_MS);
+  });
+
+  it('207 holds the budget this file names', () => {
+    const sql = fs.readFileSync(MIGRATION_207, 'utf8');
+    expect(sql).toMatch(new RegExp(String.raw`c_budget_ms\s+constant double precision := ${SEARCH_TIMING_FUNCTION_BUDGET_MS};`));
   });
 });
 
