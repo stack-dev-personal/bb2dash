@@ -29,12 +29,19 @@ async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString('utf8');
 }
 
+/** The run kind the settings file's hook command names: `--run announcement`; anything else is an inbox run. */
+function runKind(runArg: string): 'inbox' | 'announcement' {
+  const at = process.argv.indexOf(runArg);
+  return at !== -1 && process.argv[at + 1] === 'announcement' ? 'announcement' : 'inbox';
+}
+
 try {
-  const [{ runGate }, { decide }] = await Promise.all([
+  const [{ runGate }, { decide }, { GATE_RUN_ARG }] = await Promise.all([
     import('../../../workspace/src/hooks/gate-rules.js'),
     import('./gate-rules.js'),
+    import('../config.js'),
   ]);
-  const outcome = runGate(await readStdin(), decide);
+  const outcome = runGate(await readStdin(), (payload) => decide(payload, runKind(GATE_RUN_ARG)));
   if (outcome.stderr !== '') process.stderr.write(`${outcome.stderr}\n`);
   process.exitCode = outcome.exitCode;
 } catch {

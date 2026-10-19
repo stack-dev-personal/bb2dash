@@ -21,9 +21,9 @@ const GATE = path.join(REPO, 'apply', 'dist', 'hooks', 'tool-gate.js');
 const DENY = 2;
 const ALLOW = 0;
 
-function runGate(stdin) {
+function runGate(stdin, args = []) {
   assert.ok(fs.existsSync(GATE), 'apply/dist/hooks/tool-gate.js is not built: run `cd apply && npm run build` first');
-  return spawnSync(process.execPath, [GATE], { input: stdin, encoding: 'utf8', timeout: 30_000, cwd: REPO });
+  return spawnSync(process.execPath, [GATE, ...args], { input: stdin, encoding: 'utf8', timeout: 30_000, cwd: REPO });
 }
 
 const call = (toolName, extra = {}) => JSON.stringify({ tool_name: toolName, tool_input: {}, ...extra });
@@ -54,4 +54,21 @@ test('input that is not JSON is denied with exit 2', () => {
 
 test('JSON that is not a hook input is denied too', () => {
   for (const input of ['[]', '42', 'null', '{}']) assert.equal(runGate(input).status, DENY, input);
+});
+
+// Phase 26: the run kind is the hook command's `--run announcement`; without it the gate is the inbox run's.
+const review = call('mcp__db__record_review', { tool_input: { request: 7, announcement_id: 3, decision: { outcome: 'nothing' } } });
+
+test('record_review is allowed with --run announcement and denied without it', () => {
+  const allowed = runGate(review, ['--run', 'announcement']);
+  assert.equal(allowed.status, ALLOW);
+  assert.equal(allowed.stdout, '');
+  const denied = runGate(review);
+  assert.equal(denied.status, DENY);
+  assert.match(denied.stderr, /announcement run only/);
+});
+
+test('apply_item and agents are denied in an announcement run', () => {
+  assert.equal(runGate(call('mcp__db__apply_item'), ['--run', 'announcement']).status, DENY);
+  assert.equal(runGate(call('Agent', { tool_input: { subagent_type: 'inbox-writer' } }), ['--run', 'announcement']).status, DENY);
 });

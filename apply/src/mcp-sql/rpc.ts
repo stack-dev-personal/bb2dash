@@ -2,7 +2,7 @@
  * The SQL server's protocol and tools (Phase 23), without the process: one JSON-RPC message in,
  * one answer out. `server.ts` is the stdio loop and the database connection around it.
  *
- * Two tools.
+ * Three tools.
  *
  *   query        one select, inside a read-only transaction. The database refuses every write
  *                there, so this tool cannot change a row or queue a request whatever it is sent.
@@ -13,6 +13,10 @@
  *                rollback of all of it. The model never writes `begin`, `commit` or the archive
  *                call, and the record travels as a parameter, not as SQL text ("a skill step
  *                written as prose gets skipped": this one is code).
+ *
+ *   record_review  (Phase 26, announcement runs only: the gate refuses it elsewhere) one decision for
+ *                one announcement. The server calls `announcement_review_record`, the one function
+ *                that validates and writes it; the model sends no SQL for it at all.
  *
  * Every text passes the guard first (`guard.ts`), and a refusal or a database error is a tool
  * result, never a thrown protocol error.
@@ -31,6 +35,8 @@ export const RECORD_MAX_CHARS = 20_000;
  * question nobody answered (114, 162): `link_file_sessions` skips an archived answer that carries
  * it (163), so on Stack's answer it would undo the answer.
  */
+/** A decision is JSON of the brief's shape; this is only a ceiling on what crosses the wire. */
+export const DECISION_MAX_CHARS = 30_000;
 export const RECORD_RESERVED_KEYS: readonly string[] = ['closed_itself'];
 
 const METHOD_NOT_FOUND = -32601;
@@ -57,7 +63,15 @@ export type ApplyItemResult =
   /** The item was taken back or archived since the batch was read: nothing was written. */
   | { readonly outcome: 'skipped' };
 
+export interface RecordReviewInput {
+  readonly request: number;
+  readonly announcement: number;
+  readonly decision: Json;
+}
+
 export interface SqlRunner {
+  /** One decision through announcement_review_record, as one statement. Throws when the database refuses it. */
+  recordReview(input: RecordReviewInput): Promise<Json>;
   /** One select in a read-only transaction, at most `limit` rows fetched. */
   query(sql: string, limit: number): Promise<StatementResult>;
   /** One item's transaction. Throws when a statement or the archive is refused; all of it is then rolled back. */
@@ -84,6 +98,17 @@ export const TOOLS = Object.freeze([
         record: { type: 'object' },
       },
       required: ['request', 'item', 'statements', 'record'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'record_review',
+    description:
+      'Record your decision for ONE announcement (announcement runs only). Give the request id from your arguments, the announcement id and the decision object: {outcome: "nothing"|"acted", summary, add: [], change: [], ask: []}, each entry with a quote copied verbatim from the post. The database checks every quote and field and refuses the whole decision if any is wrong; the error says which. Call it exactly once per announcement.',
+    inputSchema: {
+      type: 'object',
+      properties: { request: { type: 'integer' }, announcement_id: { type: 'integer' }, decision: { type: 'object' } },
+      required: ['request', 'announcement_id', 'decision'],
       additionalProperties: false,
     },
   },
@@ -137,6 +162,16 @@ export function readApplyItem(args: unknown): { readonly input: ApplyItemInput }
   return { input: { request: args.request, item: args.item, statements: args.statements as string[], record: args.record } };
 }
 
+/** What a record_review call must be before anything reaches the database, or why it is refused. */
+export function readRecordReview(args: unknown): { readonly input: RecordReviewInput } | { readonly reason: string } {
+  if (!isRecord(args)) return { reason: 'the arguments are not an object' };
+  if (!isId(args.request)) return { reason: 'request must be the request id, a positive whole number' };
+  if (!isId(args.announcement_id)) return { reason: 'announcement_id must be the announcement id, a positive whole number' };
+  if (!isRecord(args.decision)) return { reason: 'decision must be the decision object' };
+  if (JSON.stringify(args.decision).length > DECISION_MAX_CHARS) return { reason: `the decision is longer than ${DECISION_MAX_CHARS} characters` };
+  return { input: { request: args.request, announcement: args.announcement_id, decision: args.decision } };
+}
+
 async function runQuery(args: unknown, runner: SqlRunner): Promise<Json> {
   const sql = isRecord(args) ? args.sql : undefined;
   const verdict = checkQuery(sql);
@@ -155,13 +190,22 @@ async function runApplyItem(args: unknown, runner: SqlRunner): Promise<Json> {
   return textResult(JSON.stringify({ item: read.input.item, outcome: 'archived', statements: result.statements.map(shape) }));
 }
 
+async function runRecordReview(args: unknown, runner: SqlRunner): Promise<Json> {
+  const read = readRecordReview(args);
+  if ('reason' in read) return refused(read.reason);
+  const result = await runner.recordReview(read.input);
+  return textResult(JSON.stringify({ announcement: read.input.announcement, outcome: 'recorded', result }));
+}
+
 /** Run one tool call. Never throws: a refusal and a database error are both a tool result. Null for an unknown tool. */
 export async function callTool(name: unknown, args: unknown, runner: SqlRunner): Promise<Json | null> {
-  if (name !== 'query' && name !== 'apply_item') return null;
+  if (name !== 'query' && name !== 'apply_item' && name !== 'record_review') return null;
   try {
-    return name === 'query' ? await runQuery(args, runner) : await runApplyItem(args, runner);
+    if (name === 'query') return await runQuery(args, runner);
+    return name === 'apply_item' ? await runApplyItem(args, runner) : await runRecordReview(args, runner);
   } catch (error) {
-    return textResult(`error: ${errorText(error)}${name === 'apply_item' ? '; nothing was written for this item' : ''}`, true);
+    const unwritten = name === 'query' ? '' : `; nothing was written for this ${name === 'apply_item' ? 'item' : 'announcement'}`;
+    return textResult(`error: ${errorText(error)}${unwritten}`, true);
   }
 }
 

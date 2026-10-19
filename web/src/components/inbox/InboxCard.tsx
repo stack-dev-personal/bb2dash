@@ -38,6 +38,7 @@ import { MarkedLabel } from '@/components/shell/icons';
 import { courseCodeFromId } from '@/lib/queries.today';
 import {
   REOPENED_LINE,
+  announcementSource,
   answerTypeFor,
   failureText,
   reopenedWithin24h,
@@ -55,6 +56,11 @@ import styles from './InboxCard.module.css';
 function Outcome({ item, action }: { item: AttentionItem; action: OutcomeAction }) {
   return <p className={styles.outcome}>{outcomeText(item, action)}</p>;
 }
+
+/** Announcement rows: the sentences under the buttons say where the value comes from. */
+const ANNOUNCEMENT_ACCEPT_OUTCOME = 'The announcement’s value replaces bb2dash’s on the next sync.';
+const ANNOUNCEMENT_DEADLINE_OUTCOME =
+  'Added to your planner from this announcement. Dismiss once seen; a note asks for a change.';
 
 /**
  * What an answered row says about itself. F-4: the chip reads the same
@@ -142,12 +148,18 @@ export function InboxCard({
   const decision = decisionLine(item);
   const reopened = reopenedWithin24h(item);
   const choice = parseSessionChoice(item);
+  const announcement = announcementSource(item);
   const payload = suggestedDetails(item);
   const sentence = suggestionSentence(payload);
-  // A candidate question's payload is all machinery the buttons already speak for.
-  const details = choice || sentence !== null ? [] : describeDetails(detailEntries(payload));
+  // A candidate question's payload is all machinery the buttons already speak
+  // for, and an announcement row's is its quote, shown on its own below.
+  const details =
+    choice || sentence !== null || announcement
+      ? []
+      : describeDetails(detailEntries(payload));
   const showTo = item.to_value !== null && readableValue(item.to_value);
   const showFrom = item.from_value !== null && readableValue(item.from_value);
+  const sourcePane = announcement ? 'Announcement' : 'Blackboard';
   const hasValues = !choice && (showTo || showFrom);
 
   // Narrowed once, here: TypeScript drops a narrowing on `item.kind` inside a
@@ -189,6 +201,10 @@ export function InboxCard({
         {item.question}
       </h3>
 
+      {announcement?.quote && (
+        <blockquote className={styles.quote}>{announcement.quote}</blockquote>
+      )}
+
       {reopened && <p className={styles.reopened}>{REOPENED_LINE}</p>}
 
       {(hasValues || sentence !== null) && (
@@ -196,8 +212,8 @@ export function InboxCard({
           {hasValues && <span className={`${tokens.kicker} ${styles.field}`}>{fieldPhrase(item.field)}</span>}
           <div className={styles.panes}>
             {hasValues && showTo && (
-              <div role="group" aria-label="Blackboard" className={styles.pane}>
-                <span className={tokens.kicker}>Blackboard</span>
+              <div role="group" aria-label={sourcePane} className={styles.pane}>
+                <span className={tokens.kicker}>{sourcePane}</span>
                 <span className={styles.value}>{fieldValueText(item.field, item.to_value)}</span>
               </div>
             )}
@@ -358,9 +374,13 @@ export function InboxCard({
                     aria-busy={pending}
                     onClick={() => onResolve({ id: item.id, kind: 'conflict', accept: 'blackboard', note })}
                   >
-                    Accept Blackboard
+                    {announcement ? 'Accept the announcement' : 'Accept Blackboard'}
                   </button>
-                  <Outcome item={item} action="accept_blackboard" />
+                  {announcement ? (
+                    <p className={styles.outcome}>{ANNOUNCEMENT_ACCEPT_OUTCOME}</p>
+                  ) : (
+                    <Outcome item={item} action="accept_blackboard" />
+                  )}
                 </div>
                 <div className={styles.choice}>
                   <button
@@ -404,7 +424,11 @@ export function InboxCard({
                 >
                   Dismiss
                 </button>
-                <Outcome item={item} action="dismiss" />
+                {announcement && item.kind === 'deadline' ? (
+                  <p className={styles.outcome}>{ANNOUNCEMENT_DEADLINE_OUTCOME}</p>
+                ) : (
+                  <Outcome item={item} action="dismiss" />
+                )}
               </div>
             )}
           </div>

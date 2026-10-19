@@ -180,8 +180,8 @@ begin
    where n.nspname = 'public' and p.prosecdef
      and has_function_privilege('sync_runner', p.oid, 'execute');
   if v_got is distinct from
-     'sync_claim,sync_close,sync_enqueue,sync_file_outside_link,sync_file_stored,sync_file_worklist,sync_login_ok,'
-     'sync_login_required,sync_next,sync_own_claims,sync_register_run,sync_request_inbox_apply,'
+     'sync_claim,sync_close,sync_enqueue,sync_file_outside_link,sync_file_pull_outcomes,sync_file_stored,sync_file_worklist,sync_login_ok,'
+     'sync_login_required,sync_next,sync_own_claims,sync_register_run,sync_request_announcement_review,sync_request_inbox_apply,'
      'sync_requeue_orphans,sync_run_outcome,sync_sweep_stale' then
     v_bad := v_bad || format('sync_runner executes SECURITY DEFINER functions %s', v_got);
   end if;

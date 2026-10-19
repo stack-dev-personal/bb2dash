@@ -79,7 +79,7 @@ export function parseRunFacts(value: unknown): RunFacts {
 
 const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
 
-const ERROR_SENTENCE: Readonly<Record<RunError, string>> = Object.freeze({
+export const ERROR_SENTENCE: Readonly<Record<RunError, string>> = Object.freeze({
   timed_out: 'The run was stopped at its time limit.',
   sign_in_expired: "The apply worker's Claude sign-in has expired.",
   usage_limit: 'The Claude plan limit was reached.',
