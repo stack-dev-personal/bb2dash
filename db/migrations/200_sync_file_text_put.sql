@@ -151,10 +151,13 @@ begin
          and t.tgname in ('bb_file_text_strip_ai_policy', 'bb_file_text_drop_stale_embeddings')) <> 2 then
     raise exception 'FAIL 200: the 165 triggers on bb_file_text are not both enabled';
   end if;
-  -- sync_runner executes the sixteen: 164's fifteen and this one.
+  -- sync_runner executes the sixteen: 164's fifteen and this one. Phase 26's 210 and 213 add two more
+  -- (sync_request_announcement_review, sync_file_pull_outcomes) and may be applied first (Stack,
+  -- 2026-10-19); they are checked in 213, so they are left out of this list.
   if (select string_agg(p.proname, ',' order by p.proname)
         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
        where n.nspname = 'public' and p.prosecdef
+         and p.proname not in ('sync_request_announcement_review', 'sync_file_pull_outcomes')
          and has_function_privilege('sync_runner', p.oid, 'execute'))
      is distinct from
      'sync_claim,sync_close,sync_enqueue,sync_file_outside_link,sync_file_stored,sync_file_text_put,'
