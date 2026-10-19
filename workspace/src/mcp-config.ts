@@ -12,7 +12,7 @@
 
 import fs from 'node:fs';
 
-import { MATERIALS_ENV, PATHS } from './config.js';
+import { MATERIALS_ENV, PATHS, proxyEnv } from './config.js';
 
 export const MCP_CONFIG_MODE = 0o600;
 
@@ -52,8 +52,11 @@ export function buildNoServerConfig(): McpConfig {
   return NO_SERVER_CONFIG;
 }
 
-/** The answering turn's config: the materials server, started by path, with the turn's limits. */
-export function buildMcpConfig(limits: TurnLimits): McpConfig {
+/**
+ * The answering turn's config: the materials server, started by path, with the turn's limits and the
+ * runner's proxy settings (Phase 25a: its fetch reaches the project host through the egress proxy only).
+ */
+export function buildMcpConfig(limits: TurnLimits, env: Readonly<Record<string, string | undefined>> = process.env): McpConfig {
   const scope: Record<string, string> = limits.courses === null || limits.courses.length === 0 ? {} : { BB2DASH_COURSES: limits.courses.join(',') };
   return {
     mcpServers: {
@@ -63,6 +66,7 @@ export function buildMcpConfig(limits: TurnLimits): McpConfig {
         args: ['/app/mcp-materials/dist/index.js'],
         env: {
           ...MATERIALS_ENV,
+          ...proxyEnv(env),
           BB2DASH_MAX_SEARCHES: String(limits.maxSearches),
           BB2DASH_MAX_READS: String(limits.maxReads),
           ...scope,

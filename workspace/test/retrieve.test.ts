@@ -7,6 +7,7 @@ import {
   PAUSE_MS,
   RETRIEVE_TIMEOUT_MS,
   SIMILARITY_FLOOR,
+  batchSpec,
   createRetriever,
   mergeHits,
   runBatchChild,
@@ -304,5 +305,36 @@ describe('the merge', () => {
 
   it('treats a material and an upload with one id as two rows', () => {
     expect(mergeHits([query(hit('material', 7, 0.9), hit('upload', 7, 0.9))])).toHaveLength(2);
+  });
+});
+
+describe("the batch child's environment (Phase 25a)", () => {
+  const parent = {
+    PATH: '/usr/bin',
+    HTTPS_PROXY: 'http://egress:3128',
+    NO_PROXY: 'localhost,127.0.0.1',
+    NODE_USE_ENV_PROXY: '1',
+    CLAUDE_CODE_OAUTH_TOKEN: 'never-passed',
+    HTTP_PROXY: 'http://not-carried:1',
+  };
+
+  it("carries the runner's proxy settings, so its fetch goes through the egress proxy", () => {
+    expect(batchSpec(parent).env).toEqual({
+      SUPABASE_URL: 'https://goultdzqcavefcgnifdy.supabase.co',
+      SUPABASE_SERVICE_ROLE_FILE: '/run/secrets/bb2dash_mcp_service_key',
+      HTTPS_PROXY: 'http://egress:3128',
+      NO_PROXY: 'localhost,127.0.0.1',
+      NODE_USE_ENV_PROXY: '1',
+      PATH: '/usr/bin',
+    });
+  });
+
+  it('carries nothing it was not given, and never the token', () => {
+    expect(batchSpec({ PATH: '/bin' }).env).toEqual({
+      SUPABASE_URL: 'https://goultdzqcavefcgnifdy.supabase.co',
+      SUPABASE_SERVICE_ROLE_FILE: '/run/secrets/bb2dash_mcp_service_key',
+      PATH: '/bin',
+    });
+    expect(JSON.stringify(batchSpec(parent))).not.toContain('never-passed');
   });
 });
