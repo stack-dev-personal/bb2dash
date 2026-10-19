@@ -43,6 +43,16 @@ Supabase project: `goultdzqcavefcgnifdy` (us-east-1, Postgres 17). Full access v
   himself, status only when his words say so, scores as Blackboard shows them, every write in that
   day's log (since Phase 23: in `inbox_apply_writes` when it is made, and in the day file once the
   exporter has run). `reading_progress` has no such path. Status values and labels live in `web/src/lib/progress-status.ts`.
+* Announcement reader (Phase 26, brief 120, migrations 210–212). After a sync closes done, the `sync` container
+  files an `announcement_review` request, and the `apply` container runs `/announcement-review` (Sonnet) on new or
+  edited posts.
+  * Scope: each post is read against its own course's planner rows and materials.
+  * It writes `assignments` only through `announcement_review_record`:
+    * it adds work nothing records, as `tentative`, with each value quoted from the post (the database checks the quote);
+    * it asks on every change, via `deadline` / `conflict` / `stack_must_confirm` with `suggested.source = 'announcement'`;
+    * each write is logged in `announcement_review_writes`.
+  * It never writes `assignment_progress` or `reading_progress`.
+  * `bind_announcement_rows` (212) binds a new gradebook column to the matching announcement row before `stage_assignments`.
 * Grades show one deterministic figure, "graded so far" (`web/src/lib/graded-so-far.ts`), computed
   only from mirrored Blackboard scores, `grade_components` and column links; what it leaves out is
   named under it. No what-if, no projections.
