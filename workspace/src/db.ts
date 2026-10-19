@@ -1,7 +1,8 @@
 /**
- * The runner's database side: the `workspace_runner` functions (migration 142's four, and the six of
- * migration 196: `workspace_claim_v2`, `workspace_turn_context`, `workspace_turn_put`,
- * `workspace_planner_feed`, `workspace_job_claim` and `workspace_job_finish`), and nothing else. The
+ * The runner's database side: the `workspace_runner` functions (migration 142's four, five of
+ * migration 196: `workspace_turn_context`, `workspace_turn_put`, `workspace_planner_feed`,
+ * `workspace_job_claim` and `workspace_job_finish`, and migration 202's `workspace_claim_v3`, which
+ * took the place of 196's `workspace_claim_v2`), and nothing else. The
  * role holds no table privilege, so every statement below is one of them. Their shapes are frozen in
  * `test/fixtures/contract24`.
  *
@@ -13,6 +14,7 @@
 
 import pg from 'pg';
 
+import { MAX_OPEN_CLAIMS } from './config.js';
 import { messageOf, type ErrorCode } from './errors.js';
 import type { ProviderId, StoredToolCall } from './providers/types.js';
 import type { Tier } from './tiers.js';
@@ -23,7 +25,7 @@ export const APPLICATION_NAME = 'bb2dash-workspace-runner';
 export type QueryResult = { rows: Record<string, unknown>[] };
 export type QueryFn = (sql: string, params?: readonly unknown[]) => Promise<QueryResult>;
 
-/** One claimed request, as `workspace_claim_v2()` returns it (`claim-v2.json`). */
+/** One claimed request, as `workspace_claim_v3()` returns it: v2's four columns (`claim-v2.json`). */
 export interface Claim {
   readonly requestId: string;
   readonly conversationId: string;
@@ -102,7 +104,7 @@ export interface FinishArgs {
 }
 
 export interface WorkspaceRpc {
-  /** `workspace_claim_v2`: the next request, or null. */
+  /** `workspace_claim_v3` with the cap MAX_OPEN_CLAIMS across runners: the next request, or null. */
   claim(runner: string): Promise<Claim | null>;
   /** `workspace_turn_context`: the jsonb as the function returned it; `turn-context.ts` reads it. */
   turnContext(requestId: string, runner: string): Promise<unknown>;
@@ -185,8 +187,8 @@ export function createRpc(query: QueryFn): WorkspaceRpc {
     async claim(runner) {
       const result = await query(
         'select request_id::text as request_id, conversation_id::text as conversation_id, user_message_id::text as user_message_id, ' +
-          'prompt from public.workspace_claim_v2($1)',
-        [runner],
+          'prompt from public.workspace_claim_v3($1, $2)',
+        [runner, MAX_OPEN_CLAIMS],
       );
       const row = result.rows[0];
       return row ? claimOf(row) : null;

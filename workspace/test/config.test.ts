@@ -34,7 +34,9 @@ import {
   assertSubscriptionEnv,
   cleanSecret,
   loadConfig,
+  parseRunnerName,
   parseTurnBudget,
+  RUNNER_NAME_ENV,
   PROXY_ENV_NAMES,
   proxyEnv,
   readOauthToken,
@@ -340,6 +342,39 @@ describe('loadConfig', () => {
     expect(config.dbUrl).toBe(DSN);
     expect(config.budgetUsd).toBe(0.01);
     expect(config.runnerName).toBe('workspace@workspace-1');
+  });
+
+  it('takes the runner name from WORKSPACE_RUNNER_NAME, so a recreated container keeps it', () => {
+    const config = loadConfig({ env: { [RUNNER_NAME_ENV]: 'workspace-2' }, readFile: goodFiles, hostname: '3f9c2a1b7d4e' });
+    expect(config.runnerName).toBe('workspace@workspace-2');
+    expect(loadConfig({ env: { [RUNNER_NAME_ENV]: '  workspace  ' }, readFile: goodFiles, hostname: 'h' }).runnerName).toBe('workspace@workspace');
+  });
+
+  it('falls back to the hostname when WORKSPACE_RUNNER_NAME is unset or empty', () => {
+    expect(loadConfig({ env: {}, readFile: goodFiles, hostname: 'h1' }).runnerName).toBe('workspace@h1');
+    expect(loadConfig({ env: { [RUNNER_NAME_ENV]: '' }, readFile: goodFiles, hostname: 'h2' }).runnerName).toBe('workspace@h2');
+  });
+
+  it.each(['Workspace', 'workspace_2', '-workspace', 'workspace-', 'a b', 'w@x', 'x'.repeat(33), 'ws/2', 'é'])(
+    'refuses the runner name %j, naming the variable and not the value',
+    (value) => {
+      const load = (): unknown => loadConfig({ env: { [RUNNER_NAME_ENV]: value }, readFile: goodFiles, hostname: 'h' });
+      expect(load).toThrow(ConfigError);
+      expect(load).toThrow(/WORKSPACE_RUNNER_NAME/);
+      let message = '';
+      try {
+        load();
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message).not.toContain(value.trim());
+    },
+  );
+
+  it('accepts a name of 32 lowercase letters, digits and inner hyphens', () => {
+    const name = `w${'0'.repeat(30)}2`;
+    expect(loadConfig({ env: { [RUNNER_NAME_ENV]: name }, readFile: goodFiles, hostname: 'h' }).runnerName).toBe(`workspace@${name}`);
+    expect(parseRunnerName('workspace-2')).toBe('workspace-2');
   });
 
   it('defaults the budget to one dollar', () => {
