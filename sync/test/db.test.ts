@@ -1,4 +1,4 @@
-// 164: the runner's one new call, sync_file_outside_link, as a typed function over a bare query.
+// 164 and 200: the runner's calls sync_file_outside_link and sync_file_text_put, as typed functions over a bare query.
 
 import { describe, expect, it, vi } from 'vitest';
 
@@ -39,5 +39,40 @@ describe('fileOutsideLink (migration 164)', () => {
       throw new Error('sync_file_outside_link: url is not a usable link');
     });
     await expect(createRpc(query).fileOutsideLink('1', 'ftp://x')).rejects.toThrow(/not a usable link/);
+  });
+});
+
+describe('fileTextPut (migration 200)', () => {
+  const units = [{ unit_kind: 'page', unit_no: 1, text: 'one' }, { unit_kind: 'page', unit_no: 2, text: 'two' }];
+
+  it('calls sync_file_text_put with the id as a bigint and the units as one jsonb parameter', async () => {
+    const { rpc, query } = rpcOver([{ inserted: 2, present: 0 }]);
+    expect(await rpc.fileTextPut('3736', units)).toEqual({ inserted: 2, present: 0 });
+    expect(query).toHaveBeenCalledTimes(1);
+    const [sql, params] = query.mock.calls[0]!;
+    expect(sql).toBe('select inserted, present from public.sync_file_text_put($1::bigint, $2::jsonb)');
+    expect(params).toEqual(['3736', JSON.stringify(units)]);
+    // The text is never spliced into the SQL text.
+    expect(sql).not.toContain('one');
+  });
+
+  it('reads pg\'s answer as numbers, text included, and checks they add up to the units sent', async () => {
+    expect(await rpcOver([{ inserted: '0', present: '2' }]).rpc.fileTextPut('1', units)).toEqual({ inserted: 0, present: 2 });
+    await expect(rpcOver([]).rpc.fileTextPut('1', units)).rejects.toThrow(/no answer/);
+    await expect(rpcOver([{ inserted: null, present: 2 }]).rpc.fileTextPut('1', units)).rejects.toThrow(/not whole numbers/);
+    await expect(rpcOver([{ inserted: 1, present: 0 }]).rpc.fileTextPut('1', units)).rejects.toThrow(/1 \+ 0 is not the 2 units sent/);
+  });
+
+  it('refuses an id that is not a numeric id before it asks the database anything', async () => {
+    const { rpc, query } = rpcOver([{ inserted: 2, present: 0 }]);
+    await expect(rpc.fileTextPut('1 or 1=1', units)).rejects.toThrow(/numeric id/);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('lets a database refusal through as an error', async () => {
+    const query = vi.fn<QueryFn>(async () => {
+      throw new Error('sync_file_text_put: a (unit_kind, unit_no) appears twice');
+    });
+    await expect(createRpc(query).fileTextPut('1', units)).rejects.toThrow(/appears twice/);
   });
 });

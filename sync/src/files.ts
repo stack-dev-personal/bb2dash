@@ -8,7 +8,9 @@
  *     publishable key, never `x-upsert`; a 409 or a Duplicate answer goes on for a course file whose
  *     key is the catalogue's own spelling and is never done for a submission or a sanitised key (R2 item 2);
  *   * move the download from tmpfs into course-files (copy-then-unlink on EXDEV, P-104);
- *   * extract with the locked `extract_text.py` project, POST the units to `bb_file_text`;
+ *   * extract with the locked `extract_text.py` project, and put the units through
+ *     `sync_file_text_put(…)` (200) over the runner's own pg connection (Phase 25a: the REST insert
+ *     with the publishable key is gone; units already there are kept and counted as present);
  *   * record the row through `sync_file_stored(…)`, which writes the prefixes itself.
  * A 401/403 at the first hop stops the step only when the login check then finds users/me dead
  * (R2 item 3); otherwise that file is `refused`; `gone`, `refused` and a refused
@@ -38,10 +40,8 @@ import {
   mimeFor,
   occupiedKeyRefusal,
   storageKeyFor,
-  textPostOutcome,
-  textRows,
 } from '../../ingest/pull_files.mjs';
-import type { FileStoredArgs, SyncRpc, WorklistRow } from './db.js';
+import type { FileStoredArgs, SyncRpc, TextUnit, WorklistRow } from './db.js';
 import type { Verdict } from './login.js';
 import type { FilesStepResult } from './loop.js';
 import type { NotPulled } from './report.js';
@@ -53,13 +53,6 @@ export const EMBED_TIMEOUT_MS = 600_000;
 const HTTP_REQUEST_TIMEOUT = 408;
 
 export interface ExtractUnit {
-  unit_kind: string;
-  unit_no: number;
-  text: string;
-}
-
-export interface TextRow {
-  file_id: number | string;
   unit_kind: string;
   unit_no: number;
   text: string;
@@ -82,13 +75,12 @@ export interface FileOps extends MoveOps {
 }
 
 export interface FilesPorts {
-  rpc: Pick<SyncRpc, 'fileWorklist' | 'fileStored' | 'fileOutsideLink'>;
+  rpc: Pick<SyncRpc, 'fileWorklist' | 'fileStored' | 'fileOutsideLink' | 'fileTextPut'>;
   /** One hop, redirects not followed, in the logged-in context (Playwright's request.get). */
   hop(url: string): Promise<{ status: number; headers: Record<string, string> }>;
   /** The signed-URL download; a signed URL carries its own authorisation. */
   fetchSigned(url: string): Promise<Response>;
   storagePost(key: string, bytes: Buffer, mime: string): Promise<HttpAnswer>;
-  textPost(rows: TextRow[]): Promise<HttpAnswer>;
   extract(filePath: string): Promise<ExtractUnit[]>;
   embed(): Promise<{ code: number; tail: string }>;
   fs: FileOps;
@@ -113,6 +105,16 @@ export function safeJoin(base: string, relpath: string): string | null {
   const root = path.resolve(base);
   const full = path.resolve(root, relpath);
   return full.startsWith(root + path.sep) ? full : null;
+}
+
+/**
+ * The units `sync_file_text_put` takes: kind, number and text only. A unit with blank text is not
+ * sent: 200 refuses it, and extract_text.py writes one for a .docx with no paragraphs.
+ */
+export function textUnits(units: readonly ExtractUnit[]): TextUnit[] {
+  return units
+    .filter((u) => typeof u.text === 'string' && u.text.trim() !== '')
+    .map((u) => ({ unit_kind: u.unit_kind, unit_no: u.unit_no, text: u.text }));
 }
 
 /** Move a file across devices if it must: rename, and on EXDEV copy then unlink. Never a bare rename. */
@@ -228,12 +230,19 @@ async function pullOne(row: WorklistRow, p: FilesPorts): Promise<RowResult> {
       p.log(`files: extract failed for ${row.id}: ${message(error)}`);
     }
 
+    const put = textUnits(units);
     let unitsPosted = 0;
-    if (units.length > 0) {
-      const answer = await p.textPost(textRows(Number(row.id), units) as TextRow[]);
-      const outcome = textPostOutcome(answer.status, answer.body);
-      if (outcome === 'error') return { pulled: false, reason: `bb_file_text ${answer.status}: ${answer.body.slice(0, 200)}` };
-      if (outcome === 'posted') unitsPosted = units.length;
+    if (put.length > 0) {
+      let answer;
+      try {
+        answer = await p.rpc.fileTextPut(row.id, put);
+      } catch (error) {
+        return { pulled: false, reason: `sync_file_text_put refused: ${message(error).slice(0, 200)}` };
+      }
+      unitsPosted = answer.inserted;
+      // A file whose text an agent extracted before its bytes reached Storage (file 163): those units
+      // are kept, and the bytes still land.
+      if (answer.present > 0) p.log(`files: ${row.id} already had ${answer.present} of ${put.length} text unit(s); kept`);
     }
 
     const args: FileStoredArgs = {
@@ -243,7 +252,7 @@ async function pullOne(row: WorklistRow, p: FilesPorts): Promise<RowResult> {
       sha256,
       bytes: bytes.length,
       mime,
-      textStatus: units.length > 0 ? 'extracted' : 'failed',
+      textStatus: put.length > 0 ? 'extracted' : 'failed',
     };
     let stored = false;
     try {
@@ -302,7 +311,10 @@ export async function runFilesStep(p: FilesPorts): Promise<FilesStepResult> {
   return { files: { pulled, not_pulled: notPulled, ...(linked > 0 ? { linked } : {}) }, stopped, embedError, unitsPosted };
 }
 
-/** Storage and `bb_file_text` POSTs with the publishable key (`SB_ANON_KEY`), as pull_files.mjs does. */
+/**
+ * The Storage POST with the publishable key (`SB_ANON_KEY`), as pull_files.mjs does. Text units no
+ * longer go over REST (Phase 25a): they are `sync_file_text_put`'s, through the runner's pg login.
+ */
 export function makeSupabaseFiles(supabaseUrl: string, anonKey: string, fetchImpl: typeof fetch = fetch) {
   return {
     async storagePost(key: string, bytes: Buffer, mime: string): Promise<HttpAnswer> {
@@ -312,14 +324,6 @@ export function makeSupabaseFiles(supabaseUrl: string, anonKey: string, fetchImp
         body: new Uint8Array(bytes),
       });
       return { status: res.status, body: await res.text() };
-    },
-    async textPost(rows: TextRow[]): Promise<HttpAnswer> {
-      const res = await fetchImpl(`${supabaseUrl}/rest/v1/bb_file_text`, {
-        method: 'POST',
-        headers: { ...anonHeaders(anonKey, 'application/json'), Prefer: 'return=minimal' },
-        body: JSON.stringify(rows),
-      });
-      return { status: res.status, body: res.ok ? '' : await res.text() };
     },
   };
 }

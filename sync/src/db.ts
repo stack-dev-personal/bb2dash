@@ -1,6 +1,6 @@
 /**
- * The runner's database side: the `sync_runner` functions of migrations 091, 093, 164 and 180, and
- * nothing else. The role holds no table, view or sequence grant, so every call below is one of them.
+ * The runner's database side: the `sync_runner` functions of migrations 091, 093, 164, 180 and 200,
+ * and nothing else. The role holds no table, view or sequence grant, so every call below is one of them.
  *
  * `createRpc` takes a bare query function, so the loop and the integration test run on a fake;
  * `createPgQuery` is the real one: one session-pooler connection, reconnected after a failure,
@@ -59,6 +59,19 @@ export interface FileStoredArgs {
   textStatus: 'extracted' | 'failed';
 }
 
+/** One text unit as `sync_file_text_put` (200) takes it: extract_text.py's kind, number and text. */
+export interface TextUnit {
+  unit_kind: string;
+  unit_no: number;
+  text: string;
+}
+
+/** What `sync_file_text_put` did: units it inserted, and units the file already had (kept as they are). */
+export interface TextPutAnswer {
+  inserted: number;
+  present: number;
+}
+
 export interface SyncRpc {
   sweepStale(): Promise<number>;
   ownClaims(): Promise<OwnClaim[]>;
@@ -74,6 +87,11 @@ export interface SyncRpc {
    * the row took it; false when the row is stored, superseded or gone. The database re-checks the URL.
    */
   fileOutsideLink(id: string, url: string): Promise<boolean>;
+  /**
+   * Migration 200: put one file's text units into bb_file_text, `on conflict do nothing`. A refusal
+   * (a file not in bb_files, a bad unit) throws; it is never read as "nothing inserted".
+   */
+  fileTextPut(id: string, units: readonly TextUnit[]): Promise<TextPutAnswer>;
   close(id: string, state: 'done' | 'failed', report: Report): Promise<void>;
   enqueue(trigger: 'just' | 'login'): Promise<string | null>;
   loginOk(): Promise<number>;
@@ -102,6 +120,20 @@ function optionalId(value: unknown, what: string): string | null {
 
 function firstRow(result: QueryResult): Record<string, unknown> | undefined {
   return result.rows[0];
+}
+
+/** sync_file_text_put's one row: two whole numbers that add up to the units sent, or an error. */
+export function parseTextPut(row: Record<string, unknown> | undefined, sent: number): TextPutAnswer {
+  if (!row) throw new Error('sync_file_text_put gave no answer');
+  const inserted = row.inserted === null || row.inserted === undefined ? NaN : Number(row.inserted);
+  const present = row.present === null || row.present === undefined ? NaN : Number(row.present);
+  if (!Number.isInteger(inserted) || !Number.isInteger(present) || inserted < 0 || present < 0) {
+    throw new Error(`sync_file_text_put answered ${JSON.stringify(row)}: not whole numbers`);
+  }
+  if (inserted + present !== sent) {
+    throw new Error(`sync_file_text_put answered ${inserted} + ${present} is not the ${sent} units sent`);
+  }
+  return { inserted, present };
 }
 
 function asInt(value: unknown): number {
@@ -184,6 +216,13 @@ export function createRpc(query: QueryFn): SyncRpc {
     async fileOutsideLink(id, url) {
       const ok = await scalar('select public.sync_file_outside_link($1::bigint, $2) as ok', [asId(id, 'sync_file_outside_link'), url]);
       return ok === true;
+    },
+    async fileTextPut(id, units) {
+      const result = await query('select inserted, present from public.sync_file_text_put($1::bigint, $2::jsonb)', [
+        asId(id, 'sync_file_text_put'),
+        JSON.stringify(units),
+      ]);
+      return parseTextPut(firstRow(result), units.length);
     },
     async close(id, state, report) {
       await query('select public.sync_close($1::bigint, $2, $3::jsonb)', [asId(id, 'sync_close'), state, JSON.stringify(report)]);

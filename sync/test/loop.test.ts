@@ -32,6 +32,7 @@ function fakeRpc(over: Partial<SyncRpc> = {}, request: SyncRequest | null = { id
     fileWorklist: vi.fn(async () => []),
     fileStored: vi.fn(async () => true),
     fileOutsideLink: vi.fn(async () => true),
+    fileTextPut: vi.fn(async (_id, units) => ({ inserted: units.length, present: 0 })),
     close: vi.fn(async (id: string, state: 'done' | 'failed', report: Report) => {
       rec.calls.push(`close ${state}`);
       rec.closes.push({ id, state, report });
@@ -308,6 +309,7 @@ describe('resuming the runner\'s own registered claims (R2 item 1)', () => {
       fileWorklist: async () => [],
       fileStored: async () => true,
       fileOutsideLink: async () => true,
+      fileTextPut: async (_id, units) => ({ inserted: units.length, present: 0 }),
       close: async (id, state, report) => {
         const r = rows.get(id)!;
         if (r.claimed_by !== 'sync-runner' && r.state === 'claimed') throw new Error('sync_close: another claimant');
