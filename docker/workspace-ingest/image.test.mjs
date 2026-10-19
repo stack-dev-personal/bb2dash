@@ -158,18 +158,21 @@ test('the ingest-net network is the worker\'s alone', () => {
       return false;
     }
   });
-  assert.deepEqual(users.filter((name) => !['ingest-net'].includes(name)), ['workspace-ingest']);
+  // Phase 25a: the egress proxy sits on it too, and nothing else.
+  assert.deepEqual(users.filter((name) => !['ingest-net'].includes(name)), ['workspace-ingest', 'egress']);
 });
 
 test('the firewall is the Workspace script with the listed literals changed, and nothing else', () => {
   const generated = forkFirewall(fs.readFileSync(SOURCE, 'utf8'));
   assert.equal(fs.readFileSync(TARGET, 'utf8').replace(/\r\n/g, '\n'), generated, 'run: node docker/workspace-ingest/fork-firewall.mjs --write');
-  assert.equal(SUBSTITUTIONS.length, 8);
-  // tcp/443 to the project host only, tcp/5432 to the pooler of the one secret; not the model API.
-  assert.match(generated, /readonly -a HTTPS_HOSTS=\(\n {2}"goultdzqcavefcgnifdy\.supabase\.co"\n\)\n/);
+  assert.equal(SUBSTITUTIONS.length, 9);
+  // Phase 25a: HTTPS only through the egress proxy on ingest's own port (whose list is the project
+  // host alone), tcp/5432 to the pooler of the one secret; not the model API.
+  assert.match(generated, /^readonly EGRESS_PORT=3130\n/m);
+  assert.match(generated, /^readonly EGRESS_SET=ingest-egress\n/m);
+  assert.doesNotMatch(generated, /HTTPS_HOSTS|HTTPS_PORT/);
   assert.match(generated, /readonly -a DSN_SECRETS=\(\n {2}"workspace_ingest_db_url"\n\)\n/);
   assert.match(generated, /readonly ALLOWED_PROBE=https:\/\/goultdzqcavefcgnifdy\.supabase\.co\n/);
-  assert.match(generated, /readonly HTTPS_PORT=443\n/);
   assert.match(generated, /readonly POSTGRES_PORT=5432\n/);
   const live = generated.split('\n').filter((line) => !line.trim().startsWith('#')).join('\n');
   assert.ok(!live.includes('api.anthropic.com'), 'no live line of the script names the model API');
@@ -178,8 +181,8 @@ test('the firewall is the Workspace script with the listed literals changed, and
 
 test('a literal that moved in the Workspace script stops the fork instead of dropping a rule', () => {
   const source = fs.readFileSync(SOURCE, 'utf8');
-  assert.throws(() => forkFirewall(source.replace('readonly HTTPS_SET=workspace-https', 'readonly HTTPS_SET=renamed')), /the HTTPS set occurs 0 times/);
-  assert.throws(() => forkFirewall(source.replace('"api.anthropic.com"', '"api.anthropic.com"\n  "extra.example"')), /the HTTPS names occurs 0 times/);
+  assert.throws(() => forkFirewall(source.replace('readonly EGRESS_SET=workspace-egress', 'readonly EGRESS_SET=renamed')), /the egress set occurs 0 times/);
+  assert.throws(() => forkFirewall(source.replace('readonly EGRESS_PORT=3128', 'readonly EGRESS_PORT=3999')), /the proxy port occurs 0 times/);
   assert.throws(() => forkFirewall(`${source}\nreadonly ALLOWED_PROBE=https://api.anthropic.com\n`), /the allowed probe occurs 2 times/);
 });
 

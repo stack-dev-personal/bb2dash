@@ -40,6 +40,24 @@ export const MATERIALS_ENV = Object.freeze({
   SUPABASE_SERVICE_ROLE_FILE: '/run/secrets/bb2dash_mcp_service_key',
 });
 
+/**
+ * The proxy settings a child that fetches must carry (Phase 25a): compose sets them on the service,
+ * the firewall refuses tcp/443 to every address, and the egress proxy is the only way out. A child
+ * started with an env of its own (the search batch, an MCP server) gets these copied from the
+ * parent's; without them its fetch would go direct and be refused.
+ */
+export const PROXY_ENV_NAMES = Object.freeze(['HTTPS_PROXY', 'NO_PROXY', 'NODE_USE_ENV_PROXY'] as const);
+
+/** The parent's proxy settings that are set and not empty, by name; nothing else. */
+export function proxyEnv(env: Readonly<Record<string, string | undefined>>): Record<string, string> {
+  const carried: Record<string, string> = {};
+  for (const name of PROXY_ENV_NAMES) {
+    const value = env[name];
+    if (value !== undefined && value !== '') carried[name] = value;
+  }
+  return carried;
+}
+
 /** Names the file that holds the pinned CA (PEM); PATHS.dbCaFile when it is not set. */
 export const DB_CA_FILE_ENV = 'WORKSPACE_DB_CA_FILE';
 
