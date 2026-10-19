@@ -178,7 +178,7 @@ begin
   select string_agg(p.proname, ',' order by p.proname) into v_got
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and p.prosecdef
-     and has_function_privilege('sync_runner', p.oid, 'execute');
+         and has_function_privilege('sync_runner', p.oid, 'execute');
   if v_got is distinct from
      'sync_claim,sync_close,sync_enqueue,sync_file_outside_link,sync_file_pull_outcomes,sync_file_stored,sync_file_text_put,sync_file_worklist,sync_login_ok,'
      'sync_login_required,sync_next,sync_own_claims,sync_register_run,sync_request_announcement_review,sync_request_inbox_apply,'
