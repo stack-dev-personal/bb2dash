@@ -93,7 +93,10 @@ async function finishRun(d: PassDeps, id: string, outcome: RunOutcome, attempts:
   });
   await d.rpc.close(id, state, report);
   d.log(`pass: request ${id} closed ${state}`);
-  if (state === 'done') await requestInboxApply(d, id);
+  if (state === 'done') {
+    await requestInboxApply(d, id);
+    await requestAnnouncementReview(d, id);
+  }
   return state;
 }
 
@@ -110,6 +113,21 @@ async function requestInboxApply(d: PassDeps, syncId: string): Promise<void> {
     }
   } catch (error) {
     d.log(`pass: could not file the Inbox apply request after sync ${syncId}: ${message(error)}`);
+  }
+}
+
+/**
+ * Step 12 (Phase 26, migration 210): the same ask for the announcement reader. Its own try, so a
+ * failure of either request never skips the other and never changes the sync's outcome.
+ */
+async function requestAnnouncementReview(d: PassDeps, syncId: string): Promise<void> {
+  try {
+    const requestId = await d.rpc.requestAnnouncementReview(syncId);
+    if (requestId !== null) {
+      d.log(`pass: announcement review request ${requestId} is open for the unreviewed announcements (after sync ${syncId})`);
+    }
+  } catch (error) {
+    d.log(`pass: could not file the announcement review request after sync ${syncId}: ${message(error)}`);
   }
 }
 

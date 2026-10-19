@@ -41,6 +41,7 @@ function fakeRpc(over: Partial<SyncRpc> = {}, request: SyncRequest | null = { id
     loginOk: vi.fn(async () => { rec.calls.push('login_ok'); return 0; }),
     loginRequired: vi.fn(async () => '1'),
     requestInboxApply: vi.fn(async (): Promise<string | null> => { rec.calls.push('apply_request'); return null; }),
+    requestAnnouncementReview: vi.fn(async (): Promise<string | null> => { rec.calls.push('announcement_request'); return null; }),
     ...over,
   };
   return { rpc, rec };
@@ -80,11 +81,11 @@ describe('one pass', () => {
     expect(rec.calls).toEqual(['sweep', 'next']);
   });
 
-  it('done: probe, claim, register, crawl, wait, files, close done, then the Inbox apply request; the pass flag brackets it', async () => {
+  it('done: probe, claim, register, crawl, wait, files, close done, then the Inbox apply and announcement requests; the pass flag brackets it', async () => {
     const { rpc, rec } = fakeRpc();
     const d = deps(rpc, rec);
     expect(await runPass(d)).toBe('done');
-    expect(rec.calls).toEqual(['sweep', 'next', 'probe', 'login_ok', 'claim', 'register', 'crawl', 'wait', 'outcome', 'files', 'close done', 'apply_request']);
+    expect(rec.calls).toEqual(['sweep', 'next', 'probe', 'login_ok', 'claim', 'register', 'crawl', 'wait', 'outcome', 'files', 'close done', 'apply_request', 'announcement_request']);
     expect(rpc.requestInboxApply).toHaveBeenCalledWith('501');
     expect(rpc.registerRun).toHaveBeenCalledWith('501', RUN_ID);
     expect(d.crawl).toHaveBeenCalledWith(RUN_ID);
@@ -321,6 +322,7 @@ describe('resuming the runner\'s own registered claims (R2 item 1)', () => {
         applyAfter.push(after);
         return null;
       },
+      requestAnnouncementReview: async () => null,
     };
     return { rpc, rows, closes, applyAfter };
   }
@@ -461,5 +463,43 @@ describe('progress during the fold wait (R2 item 5)', () => {
     const onPoll = vi.fn();
     await waitForFold(RUN_ID, { rpc, now: () => t, sleep: async (ms) => { t += ms; }, onPoll });
     expect(onPoll).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('the announcement review request after a done sync (Phase 26, migration 210)', () => {
+  it('asks after the Inbox request, with the sync id, and logs the request filed', async () => {
+    const lines: string[] = [];
+    const { rpc, rec } = fakeRpc({ requestAnnouncementReview: vi.fn(async () => '9101') });
+    expect(await runPass(deps(rpc, rec, { log: (l) => lines.push(l) }))).toBe('done');
+    expect(rpc.requestAnnouncementReview).toHaveBeenCalledWith('501');
+    expect(lines).toContain('pass: announcement review request 9101 is open for the unreviewed announcements (after sync 501)');
+  });
+
+  it('says nothing when none is filed', async () => {
+    const lines: string[] = [];
+    const { rpc, rec } = fakeRpc();
+    await runPass(deps(rpc, rec, { log: (l) => lines.push(l) }));
+    expect(lines.some((l) => l.includes('announcement review'))).toBe(false);
+  });
+
+  it('a throw is logged, the sync still reads done and the Inbox request was not affected', async () => {
+    const lines: string[] = [];
+    const { rpc, rec } = fakeRpc({ requestAnnouncementReview: vi.fn(async () => { throw new Error('connection terminated'); }) });
+    expect(await runPass(deps(rpc, rec, { log: (l) => lines.push(l) }))).toBe('done');
+    expect(rec.closes[0]!.state).toBe('done');
+    expect(rpc.requestInboxApply).toHaveBeenCalled();
+    expect(lines).toContain('pass: could not file the announcement review request after sync 501: connection terminated');
+  });
+
+  it('an Inbox request that throws does not stop the announcement request', async () => {
+    const { rpc, rec } = fakeRpc({ requestInboxApply: vi.fn(async () => { throw new Error('boom'); }) });
+    expect(await runPass(deps(rpc, rec))).toBe('done');
+    expect(rpc.requestAnnouncementReview).toHaveBeenCalledWith('501');
+  });
+
+  it('a failed sync never asks', async () => {
+    const { rpc, rec } = fakeRpc({ runOutcome: vi.fn(async () => ({ syncRunId: '62', status: 'failed' as const, summary: {} })) });
+    expect(await runPass(deps(rpc, rec))).toBe('failed');
+    expect(rpc.requestAnnouncementReview).not.toHaveBeenCalled();
   });
 });
