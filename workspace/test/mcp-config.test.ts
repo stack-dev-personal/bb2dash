@@ -66,7 +66,7 @@ describe('the in-image layout (the seam with the image)', () => {
     expect(tsconfig.compilerOptions.rootDir).toBe('src');
     expect(tsconfig.compilerOptions.outDir).toBe('dist');
     expect(tsconfig.include).toEqual(['src/**/*.ts']);
-    for (const source of ['runner.ts', 'healthcheck.ts', path.join('hooks', 'tool-gate.ts')]) {
+    for (const source of ['runner.ts', 'healthcheck.ts', 'search-probe.ts', path.join('hooks', 'tool-gate.ts')]) {
       expect(fs.existsSync(path.resolve(HERE, '..', 'src', source)), source).toBe(true);
     }
   });
