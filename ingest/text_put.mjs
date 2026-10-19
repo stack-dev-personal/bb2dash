@@ -11,6 +11,14 @@
 // import: the sync image copies pull_files.mjs (for its pure helpers) but not this file, and the
 // container's runner calls the same function through its own `pg` connection (`sync/src/db.ts`).
 //
+// THE CONNECTION (review of 25a). As the Workspace runner connects (`workspace/src/db.ts`
+// newPgClient): built from the DSN's parsed parts, never the DSN string, so nothing in its query
+// string (`sslmode`, `uselibpqcompat`, `sslrootcert`) reaches the driver; the pooler's certificate
+// is verified (verify-full) against the pinned CA alone and the DSN's host name. The CA is the one
+// the Workspace image is built with: the harness checkout's `certs/prod-ca.crt` (compose.yaml's
+// `harness-certs` context, `${HARNESS_DIR:-../agentic-harness}/certs`). Without it nothing connects.
+// Connect and statement timeouts are the named constants below.
+//
 // The `pg` client is the one `scripts/` already pins (the SQL runner's single dependency); this
 // directory has no package.json of its own. No message here ever carries the DSN, its password or
 // its host: every error is passed through `redactDsn`.
@@ -25,9 +33,25 @@ export const TEXT_PUT_SQL = 'select inserted, present from public.sync_file_text
 export const SYNC_RUNNER_DSN_FILE = 'sync_runner_db_url';
 export const DEFAULT_SECRETS_DIR = 'C:/Users/stack/.bb2dash-secrets';
 export const APPLICATION_NAME = 'bb2dash-pull-files';
+/** The harness checkout whose certs/ folder holds the pinned CA, unless HARNESS_DIR names another. */
+export const DEFAULT_HARNESS_DIR = 'C:/Users/stack/agentic-harness';
+export const CA_FILE_NAME = 'prod-ca.crt';
+/** A connect that has not answered by now is given up (the Workspace runner's value). */
+export const DB_CONNECT_TIMEOUT_MS = 10_000;
+/**
+ * A statement that has not answered by now is given up. `sync_runner` has no statement_timeout of its
+ * own; the largest put 200 accepts (1,000 units, 1.5 million characters, each through the 165
+ * trigger) is far inside this.
+ */
+export const DB_QUERY_TIMEOUT_MS = 60_000;
+/** 200's SQLSTATE for a file over its size caps (program_limit_exceeded); its other refusals are 22023. */
+export const TEXT_TOO_LARGE_SQLSTATE = '54000';
 
 const TRANSACTION_POOLER_PORT = '6543';
-const SSLMODE_ALLOWED = new Set(['require', 'verify-ca', 'verify-full', 'no-verify']);
+const DEFAULT_PG_PORT = 5432;
+/** The DSN may say any encrypted mode; the connection is verify-full against the pinned CA whatever it says. */
+const SSLMODE_ALLOWED = new Set(['require', 'verify-ca', 'verify-full']);
+const PEM_CERTIFICATE_HEADER = '-----BEGIN CERTIFICATE-----';
 const ID_RE = /^\d+$/;
 const MIN_SECRET_LENGTH = 4;
 
@@ -55,7 +79,7 @@ export function redactDsn(text, dsn) {
   return out;
 }
 
-/** A session-pooler or direct DSN with an encrypted sslmode, the rule the sync runner applies. */
+/** A session-pooler or direct DSN that asks for an encrypted connection. */
 export function assertSessionDsn(dsn) {
   let url;
   try {
@@ -74,7 +98,8 @@ export function assertSessionDsn(dsn) {
     throw new Error('the sync_runner DSN names no sslmode; append ?uselibpqcompat=true&sslmode=require');
   }
   if (!SSLMODE_ALLOWED.has(sslmode)) {
-    throw new Error(`the sync_runner DSN sets sslmode=${sslmode}, which permits an unencrypted connection`);
+    throw new Error(`the sync_runner DSN sets sslmode=${sslmode}, which asks for less than an encrypted connection; `
+      + 'the fallback verifies the pooler against the pinned CA whatever the DSN says, and refuses this one');
   }
   return dsn;
 }
@@ -101,6 +126,67 @@ export function readSyncRunnerDsn(env, readFile = (file) => fs.readFileSync(file
   return assertSessionDsn(dsn);
 }
 
+/**
+ * The pinned CA (PEM): the file SYNC_RUNNER_DB_CA_FILE names, else `<HARNESS_DIR>/certs/prod-ca.crt`,
+ * HARNESS_DIR defaulting to C:/Users/stack/agentic-harness, the checkout the Workspace image takes
+ * its CA from. Missing, empty or not a certificate: the run stops, and nothing connects.
+ */
+export function readPinnedCa(env, readFile = (file) => fs.readFileSync(file, 'utf8')) {
+  const file = env.SYNC_RUNNER_DB_CA_FILE?.trim()
+    || path.join(env.HARNESS_DIR?.trim() || DEFAULT_HARNESS_DIR, 'certs', CA_FILE_NAME);
+  const fix = `the database connection is not made without it. The Workspace takes this CA from the harness checkout's certs/${CA_FILE_NAME}; `
+    + 'set HARNESS_DIR to that checkout, or SYNC_RUNNER_DB_CA_FILE to the file';
+  let text;
+  try {
+    text = readFile(file);
+  } catch (error) {
+    const code = typeof error?.code === 'string' ? error.code : 'unreadable';
+    throw new Error(`the pinned CA ${file} cannot be read (${code}): ${fix}`);
+  }
+  const pem = String(text ?? '').replace(/^\uFEFF/, '');
+  if (!pem.includes(PEM_CERTIFICATE_HEADER)) throw new Error(`the pinned CA ${file} holds no PEM certificate: ${fix}`);
+  return pem;
+}
+
+/** The DSN's five parts, percent-decoded; a missing one is named, never a value. */
+export function dsnParts(dsn) {
+  let url;
+  try {
+    url = new URL(dsn);
+  } catch {
+    throw new Error('the sync_runner DSN is not a URL');
+  }
+  let parts;
+  try {
+    parts = {
+      host: url.hostname,
+      port: url.port === '' ? DEFAULT_PG_PORT : Number(url.port),
+      user: decodeURIComponent(url.username),
+      password: decodeURIComponent(url.password),
+      database: decodeURIComponent(url.pathname.replace(/^\//, '')),
+    };
+  } catch {
+    throw new Error('the sync_runner DSN holds a part that is not percent-encoded text');
+  }
+  for (const name of ['host', 'user', 'password', 'database']) {
+    if (parts[name] === '') throw new Error(`the sync_runner DSN names no ${name}`);
+  }
+  return parts;
+}
+
+/** pg.Client options: the DSN's parts, verify-full against the pinned CA, and the two timeouts. */
+export function pgClientOptions(dsn, ca) {
+  const { host, port, user, password, database } = dsnParts(dsn);
+  return {
+    host, port, user, password, database,
+    ssl: { ca, rejectUnauthorized: true, servername: host },
+    application_name: APPLICATION_NAME,
+    connectionTimeoutMillis: DB_CONNECT_TIMEOUT_MS,
+    query_timeout: DB_QUERY_TIMEOUT_MS,
+    keepAlive: true,
+  };
+}
+
 /** sync_file_text_put's one row, checked: two whole numbers that add up to the units sent. */
 export function parseTextPut(rows, sent) {
   const row = Array.isArray(rows) ? rows[0] : undefined;
@@ -120,10 +206,16 @@ function firstLine(error) {
   return String(error instanceof Error ? error.message : error).split('\n')[0];
 }
 
+/** True when sync_file_text_put refused a file because its text is too large to store. */
+export function isTextTooLarge(error) {
+  return error?.code === TEXT_TOO_LARGE_SQLSTATE;
+}
+
 /**
- * The two calls over a query function `(sql, params) => { rows }` on one connection:
+ * The two calls over a query function `(sql, params) => { rows }`:
  *   put              one statement; units already there are kept and counted as present
- *   putAllOrNothing  the same inside begin/commit, rolled back when any unit was already there
+ *   putAllOrNothing  the same inside begin/commit, rolled back when any unit was already there. The
+ *                    query function it is given must be bound to ONE connection (openTextPut pins it).
  */
 export function makeTextPutter(query) {
   const put = async (fileId, units) => {
@@ -140,7 +232,9 @@ export function makeTextPutter(query) {
       try {
         await query('rollback');
       } catch (rollbackError) {
-        throw new Error(`${firstLine(error)}; the rollback failed too: ${firstLine(rollbackError)}`);
+        const both = new Error(`${firstLine(error)}; the rollback failed too: ${firstLine(rollbackError)}`);
+        both.code = error?.code;
+        throw both;
       }
       throw error;
     }
@@ -165,12 +259,13 @@ export function putUnits(units) {
     .map((u) => ({ unit_kind: u.unit_kind, unit_no: u.unit_no, text: u.text }));
 }
 
-
 /**
  * A first pull's units, through `store.put(fileId, units)` → { inserted, present }. Units already
  * there are kept — text an agent extracted from the same file before its bytes reached Storage (file
  * 163, 2026-10-01) — and the bytes still land, so the row is not stuck behind its own text forever.
- * A refusal is an error for this row; it is never read as "nothing to insert".
+ * A file too large to store (200's 54000) gets no text and `textRefused`: the owner SQL then records
+ * it with text_status 'failed', as a failed extraction is, so it is not pulled again. Any other
+ * refusal is an error for this row; it is never read as "nothing to insert".
  */
 export async function putFileText(store, fileId, units) {
   const put = putUnits(units);
@@ -179,6 +274,9 @@ export async function putFileText(store, fileId, units) {
   try {
     answer = await store.put(fileId, put);
   } catch (error) {
+    if (isTextTooLarge(error)) {
+      return { unitsPosted: 0, textKept: false, unitCount: 0, textRefused: `too large for sync_file_text_put: ${firstLine(error).slice(0, 200)}` };
+    }
     return { error: `sync_file_text_put refused: ${firstLine(error).slice(0, 200)}` };
   }
   return { unitsPosted: answer.inserted, textKept: answer.present > 0, unitCount: put.length };
@@ -217,15 +315,39 @@ export async function loadPg(repoRoot) {
   return mod.default ?? mod;
 }
 
+/** True for a SQLSTATE that refuses one statement and leaves the session usable (sync/src/db.ts's rule). */
+function isStatementError(code) {
+  if (typeof code !== 'string' || !/^[0-9A-Z]{5}$/.test(code)) return false;
+  return !(code.startsWith('08') || code.startsWith('57P') || code === 'XX000');
+}
+
 /**
  * `put`, `putAllOrNothing` and `end` over one `sync_runner` connection, opened on the first call.
- * A failed connect or statement is rethrown with the DSN taken out; a failed connect leaves no client.
+ * `put` is one autocommit statement and may run on a fresh connection after a lost one.
+ * `putAllOrNothing` holds ONE connection from `begin` to `commit` and never opens another inside it:
+ * a connection lost there aborts the whole file (the server rolls back what it held), the
+ * connection is closed, and the error says so; the next file connects afresh. Every error is
+ * rethrown with the DSN taken out and its SQLSTATE kept.
  */
-export function openTextPut({ dsn, pg }) {
+export function openTextPut({ dsn, ca, pg }) {
+  const options = pgClientOptions(dsn, ca);
   let client = null;
+  const wrap = (error, prefix = '') => {
+    const wrapped = new Error(prefix + redactDsn(error instanceof Error ? error.message : String(error), dsn));
+    wrapped.code = error?.code;
+    return wrapped;
+  };
+  const drop = async (target) => {
+    if (client === target) client = null;
+    try {
+      await target.end();
+    } catch {
+      // The socket is already gone; closing it again is not news.
+    }
+  };
   const connected = async () => {
     if (client) return client;
-    const fresh = new pg.Client({ connectionString: dsn, application_name: APPLICATION_NAME });
+    const fresh = new pg.Client(options);
     fresh.on('error', () => {
       // A dropped socket surfaces on the next query as its own error; nothing is lost here.
       if (client === fresh) client = null;
@@ -233,29 +355,44 @@ export function openTextPut({ dsn, pg }) {
     try {
       await fresh.connect();
     } catch (error) {
-      try {
-        await fresh.end();
-      } catch {
-        // Half-open; nothing to close.
-      }
+      await drop(fresh);
       throw error;
     }
     client = fresh;
     return fresh;
   };
   const query = async (sql, params) => {
+    let c = null;
     try {
-      const c = await connected();
+      c = await connected();
       return await c.query(sql, params);
     } catch (error) {
-      const wrapped = new Error(redactDsn(error instanceof Error ? error.message : String(error), dsn));
-      wrapped.code = error?.code;
-      throw wrapped;
+      if (c && !isStatementError(error?.code)) await drop(c);
+      throw wrap(error);
     }
   };
-  const putter = makeTextPutter(query);
+  const putAllOrNothing = async (fileId, units) => {
+    let c;
+    try {
+      c = await connected();
+    } catch (error) {
+      throw wrap(error);
+    }
+    // Bound to `c` alone: a lost connection is never replaced inside the transaction.
+    const pinned = async (sql, params) => {
+      if (client !== c) throw new Error('the connection was lost inside the transaction');
+      return c.query(sql, params);
+    };
+    try {
+      return await makeTextPutter(pinned).putAllOrNothing(fileId, units);
+    } catch (error) {
+      await drop(c);
+      throw wrap(error, `file ${fileId} aborted, nothing stored: `);
+    }
+  };
   return {
-    ...putter,
+    put: makeTextPutter(query).put,
+    putAllOrNothing,
     async end() {
       const old = client;
       client = null;
