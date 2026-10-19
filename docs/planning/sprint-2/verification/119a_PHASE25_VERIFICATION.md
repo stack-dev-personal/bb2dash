@@ -79,3 +79,24 @@ e2e: 92 of 92 checks in the throwaway project `bb2dash-p25egress`; project, imag
 | 4 | 201 applied after a rolled-back probe of 200 as `sync_runner` inside the live `sync` (Stack: "migrate and cut everything over") | md5 `d4fa53f0`; policy gone; units 201, store proof, 198 PASS on prod |
 | SQL | units on prod after the cut-over | 200, 201, 207, 091, 093, 095, 164, 180, 213, 142, 143, 196, 199, store proof, 198: PASS |
 | 8 | log watch of the first logged-in Workspace turn | **passed** 23:04Z: Stack's ECN 304 question answered with 12 sources; egress shows only spliced tunnels to `api.anthropic.com` and the project host on port 3128; no refusal beyond the three start-up self-checks |
+
+## 25b (2026-10-19, night), branch `feat/phase25b-assistant` from `origin/main` e88a1a74, worktree `bb2dash-wt-25b`
+
+Stack's start prompt: D (W-103) then E (W-104), Opus workers, probe P-4 before D, migrations 202 to 206 (207 is
+25a's, so 208 and 209 are the slack), no prod apply or merge before his word.
+
+### Probe P-4: two answers at once on one subscription (PASS)
+
+Run 2026-10-19 from the live image `bb2dash-workspace:local` (CLI 2.1.289) as a throwaway container
+`bb2dash-p25-p4`, the subscription token mounted read-only as a file, never printed; live containers untouched. Each
+turn: `claude -p --no-session-persistence --output-format json`, one 350-word answer, no tool.
+
+| run | model | wall s | API ms | result |
+|---|---|---|---|---|
+| alone | Sonnet | 8.7 | 6,279 | success |
+| pair 1 | Sonnet + Sonnet | 9.1 / 39.2 | 6,060 / 37,188 | both success |
+| pair 2 | Opus + Sonnet | 10.4 / 8.2 | 8,318 / 5,987 | both success |
+| pairs 3 to 5 | Sonnet + Sonnet | 8.1 to 9.5 | 5,887 to 7,020 | all six success |
+
+Ten turns in five pairs, no error, no limit message, no rate-limit text on stderr. One slow answer in the first pair
+(37 s of API time) did not recur in the next three pairs. The plan did not push back: D is built.
