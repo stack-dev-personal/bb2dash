@@ -42,6 +42,7 @@ function fakeRpc(over: Partial<SyncRpc> = {}, request: SyncRequest | null = { id
     loginRequired: vi.fn(async () => '1'),
     requestInboxApply: vi.fn(async (): Promise<string | null> => { rec.calls.push('apply_request'); return null; }),
     requestAnnouncementReview: vi.fn(async (): Promise<string | null> => { rec.calls.push('announcement_request'); return null; }),
+    filePullOutcomes: vi.fn(async (failed: readonly { id: string; reason: string }[]) => failed.map((f) => ({ ...f }))),
     ...over,
   };
   return { rpc, rec };
@@ -89,7 +90,7 @@ describe('one pass', () => {
     expect(rpc.requestInboxApply).toHaveBeenCalledWith('501');
     expect(rpc.registerRun).toHaveBeenCalledWith('501', RUN_ID);
     expect(d.crawl).toHaveBeenCalledWith(RUN_ID);
-    expect(rec.closes[0]).toMatchObject({ id: '501', state: 'done', report: { lines: ['Files: nothing new to pull'], error: null, claim_attempts: 1 } });
+    expect(rec.closes[0]).toMatchObject({ id: '501', state: 'done', report: { lines: [], error: null, claim_attempts: 1 } });
     expect(d.setPassRunning).toHaveBeenNthCalledWith(1, true);
     expect(d.setPassRunning).toHaveBeenLastCalledWith(false);
   });
@@ -323,6 +324,7 @@ describe('resuming the runner\'s own registered claims (R2 item 1)', () => {
         return null;
       },
       requestAnnouncementReview: async () => null,
+      filePullOutcomes: async (failed) => failed.map((f) => ({ ...f })),
     };
     return { rpc, rows, closes, applyAfter };
   }
@@ -501,5 +503,47 @@ describe('the announcement review request after a done sync (Phase 26, migration
     const { rpc, rec } = fakeRpc({ runOutcome: vi.fn(async () => ({ syncRunId: '62', status: 'failed' as const, summary: {} })) });
     expect(await runPass(deps(rpc, rec))).toBe('failed');
     expect(rpc.requestAnnouncementReview).not.toHaveBeenCalled();
+  });
+});
+
+describe('the files not pulled, recorded after the files step (Phase 26, migration 213)', () => {
+  const gone = { id: '3713', reason: 'gone: status 404' };
+  const withFailure = (): Partial<PassDeps> => ({
+    files: vi.fn(async () => ({ files: { pulled: 0, not_pulled: [gone] }, stopped: null, embedError: null, unitsPosted: 0 })),
+  });
+
+  it('sends every failure once and names only the new ones: a repeat adds no line', async () => {
+    const { rpc, rec } = fakeRpc({ filePullOutcomes: vi.fn(async () => []) });
+    expect(await runPass(deps(rpc, rec, withFailure()))).toBe('done');
+    expect(rpc.filePullOutcomes).toHaveBeenCalledTimes(1);
+    expect(rpc.filePullOutcomes).toHaveBeenCalledWith([gone]);
+    expect(rec.closes[0]!.report.lines).toEqual([]);
+    expect(rec.closes[0]!.report.files.not_pulled).toEqual([gone]);
+  });
+
+  it('a new failure is named', async () => {
+    const { rpc, rec } = fakeRpc({ filePullOutcomes: vi.fn(async () => [gone]) });
+    await runPass(deps(rpc, rec, withFailure()));
+    expect(rec.closes[0]!.report.lines).toEqual(['Files: 0 pulled, 1 not pulled', 'Not pulled: file 3713 (gone: status 404)']);
+  });
+
+  it('sends [] when nothing failed, so the database clears what is now pulled', async () => {
+    const { rpc, rec } = fakeRpc({ filePullOutcomes: vi.fn(async () => []) });
+    await runPass(deps(rpc, rec));
+    expect(rpc.filePullOutcomes).toHaveBeenCalledWith([]);
+  });
+
+  it('a failed call is logged and every failure is listed; the sync still closes done', async () => {
+    const lines: string[] = [];
+    const { rpc, rec } = fakeRpc({ filePullOutcomes: vi.fn(async () => { throw new Error('connection terminated'); }) });
+    expect(await runPass(deps(rpc, rec, { ...withFailure(), log: (l) => lines.push(l) }))).toBe('done');
+    expect(lines.some((l) => l.includes('could not record the files not pulled') && l.includes('connection terminated'))).toBe(true);
+    expect(rec.closes[0]!.report.lines).toEqual(['Files: 0 pulled, 1 not pulled', 'Not pulled: file 3713 (gone: status 404)']);
+  });
+
+  it('is not asked when the files step threw', async () => {
+    const { rpc, rec } = fakeRpc();
+    await runPass(deps(rpc, rec, { files: vi.fn(async () => { throw new Error('worklist failed'); }) }));
+    expect(rpc.filePullOutcomes).not.toHaveBeenCalled();
   });
 });
