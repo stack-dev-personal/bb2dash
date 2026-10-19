@@ -78,4 +78,4 @@ e2e: 92 of 92 checks in the throwaway project `bb2dash-p25egress`; project, imag
 | 10 | `workspace-ingest` rebuilt alone (no upload in flight) | healthy; self-check passed on port 3130 to the project host only |
 | 4 | 201 applied after a rolled-back probe of 200 as `sync_runner` inside the live `sync` (Stack: "migrate and cut everything over") | md5 `d4fa53f0`; policy gone; units 201, store proof, 198 PASS on prod |
 | SQL | units on prod after the cut-over | 200, 201, 207, 091, 093, 095, 164, 180, 213, 142, 143, 196, 199, store proof, 198: PASS |
-| 8 | log watch of the first logged-in Workspace turn | **open, Stack's**: no question asked yet |
+| 8 | log watch of the first logged-in Workspace turn | **passed** 23:04Z: Stack's ECN 304 question answered with 12 sources; egress shows only spliced tunnels to `api.anthropic.com` and the project host on port 3128; no refusal beyond the three start-up self-checks |
