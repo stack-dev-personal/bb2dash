@@ -1,6 +1,6 @@
 # Phase 25: after 24b. Egress by name, the sync's text insert behind a function, the index watch, a second runner, planner changes the assistant proposes and Stack approves
 
-**Status: DRAFT, 2026-10-18. Not frozen. Nothing is built until Stack answers the questions at the end (CLAUDE.md, "Substantial new scope").**
+**Status: FROZEN 2026-10-19 on Stack's answers (see "Answers" at the end). A change needs his word and a row in 119a.**
 Asked by Stack on 2026-10-18: "execute the after 24b phase, assume the walk passed." The phase is brief 118's row
 "after 24b": five items, each left for later by brief 109's Out of scope and 109a's answers. Branch
 `feat/phase25-after-24b`, worktree `C:/Users/stack/projects/bb2dash-wt-25`. Migration block **200–209** (the next
@@ -124,7 +124,7 @@ it as Stack, under the row security it already uses.
 
 * **Migration 203** `workspace_proposals`: request, conversation, target (`assignment_progress` or
   `reading_progress`), row id as text (`assignment_id` is text, `reading_id` a number), field, the value read when proposed, the value proposed, a reason, state (`proposed`,
-  `approved`, `rejected`, `stale`, `applied`), times. Owner reads and updates under row security; the runner inserts
+  `approved`, `rejected`, `stale`, `applied`, `expired`), times. Owner reads and updates under row security; the runner inserts
   only through **204** `workspace_propose(...)`, SECURITY DEFINER, which checks the request is the runner's own and the
   row exists, and refuses more than five proposals a turn.
 * A third tool, `propose_planner_change`, in the materials server's gate (`ALLOWED_TOOLS`), with its own per-turn
@@ -133,8 +133,27 @@ it as Stack, under the row security it already uses.
   Reject. Approve re-reads the row; if the value is no longer the one the proposal read, the card turns `stale` and
   writes nothing. The write goes through the same queries the planner uses, so Google Calendar's push follows as it
   does today.
-* Fields in v1 (question 6): `status` on both tables, and `planned_start` and `planned_finish` on `assignment_progress`. Nothing on a fact
-  table, a grade or `planner_events`.
+* Fields in v1 (question 6, answered "also notes"): `status` and `notes` on both tables, and `planned_start` and
+  `planned_finish` on `assignment_progress`. A proposed note is the whole new text, at most 2,000 characters, checked
+  in 204. Nothing on a fact table, a grade or `planner_events`.
+* The card (Stack, 2026-10-19): while a proposal is `proposed` it shows the value read and the value proposed, side
+  by side (for a note, the old text and the new). Once it is decided it shows only the outcome ("Approved: marked
+  submitted", "Rejected", "Stale: the row changed", "Expired"), and the old and new values are no longer drawn.
+* Approval in two places (question 7, answered "both", with Stack's note: "approving or rejecting on either page will
+  also update it on the page that the button wasn't selected for that item"):
+  * **Migration 205** adds the Inbox kind `assistant_proposal` to `attention_items` (the check from 031) and a
+    nullable `workspace_proposal_id` on it. `workspace_propose` files one Inbox item per proposal in the same
+    transaction. `v_inbox_feedback`, the answered queue and the sync's `inbox_feedback` request all leave this kind
+    out, so the `apply` container and `/inbox-apply` never see a proposal.
+  * **Migration 206** `workspace_proposal_decide(p_id, p_decision)`, SECURITY INVOKER, so it runs as Stack under
+    the row security he already has. In one transaction it locks the proposal, re-reads the planner row, writes it
+    or marks the proposal `stale`, sets the proposal's state and resolves its Inbox item with the same outcome. A
+    proposal already decided is refused with the state it holds. The card's buttons and the Inbox item's buttons
+    call this one function and nothing else, so neither place can disagree with the other.
+  * Both pages show the outcome on next read: the Workspace card from the proposal's state, the Inbox item from
+    its resolved state, which names the outcome and links back to the answer.
+* Expiry (question 8): a proposal still `proposed` after 7 days becomes `expired` when either page reads it
+  (205's view computes it; the next decide call writes it), and its Inbox item resolves as expired.
 * The rule changes: D:195 and D:442 get a successor row; CLAUDE.md's "Still read-only for the planner" becomes
   "proposes, never writes". The runner's login still holds no table grant.
 
@@ -168,6 +187,9 @@ inside the Nov 30 – Dec 13 freeze.
 - [ ] D: two questions from two conversations answered at once; both runners on the status row.
 - [ ] E: a proposal approved on the page changes the row once; a stale one changes nothing; the runner's login still
       shows no table grant (`has_table_privilege` over `public` gives false throughout).
+- [ ] E: one proposal approved on its card shows approved in the Inbox, one rejected in the Inbox shows rejected on
+      its card, and a second decision on either is refused; no `assistant_proposal` item reaches `v_inbox_feedback`.
+- [ ] E: a decided card draws no old or new value; an open one draws both.
 - [ ] STATUS, DECISIONS, ORCHESTRATOR, root `CLAUDE.md` in each PR; `just accept 25` green after 25b.
 
 ## Questions for Stack (each with the default the PM takes if he says "defaults")
@@ -188,3 +210,21 @@ inside the Nov 30 – Dec 13 freeze.
    answer; nothing goes to the Inbox.*
 8. **A proposal no one answers.** Left as `proposed` forever, or expired after 7 days? *Default: expired after 7
    days, shown as expired.*
+
+## Answers (Stack, 2026-10-19)
+
+Given on the decision page (artifact `3qgePNhZPGQXjzjLDarkJC`, sent 2026-10-19T17:00Z) and confirmed in the
+terminal ("Defaults on brief 119. 6) card should show old and new only until one has been decided on. 7) yes.").
+
+| # | Answer |
+|---|---|
+| E | Yes, build E: the assistant proposes, Stack approves. D:195 and D:442 get successor rows. |
+| 1 | Default: two PRs, 25a then 25b. |
+| 2 | Default: the three containers with a firewall today; `sync` stays open and is named as open. |
+| 3 | Default: the Windows fallback stores text through the sync's login. |
+| 4 | Default: keep the 60 ms rule, add the doctor row. |
+| 5 | Default: two answers at once, cap 2. |
+| 6 | **Also notes.** The card shows old and new only until the proposal is decided. |
+| 7 | **Both**, on the answer and in the Inbox; a decision in either place shows in the other (migrations 205, 206). |
+| 8 | Default: expire after 7 days, shown as expired. |
+| PR #119 | Merge it. Merged 2026-10-19 as 14f010f. |
