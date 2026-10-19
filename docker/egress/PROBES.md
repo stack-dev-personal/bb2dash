@@ -110,6 +110,6 @@ Item A can be built as the brief says, with four adjustments:
 * the environment route is used for P-2;
 * each client has its own proxy port and list;
 * checks read Squid's log;
-* the log watch is cut-over step 7.
+* the log watch is cut-over step 8.
 
 The end-to-end run (`e2e/run-e2e.sh`) passed 64 of 64 checks with the real images.
