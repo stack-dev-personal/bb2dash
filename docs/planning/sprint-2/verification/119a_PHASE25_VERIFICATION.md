@@ -60,3 +60,22 @@ Checked and sound by both: 200's conflict target, grants and `search_path`; 207 
 | LOWs, doctor row | W-102 67b733c2 (probe: `over_budget` line, one 20 s deadline), bb2dash-stack e660b60 (exact not-deployed match, stderr only, 57014 reads `move`) | workspace 1027, bb2dash-stack 400 |
 
 e2e: 92 of 92 checks in the throwaway project `bb2dash-p25egress`; project, images (CoreDNS and Debian too), networks and volumes removed; live containers untouched. Merged into the phase branch: e66fe18f (W-101), 75a71add (W-102), 917be52f (W-100).
+
+## Merge and cut-over (2026-10-19)
+
+| step | what | result |
+|---|---|---|
+| order | Phase 26 (#120, #122; 210–213) cut over first on Stack's pick in its own session; its session confirmed, and the PM checked prod and the containers | done 21:34Z |
+| merge | main (Phase 26, #122) merged into the phase branch: the pinned units list all eighteen `sync_runner` functions exactly (cb886be5, 7cc05839); bb2dash #121 and bb2dash-stack #9 merged on Stack's "merge the PRs if all tests are green" | `9d6d5dec`, `9dfcd01` |
+| 1 | 200 applied | md5 `8c3b6682` = repo file |
+| 2 | `sync` rebuilt alone, between syncs | healthy 21:53Z, login alive |
+| 3 | sync 6020 | closed done; 0 files pulled, so 200 unused; surfaced Phase 26's string ids (fixed in #124) |
+| 5 | 207 applied | md5 `c6bac184` = repo file |
+| 6 | `egress` up alone | healthy, three ports listening |
+| 7 | `workspace` rebuilt alone | healthy; self-check: `TCP_DENIED … example.com … server=-`, `TCP_TUNNEL … api.anthropic.com … bump=splice` |
+| doctor | `workspace search` row | ok, median 21.2 ms |
+| 9 | `apply` rebuilt alone (announcement reviews 6040, 6041 done first) | healthy; self-check passed on port 3129 |
+| 10 | `workspace-ingest` rebuilt alone (no upload in flight) | healthy; self-check passed on port 3130 to the project host only |
+| 4 | 201 applied after a rolled-back probe of 200 as `sync_runner` inside the live `sync` (Stack: "migrate and cut everything over") | md5 `d4fa53f0`; policy gone; units 201, store proof, 198 PASS on prod |
+| SQL | units on prod after the cut-over | 200, 201, 207, 091, 093, 095, 164, 180, 213, 142, 143, 196, 199, store proof, 198: PASS |
+| 8 | log watch of the first logged-in Workspace turn | **open, Stack's**: no question asked yet |
