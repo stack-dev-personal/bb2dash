@@ -32,6 +32,11 @@ export const RUN_TIMEOUT_MS = 14 * 60_000;
 export const KILL_GRACE_MS = 5_000;
 /** Runs that start Claude per New York day. A queue that cannot be applied retries on each sync, not forever. */
 export const MAX_RUNS_PER_DAY = 12;
+/**
+ * Announcement runs per New York day, counted by announcement_review_prepare's runs_today (announcement
+ * requests only, migration 211 as fixed). Its own number: the Inbox cap above is not shared with it.
+ */
+export const ANNOUNCEMENT_RUNS_PER_DAY = 6;
 /** The healthcheck's limit on the alive file's age. */
 export const HEALTH_MAX_AGE_MS = 90_000;
 

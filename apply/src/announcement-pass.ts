@@ -3,7 +3,7 @@
  *
  *   1. announcement_review_claim(): the oldest queued request, claimed; none -> idle
  *   2. announcement_review_prepare(id): at most six unreviewed announcements, as ids, and the day's run count
- *   3. one `claude -p` run of /announcement-review, unless the day's cap is reached
+ *   3. one `claude -p` run of /announcement-review, unless the day's announcement cap is reached
  *   4. announcement_review_prepare(id) again: whichever of the six it still lists got no decision, and
  *      each is marked refused ('no decision recorded') so a post the model cannot decide never loops
  *   5. announcement_review_close(id, done | failed, result): a done close files the follow-up for the rest
@@ -11,15 +11,17 @@
  * Step 4 happens only after a run that ended by itself. A run cut short (the time limit, a stop, the
  * plan's limit, an expired sign-in) says nothing about the posts it never reached, so they stay
  * unreviewed for the next request instead of being refused for an outage. The day's cap closes the
- * request failed, so no follow-up is filed against a cap.
+ * request failed, so no follow-up is filed against a cap. Every failed close carries `result.error`, the
+ * RunError code: the database counts timed_out and budget_exceeded against a post (two refuse it) and
+ * never an outage.
  *
  * The same ports as the Inbox pass: every step is injected, so this runs on fakes.
  */
 
-import { ANNOUNCEMENT_BATCH_MAX, MAX_RUNS_PER_DAY } from './config.js';
+import { ANNOUNCEMENT_BATCH_MAX, ANNOUNCEMENT_RUNS_PER_DAY } from './config.js';
 import type { AnnouncementRpc } from './db.js';
 import type { PassOutcome } from './loop.js';
-import type { ClaudeOutcome, RunError } from './report.js';
+import { ERROR_SENTENCE, type ClaudeOutcome, type RunError } from './report.js';
 
 export const NO_DECISION_REASON = 'no decision recorded';
 
@@ -29,26 +31,23 @@ export interface AnnouncementRunInput {
 }
 
 export interface AnnouncementDeps {
+  /** Overrides ANNOUNCEMENT_RUNS_PER_DAY, for tests. */
+  readonly maxRunsPerDay?: number;
   readonly rpc: AnnouncementRpc;
   readonly runClaude: (input: AnnouncementRunInput) => Promise<ClaudeOutcome>;
 }
 
 interface Ports {
   readonly log: (line: string) => void;
-  readonly maxRunsPerDay?: number;
 }
 
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error)).split('\n')[0] ?? '';
 
+/** The Inbox pass's sentences, with the two that name announcements instead of answers. */
 const ERROR_LINE: Readonly<Record<RunError, string>> = Object.freeze({
-  timed_out: 'The run was stopped at its time limit.',
-  sign_in_expired: "The apply worker's Claude sign-in has expired.",
-  usage_limit: 'The Claude plan limit was reached.',
-  budget_exceeded: 'The run reached its cost limit.',
-  cli_error: 'The Claude run ended with an error.',
-  daily_cap: "Today's limit on apply runs was reached; the rest waits for tomorrow.",
+  ...ERROR_SENTENCE,
+  daily_cap: "Today's limit on announcement runs was reached; the rest waits for tomorrow.",
   not_applied: 'Some announcements could not be reviewed.',
-  interrupted: 'The run was interrupted.',
 });
 
 interface Counts {
@@ -97,7 +96,7 @@ async function skipUnreviewed(d: AnnouncementDeps, p: Ports, requestId: number, 
 async function work(d: AnnouncementDeps, p: Ports, requestId: number, onRun: () => void): Promise<'done' | 'failed'> {
   const prepared = await d.rpc.prepare(requestId);
   const ids = prepared.announcements.slice(0, ANNOUNCEMENT_BATCH_MAX).map((a) => a.id);
-  const capped = ids.length > 0 && prepared.runsToday >= (p.maxRunsPerDay ?? MAX_RUNS_PER_DAY);
+  const capped = ids.length > 0 && prepared.runsToday >= (d.maxRunsPerDay ?? ANNOUNCEMENT_RUNS_PER_DAY);
 
   let claude: ClaudeOutcome | null = null;
   let skipped: number[] = [];

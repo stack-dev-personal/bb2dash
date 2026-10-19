@@ -4,7 +4,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { buildAnnouncementArgs, buildArgs, checkInit } from '../src/claude.js';
-import { CONTEXT_AGENT, PATHS, WRITER_AGENT } from '../src/config.js';
+import { ANNOUNCEMENT_RUNS_PER_DAY, CONTEXT_AGENT, MAX_RUNS_PER_DAY, PATHS, WRITER_AGENT } from '../src/config.js';
 import { createAnnouncementRpc, parsePreparedAnnouncements, type AnnouncementRpc, type PreparedAnnouncements } from '../src/db.js';
 import { decide } from '../src/hooks/gate-rules.js';
 import { NO_DECISION_REASON, runAnnouncementPass } from '../src/announcement-pass.js';
@@ -129,10 +129,11 @@ function announcementPorts(over: { prepares?: PreparedAnnouncements[]; claude?: 
     close: async (_id, state, result) => { calls.push(`close ${state}`); closes.push({ state, result }); return null; },
   };
   const deps = {
+    maxRunsPerDay: over.maxRunsPerDay,
     rpc,
     runClaude: async (input: { requestId: number; announcementIds: readonly number[] }) => { calls.push('claude'); runs.push(input); return over.claude ?? FINISHED; },
   };
-  const ports = { log: (line: string) => lines.push(line), maxRunsPerDay: over.maxRunsPerDay };
+  const ports = { log: (line: string) => lines.push(line) };
   return { deps, ports, calls, closes, skips, runs, lines };
 }
 
@@ -170,6 +171,26 @@ describe('one announcement pass', () => {
     expect(p.calls).toEqual(['claim', 'prepare', 'close failed']);
     expect(p.closes[0]!.result).toMatchObject({ error: 'daily_cap', claude: { started: false } });
   });
+
+  it('the cap is its own constant, not the Inbox one', async () => {
+    expect(ANNOUNCEMENT_RUNS_PER_DAY).toBe(6);
+    expect(ANNOUNCEMENT_RUNS_PER_DAY).not.toBe(MAX_RUNS_PER_DAY);
+    const at = (n: number) => announcementPorts({ prepares: [{ announcements: [{ id: 11, courseId: 'a' }], runsToday: n }, { announcements: [], runsToday: n }] });
+    const under = at(ANNOUNCEMENT_RUNS_PER_DAY - 1);
+    expect(await runAnnouncementPass(under.deps, under.ports)).toBe('done');
+    const over = at(ANNOUNCEMENT_RUNS_PER_DAY);
+    expect(await runAnnouncementPass(over.deps, over.ports)).toBe('failed');
+    expect(over.runs).toEqual([]);
+  });
+
+  it.each(['timed_out', 'budget_exceeded', 'sign_in_expired', 'usage_limit', 'cli_error', 'interrupted'] as const)(
+    'a run that ends %s closes failed with that code in result.error',
+    async (error) => {
+      const p = announcementPorts({ claude: { exitCode: 1, timedOut: error === 'timed_out', costUsd: null, error, detail: null } });
+      expect(await runAnnouncementPass(p.deps, p.ports)).toBe('failed');
+      expect(p.closes[0]).toMatchObject({ state: 'failed', result: { error } });
+    },
+  );
 
   it('a run cut short closes failed and refuses nothing', async () => {
     const p = announcementPorts({ claude: { exitCode: null, timedOut: true, costUsd: null, error: 'timed_out', detail: null } });
