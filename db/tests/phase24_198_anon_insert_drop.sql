@@ -4,15 +4,17 @@
 -- publishable key can no longer insert a vector row into the course store, and nothing else moved.
 --
 --   a. under `set local role anon` an insert of one synthetic vector row raises 42501
---   b. `pg_policies` holds exactly three rows for the two course tables: bb_file_text_anon_insert,
---      bb_file_text_owner_all and bb_text_embeddings_owner_all (the sync's insert of a course UNIT
---      is the live write path and stays; 198 drops only the vector table's policy)
+--   b. `pg_policies` holds exactly two rows for the two course tables: bb_file_text_owner_all and
+--      bb_text_embeddings_owner_all (198 dropped the vector table's anon policy; since Phase 25a, 201
+--      drops bb_file_text_anon_insert too, the sync's unit insert having moved behind 200's
+--      sync_file_text_put)
 --   c. `service_role` bypasses row security, so the embedder's write rests on no policy
 --   d. the table's row count is the same before and after the unit
 --
 -- BEFORE 198 IS APPLIED this unit is RED: the insert in (a) succeeds, because the policy still lets
 -- anon in, and the unit raises "FAIL 198 (a)". The unit's own transaction is rolled back, so that
--- insert never survives.
+-- insert never survives. BEFORE 201 IS APPLIED (Phase 25a's cut-over) it is RED at (b): the list
+-- still carries bb_file_text.bb_file_text_anon_insert.
 --
 -- It needs none of 190 to 197. Reads and one rolled-back insert; nothing is committed.
 -- RUN IT: `node scripts/db-test.mjs --only phase24_198_anon_insert_drop.sql`.
@@ -51,15 +53,14 @@ begin
                     '(the policy bb_text_embeddings_anon_insert is still there)', v_state;
   end if;
 
-  -- (b) the three policies that are left on the two course tables.
+  -- (b) the two policies that are left on the two course tables (201 dropped the unit table's anon one).
   select string_agg(p.tablename || '.' || p.policyname, ', '
                     order by p.tablename collate "C", p.policyname collate "C") into v_got
     from pg_policies p
    where p.schemaname = 'public'
      and p.tablename in ('bb_file_text', 'bb_text_embeddings');
   if v_got is distinct from
-     'bb_file_text.bb_file_text_anon_insert, bb_file_text.bb_file_text_owner_all, '
-     'bb_text_embeddings.bb_text_embeddings_owner_all' then
+     'bb_file_text.bb_file_text_owner_all, bb_text_embeddings.bb_text_embeddings_owner_all' then
     raise exception 'FAIL 198 (b): the policies on the two course tables are [%]', v_got;
   end if;
 

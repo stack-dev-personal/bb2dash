@@ -36,8 +36,9 @@
 //      Then: check size and magic bytes, copy to the local mirror (`course context/<relpath>`),
 //      POST to Storage `bb-files/<key>` with the publishable key (anon is insert-only, never
 //      `x-upsert`; a Duplicate answer means the object is already there), run extract_text.py
-//      under uv with its three libraries, POST the units to /rest/v1/bb_file_text (anon
-//      insert-only; `char_count` is generated, never sent), and write the `update bb_files …`
+//      under uv with its three libraries, store the units through `sync_file_text_put` (migration
+//      200) as `sync_runner`, with the login the sync container uses (`ingest/text_put.mjs`;
+//      Phase 25a, replacing the REST insert with the publishable key), and write the `update bb_files …`
 //      statements to --out for the owner to run through execute_sql. Unless `--no-embed`, a run
 //      that posted any unit finishes by calling `ingest/embed_corpus.mjs`'s loop, so the text it
 //      just stored is actually searchable when the run ends.
@@ -315,13 +316,13 @@ const q = (s) => `'${String(s).replace(/'/g, "''")}'`;
 // The stored bytes and their text may then be out of date. This mode re-fetches them.
 //
 // THE RULE IT KEEPS (PR #32's security review): professor-authored document text never lands in
-// SQL an agent reads and hands to a privileged execute_sql. Text goes over PostgREST exactly as the
-// normal pull posts it. The owner SQL carries only ids, Storage keys, hashes, a mime shape, a date
+// SQL an agent reads and hands to a privileged execute_sql. Text goes through sync_file_text_put
+// (200) exactly as the normal pull stores it, as a parameter, never in SQL text. The owner SQL carries only ids, Storage keys, hashes, a mime shape, a date
 // and this script's own constant wording, and each of those is shape-checked before it is written.
 //
-// WHY TWO RUNS. `bb_file_text` is unique on (file_id, unit_kind, unit_no) and anon can insert but
-// not select or delete, so the new units cannot be posted while the old ones are there, and only
-// the owner can remove the old ones. So:
+// WHY TWO RUNS. `bb_file_text` is unique on (file_id, unit_kind, unit_no) and `sync_runner` can
+// only insert through sync_file_text_put, never update or delete, so the new units cannot be stored
+// while the old ones are there, and only the owner can remove the old ones. So:
 //   1. `--restale` fetches the bytes and hashes them. Unchanged bytes → owner SQL that only clears
 //      the note. Changed bytes → a NEW Storage key (a `restale-<sha12>/` segment; the old object is
 //      never overwritten and stays where it is), a mirror copy at that new path, the units staged
@@ -333,8 +334,10 @@ const q = (s) => `'${String(s).replace(/'/g, "''")}'`;
 //      key (md5 eTag + size): that is why an occupied restale key is resumed, never refused or
 //      overwritten. A row that uploads but gets no units reports its orphaned key.
 //   2. The owner runs that SQL through execute_sql.
-//   3. `--restale-post` posts each staged file's units to /rest/v1/bb_file_text and runs the embed
-//      step. A 409 there means step 2 has not run for that row yet; the file stays staged.
+//   3. `--restale-post` stores each staged file's units through sync_file_text_put, all or nothing
+//      (one transaction, rolled back when any unit is already there), and runs the embed step. A unit
+//      already there means step 2 has not run for that row yet; nothing is stored and the file stays
+//      staged.
 //
 // THE MANIFEST for --restale adds three keys to the normal one (ids, hashes and a boolean only):
 //   select jsonb_agg(jsonb_build_object('id', f.id, 'file_name', f.file_name,
@@ -423,7 +426,7 @@ export function restaleUnchangedSql({ id, sha, pulledOn }) {
   ].join('\n');
 }
 
-/** What --restale stages on disk for --restale-post: the PostgREST rows, never SQL. */
+/** What --restale stages on disk for --restale-post: the unit rows, never SQL. */
 export function stagedUnits({ id, sha256, units }) {
   return { id, sha256, rows: textRows(id, units) };
 }
@@ -432,22 +435,25 @@ export function stagedUnitsPath(downloads, id) {
   return path.join(downloads, 'restale_units', `${id}.json`);
 }
 
-/** A --restale-post answer: posted, or the owner SQL has not removed the old units yet, or an error. */
-export function restalePostOutcome(status, body) {
-  if (status >= 200 && status < 300) return 'posted';
-  if (status === 409 || /23505/.test(String(body))) return 'owner_sql_pending';
-  return 'error';
+function firstLine(error) {
+  return String(error instanceof Error ? error.message : error).split('\n')[0];
 }
 
 /**
- * A first pull's unit POST answer. A 409 / 23505 means this file already has units — text an agent
- * extracted from the same file before its bytes reached Storage (file 163, 2026-10-01). Those
- * units are kept; the bytes still land, so the row is not stuck behind its own text forever.
+ * The text store for this run: `ingest/text_put.mjs`, loaded here and not at the top, because the
+ * sync image copies this file for its pure helpers but not that one. It reads the sync_runner login
+ * from SECRETS_DIR and connects on the first put.
  */
-export function textPostOutcome(status, body) {
-  if (status >= 200 && status < 300) return 'posted';
-  if (status === 409 || /23505/.test(String(body))) return 'already_present';
-  return 'error';
+async function openTextStore(env, ingestDir) {
+  const tp = await import('./text_put.mjs');
+  const dsn = tp.readSyncRunnerDsn(env);
+  const pg = await tp.loadPg(path.join(ingestDir, '..'));
+  const store = tp.openTextPut({ dsn, pg });
+  return {
+    putFile: (fileId, units) => tp.putFileText(store, fileId, units),
+    postStaged: (staged, id) => tp.restalePostOne(staged, id, store),
+    end: () => store.end(),
+  };
 }
 
 const USAGE = 'usage: node ingest/pull_files.mjs --manifest <json> --downloads <dir> [--mirror <dir>] [--bucket my_submissions] [--fetch] [--restale] [--only ids] [--out <sql>] [--dry-run] [--no-embed]\n' +
@@ -562,21 +568,11 @@ async function pullOne(row, ctx) {
   let extractError = null;
   try { units = extractUnits(ingestDir, localPath); } catch (e) { extractError = String(e).slice(0, 200); }
 
-  let unitsPosted = 0;
-  let textKept = false;
-  if (units.length) {
-    const tr = await fetch(`${supabaseUrl}/rest/v1/bb_file_text`, {
-      method: 'POST', headers: { ...anonHeaders(key, 'application/json'), Prefer: 'return=minimal' },
-      body: JSON.stringify(textRows(row.id, units)),
-    });
-    const trBody = tr.ok ? '' : await tr.text();
-    const outcome = textPostOutcome(tr.status, trBody);
-    if (outcome === 'error') return { id: row.id, error: `bb_file_text ${tr.status}: ${trBody.slice(0, 200)}` };
-    textKept = outcome === 'already_present';
-    unitsPosted = textKept ? 0 : units.length;
-  }
+  const text = await ctx.putFile(row.id, units);
+  if (text.error) return { id: row.id, error: text.error };
+  const { unitsPosted, textKept } = text;
 
-  const textStatus = units.length ? 'extracted' : 'failed';
+  const textStatus = text.unitCount ? 'extracted' : 'failed';
   const sql = bbFilesUpdateSql({ id: row.id, key: storageKey, relpath: row.relpath, sha256, size: bytes.length, mime, textStatus, pulledOn, submission, textKept });
   return { id: row.id, key: storageKey, size: bytes.length, sha256: sha256.slice(0, 12), ...tag, storage: up.status, units: units.length, unitsPosted, textKept, textStatus, extractError, sql };
 }
@@ -635,35 +631,38 @@ async function embedStep(env, supabaseUrl) {
 }
 
 /**
- * --restale-post: post each staged file's units over PostgREST, exactly as the normal pull posts
- * text. A posted file is renamed `<id>.json.posted` so a re-run never posts it twice. A 409 means
- * the owner SQL has not deleted that row's old units yet: the file stays staged for the next run.
+ * --restale-post: store each staged file's units through sync_file_text_put, all or nothing, as the
+ * normal pull stores text. A posted file is renamed `<id>.json.posted` so a re-run never posts it
+ * twice. A unit already there means the owner SQL has not deleted that row's old units yet: nothing
+ * is stored and the file stays staged for the next run.
  */
-async function restalePost(args, env) {
-  const key = env.SB_ANON_KEY || env.SUPABASE_PUBLISHABLE_KEY;
-  if (!key) { console.error('SB_ANON_KEY (the publishable key) is not set'); return 2; }
+async function restalePost(args, env, ingestDir) {
   const supabaseUrl = env.SUPABASE_URL || DEFAULT_SUPABASE_URL;
   const dir = path.dirname(stagedUnitsPath(args.downloads, 0));
   const only = String(args.only ?? '').split(',').map((s) => s.trim()).filter(Boolean);
   const names = fs.existsSync(dir) ? fs.readdirSync(dir).filter((n) => /^\d+\.json$/.test(n)) : [];
   const picked = names.filter((n) => only.length === 0 || only.includes(n.replace('.json', '')));
   const results = [];
-  for (const name of picked) {
-    const file = path.join(dir, name);
-    const staged = JSON.parse(fs.readFileSync(file, 'utf8'));
-    const id = Number(name.replace('.json', ''));
-    if (staged.id !== id || !Array.isArray(staged.rows) || staged.rows.some((r) => r.file_id !== id)) {
-      results.push({ id, error: 'staged file does not match its name; not posted' });
-      continue;
+  if (picked.length > 0) {
+    let store;
+    try {
+      store = await openTextStore(env, ingestDir);
+    } catch (error) {
+      console.error(`restale-post: ${firstLine(error)}`);
+      return 2;
     }
-    const tr = await fetch(`${supabaseUrl}/rest/v1/bb_file_text`, {
-      method: 'POST', headers: { ...anonHeaders(key, 'application/json'), Prefer: 'return=minimal' },
-      body: JSON.stringify(staged.rows),
-    });
-    const body = tr.ok ? '' : await tr.text();
-    const outcome = restalePostOutcome(tr.status, body);
-    if (outcome === 'posted') fs.renameSync(file, `${file}.posted`);
-    results.push({ id, outcome, unitsPosted: outcome === 'posted' ? staged.rows.length : 0, ...(outcome === 'error' ? { error: `bb_file_text ${tr.status}: ${body.slice(0, 200)}` } : {}) });
+    try {
+      for (const name of picked) {
+        const file = path.join(dir, name);
+        const staged = JSON.parse(fs.readFileSync(file, 'utf8'));
+        const id = Number(name.replace('.json', ''));
+        const r = await store.postStaged(staged, id);
+        if (r.outcome === 'posted') fs.renameSync(file, `${file}.posted`);
+        results.push(r);
+      }
+    } finally {
+      await store.end();
+    }
   }
   for (const r of results) console.log(JSON.stringify(r));
   const unitsPosted = results.reduce((n, r) => n + (r.unitsPosted || 0), 0);
@@ -683,11 +682,23 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     if (bad === USAGE) console.error('note: --dry-run writes nothing to Storage, the mirror or the database, but with --fetch it still downloads the bytes, because the key and sha it reports are computed from them.');
     return 2;
   }
-  if (args['restale-post']) return restalePost(args, env);
+  const ingestDir = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
+  if (args['restale-post']) return restalePost(args, env, ingestDir);
   const key = env.SB_ANON_KEY || env.SUPABASE_PUBLISHABLE_KEY;
   if (!key && !args['dry-run']) { console.error('SB_ANON_KEY (the publishable key) is not set'); return 2; }
-  const ingestDir = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
   const mode = modeOf(args);
+  // A first pull stores text through sync_file_text_put as sync_runner: the login is read (and the
+  // pg client found) before any byte moves, so a missing secret stops the run instead of failing
+  // every row after its upload. It connects on the first put. --restale stages text, and stores none.
+  let store = null;
+  if (args['dry-run'] !== true && args.restale !== true) {
+    try {
+      store = await openTextStore(env, ingestDir);
+    } catch (error) {
+      console.error(`pull_files: ${firstLine(error)}`);
+      return 2;
+    }
+  }
   const ctx = {
     downloads: args.downloads,
     // Only --fetch may name a directory that does not exist yet; it creates it below. Without
@@ -708,6 +719,10 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
       return { ok: up.ok, status: up.status, body: await up.text() };
     },
     extract: (localPath) => extractUnits(ingestDir, localPath),
+    putFile: (fileId, units) => {
+      if (!store) throw new Error('no text store in this mode');
+      return store.putFile(fileId, units);
+    },
     fetchImpl: (url) => fetch(url),
     pulledOn: new Date().toISOString().slice(0, 10),
   };
@@ -717,15 +732,19 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   const rows = ctx.restale ? filterRestale(manifest, args.only) : filterManifest(manifest, args.only, args.bucket);
   const results = [];
   let stopped = null;
-  for (const row of rows) {
-    const r = await pullOne(row, ctx);
-    results.push(r);
-    if (r.fatal) {
-      // The Blackboard session died mid-run. Stop: every remaining row fails the same way, and the
-      // rows already pulled keep their SQL so the run is not wasted.
-      stopped = r;
-      break;
+  try {
+    for (const row of rows) {
+      const r = await pullOne(row, ctx);
+      results.push(r);
+      if (r.fatal) {
+        // The Blackboard session died mid-run. Stop: every remaining row fails the same way, and the
+        // rows already pulled keep their SQL so the run is not wasted.
+        stopped = r;
+        break;
+      }
     }
+  } finally {
+    await store?.end();
   }
 
   const sql = results.filter((r) => r.sql).map((r) => `-- file ${r.id}\n${r.sql}`).join('\n');

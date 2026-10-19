@@ -5,7 +5,8 @@
  * the compose secret mounted at `/run/secrets/<name>` (so `docker compose exec sync node
  * sync/dist/enqueue.js` works without the entrypoint's shim):
  *   SYNC_RUNNER_DB_URL   sync_runner_db_url         the session-pooler DSN for `sync_runner`
- *   SB_ANON_KEY          supabase_publishable_key   Storage and bb_file_text inserts, the crawler's posts
+ *   SB_ANON_KEY          supabase_publishable_key   Storage uploads, the crawler's posts (text units go
+ *                                                   through sync_file_text_put since Phase 25a)
  *   SB_ANON_JWT          supabase_anon_jwt          `embed-corpus` (verify_jwt on)
  * A value is stripped of a UTF-8 BOM, CR and LF (files written by PowerShell carry them). A service
  * key is refused in every slot: the service key never reaches this image (Stack's decision 16).
