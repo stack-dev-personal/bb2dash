@@ -1,0 +1,32 @@
+# bb2dash Phase 25a, W-100: the end-to-end test's overrides, read after compose.yaml:
+#
+#   docker compose -p bb2dash-p25egress -f compose.yaml -f docker/egress/e2e/compose.e2e.yaml \
+#     --profile workspace --profile apply <command> <service>...
+#
+# run-e2e.sh is the only caller. Every image gets a tag of its own (:p25-egress), so no live tag
+# moves; the project name gives the three networks copies of their own (bb2dash-p25egress_*), so no
+# live network is joined. The clients run `sleep infinity` after their entrypoint has raised the
+# firewall: no runner or worker starts, so nothing logs in anywhere. SECRETS_DIR points at a scratch
+# folder of fake files (run-e2e.sh writes them): a DSN whose host is a real pooler name, which the
+# firewall resolves and pins and nothing ever logs in to, and made-up strings for the rest.
+services:
+  egress:
+    image: bb2dash-egress:p25-egress
+  workspace:
+    image: bb2dash-workspace:p25-egress
+    command: ["sleep", "infinity"]
+    restart: "no"
+    healthcheck:
+      disable: true
+  apply:
+    image: bb2dash-apply:p25-egress
+    command: ["sleep", "infinity"]
+    restart: "no"
+    healthcheck:
+      disable: true
+  workspace-ingest:
+    image: bb2dash-workspace-ingest:p25-egress
+    command: ["sleep", "infinity"]
+    restart: "no"
+    healthcheck:
+      disable: true
