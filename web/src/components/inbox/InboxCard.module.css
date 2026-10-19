@@ -213,3 +213,13 @@
 .more[open] .moreSummary {
   margin-bottom: var(--space-1);
 }
+
+/* What the announcement said: a short plain-text quote under the question. */
+.quote {
+  margin: 0;
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--color-divider);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--color-neutral-300);
+}

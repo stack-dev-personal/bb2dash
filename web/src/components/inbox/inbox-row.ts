@@ -30,11 +30,44 @@ export const REOPENED_LINE = 'Closed itself earlier today and came back';
 /** The key `close_cleared_gaps()` (114) sets on a row it left open because it reopened. */
 const REOPENED_KEY = 'reopened_within_24h';
 
+const ANNOUNCEMENTS_HREF = '/announcements';
+
 function suggestedRecord(item: Pick<AttentionItem, 'suggested'>): Record<string, unknown> | null {
   const value: unknown = item.suggested;
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+/** What the announcement reader attached to a row it raised. */
+export interface AnnouncementSource {
+  announcementId: string | number | null;
+  title: string;
+  postedAt: string | null;
+  quote: string | null;
+}
+
+/** A non-empty string, trimmed, or null: the jsonb is never trusted. */
+function cleanText(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
+}
+
+/**
+ * The announcement a row came from, or null for any other row. Recognised by
+ * `suggested.source === 'announcement'`; every field is type-checked.
+ */
+export function announcementSource(
+  item: Pick<AttentionItem, 'suggested'>,
+): AnnouncementSource | null {
+  const record = suggestedRecord(item);
+  if (record?.source !== 'announcement') return null;
+  const id = record.announcement_id;
+  return {
+    announcementId: typeof id === 'string' || typeof id === 'number' ? id : null,
+    title: cleanText(record.announcement_title) ?? 'untitled',
+    postedAt: cleanText(record.posted_at),
+    quote: cleanText(record.quote),
+  };
 }
 
 /** One Inbox write's bookkeeping: when it was sent, and the row it was about. */
@@ -97,6 +130,10 @@ export function failureText(err: unknown): string {
 export function sourceText(item: AttentionItem): string {
   const course = item.course_id ? courseCodeFromId(item.course_id) : null;
   const inCourse = course ? ` in ${course}` : '';
+  const announcement = announcementSource(item);
+  if (announcement) {
+    return `From the announcement “${announcement.title}”${inCourse}. Raised by the announcement reader.`;
+  }
   let where: string;
 
   if (item.entity === 'assignment' && isAssignmentRef(item.ref)) {
@@ -134,6 +171,7 @@ export function sourceText(item: AttentionItem): string {
  * The full sentence (`sourceText`) stays on the card below.
  */
 export function sourceChip(item: AttentionItem): string {
+  if (announcementSource(item)) return 'announcement';
   if (item.entity === 'assignment' && isAssignmentRef(item.ref)) {
     return `assignment ${(item.ref as string).split('/').pop()}`;
   }
@@ -156,6 +194,7 @@ export function sourceHref(item: AttentionItem): string | null {
   if (item.entity === 'assignment' && isAssignmentRef(item.ref)) {
     return itemQuery({ kind: 'assignment', id: item.ref as string });
   }
+  if (announcementSource(item)) return ANNOUNCEMENTS_HREF;
   if (item.course_id) return `/course/${encodeURIComponent(item.course_id)}`;
   return null;
 }
@@ -165,5 +204,6 @@ export function sourceLinkLabel(item: AttentionItem): string {
   if (item.entity === 'assignment' && isAssignmentRef(item.ref)) {
     return 'Open the assignment →';
   }
+  if (announcementSource(item)) return 'Open the announcements →';
   return `Open ${item.course_id ? courseCodeFromId(item.course_id) : 'the course'} →`;
 }
