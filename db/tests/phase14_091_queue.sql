@@ -90,7 +90,7 @@ begin
     v_fail := v_fail || 'sync_login_sync_due is not stable'::text;
   end if;
 
-  -- The fifteen (091's twelve, 093's sync_own_claims, 164's sync_file_outside_link and 180's sync_request_inbox_apply) are exactly
+  -- The seventeen (091's twelve, 093's sync_own_claims, 164's sync_file_outside_link, 180's sync_request_inbox_apply, 210's sync_request_announcement_review and 213's sync_file_pull_outcomes) are exactly
   -- what sync_runner can run with the owner's rights (task 7's check, as 093 and 180 amend it).
   if (select string_agg(p.proname, ',' order by p.proname)
         from pg_proc p join pg_namespace n on n.oid = p.pronamespace

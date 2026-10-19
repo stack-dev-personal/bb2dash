@@ -68,6 +68,12 @@ Branch `feat/phase26-announcement-reader`. Migrations 210–212 in block 210–2
 * **No duplicates:** `bind_announcement_rows` (212) runs in `run_transform` before `stage_assignments`. It binds a
   new gradebook column to the one announcement row that matches it.
 * **First run:** reads the last 14 days. 210 marks older posts `before_floor`.
+* **Activity fix (213, Stack, same day):** each sync showed the same three lines: two staff disagreements he
+  had settled, "Files: 0 pulled, 1 not pulled", and file 3713 (404). Now only newly raised disagreements, and
+  only new or changed file failures, get a line.
+* **Review round:** `/code-review` (high) made 10 findings, all fixed: Blackboard link kept, no clash with
+  Blackboard conflicts, explicit time offsets, stricter quote check, poison posts refused after two failed runs,
+  own daily cap of 6, pinned function lists updated.
 * **Tests:**
   * SQL: 210–212 tested in rolled-back transactions on prod. Nothing was applied.
   * Worker and web tests: see the PR.
