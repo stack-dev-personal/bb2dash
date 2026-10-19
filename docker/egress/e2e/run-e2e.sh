@@ -13,6 +13,11 @@
 #   * example.com is refused by name, and by SNI behind a listed CONNECT host;
 #   * a direct tcp/443 to a public address and another client's proxy port are refused by the firewall;
 #   * DNS answers nothing, while egress and the pooler resolve from their pins;
+#   * (review fixes) a CONNECT to an IPv4 or IPv6 address literal is refused; a ClientHello with no
+#     SNI is terminated; a CONNECT to an unlisted canary name is refused and egress makes no DNS query
+#     for it: egress's only upstream resolver here is `dnslog` (CoreDNS with `log`), and its log holds
+#     the listed names egress did resolve, a control name looked up from inside egress, and never the
+#     canary;
 #   * after egress is restarted, and after it is recreated, alone and by name, every client's route
 #     works again (the recreated egress keeps its addresses on its own networks).
 #
@@ -27,10 +32,20 @@ export MSYS_NO_PATHCONV=1
 readonly PROJECT=bb2dash-p25egress
 readonly TAG=p25-egress
 readonly SERVICES=(egress workspace apply workspace-ingest)
+# Started too, never built: the logging resolver (compose.e2e.yaml) and its pinned image.
+readonly DNSLOG_SERVICE=dnslog
+readonly DNSLOG_IMAGE=coredns/coredns:1.11.3
 readonly CLIENTS=(workspace apply workspace-ingest)
 readonly PROJECT_HOST=goultdzqcavefcgnifdy.supabase.co
 readonly API_HOST=api.anthropic.com
 readonly REFUSED_NAME=example.com
+# A name no list holds and nobody would look up: if it ever reaches dnslog, egress resolved it.
+readonly CANARY="p25-canary-$(date +%s)-$RANDOM.example.net"
+readonly CONTROL_NAME="p25-control-$(date +%s)-$RANDOM.example.net"
+# Address literals as CONNECT hosts: api.anthropic.com's IPv4 address (2026-10-19) and an IPv6 one.
+readonly IPV4_LITERAL=160.79.104.10
+readonly IPV6_LITERAL='[2607:6bc0::10]'
+readonly REFUSED_CONNECTS="$IPV4_LITERAL,$IPV6_LITERAL,$CANARY"
 # A real pooler name, so the firewall can resolve and pin it; the user and password are made up and
 # nothing ever connects with them.
 readonly FAKE_POOLER=aws-0-us-east-1.pooler.supabase.com
@@ -62,15 +77,17 @@ row() {
 teardown() {
   rm -rf "$FAKE_SECRETS"
   if [ "${KEEP:-0}" = 1 ]; then
-    echo "KEEP=1: left running. Tear down: docker compose -p $PROJECT down -v; docker rmi bb2dash-egress:$TAG bb2dash-workspace:$TAG bb2dash-apply:$TAG bb2dash-workspace-ingest:$TAG"
+    echo "KEEP=1: left running. Tear down: docker compose -p $PROJECT down -v; docker rmi bb2dash-egress:$TAG bb2dash-workspace:$TAG bb2dash-apply:$TAG bb2dash-workspace-ingest:$TAG $DNSLOG_IMAGE"
     return
   fi
   echo "== tear down: project $PROJECT (containers, networks, volumes) and the four :$TAG images"
   dc down -v --remove-orphans >/dev/null 2>&1
-  docker rmi "bb2dash-egress:$TAG" "bb2dash-workspace:$TAG" "bb2dash-apply:$TAG" "bb2dash-workspace-ingest:$TAG" >/dev/null 2>&1
+  docker rmi "bb2dash-egress:$TAG" "bb2dash-workspace:$TAG" "bb2dash-apply:$TAG" "bb2dash-workspace-ingest:$TAG" "$DNSLOG_IMAGE" >/dev/null 2>&1
   echo "removed"
 }
 trap teardown EXIT
+# A signal (a timeout, Ctrl-C) ends the run through exit, so the EXIT trap still tears down.
+trap 'exit 130' INT TERM
 
 # --- fake secrets: every file compose.yaml names, none of them real --------------------------------
 for name in workspace_runner_db_url inbox_apply_db_url workspace_ingest_db_url sync_runner_db_url; do
@@ -89,7 +106,9 @@ started_at() { docker inspect -f '{{.State.StartedAt}}' "$(dc ps -q "$1")" 2>/de
 wait_clients() { # each client running with its firewall raised, or a failure row
   local client deadline=$((SECONDS + START_WAIT_S))
   for client in "${CLIENTS[@]}"; do
-    until dc logs --no-color --no-log-prefix "$client" 2>&1 | grep -q 'Firewall raised:'; do
+    # The log is read whole, then searched: a grep -q on a pipe would stop early, and under pipefail
+    # the writer's broken pipe would read as "not found" forever.
+    until grep -q 'Firewall raised:' <<<"$(dc logs --no-color --no-log-prefix "$client" 2>&1)"; do
       if [ "$SECONDS" -ge "$deadline" ]; then
         row FAIL "$client" "firewall raised" "no 'Firewall raised' line within ${START_WAIT_S}s"
         dc logs --no-color --no-log-prefix "$client" 2>&1 | tail -15
@@ -118,7 +137,7 @@ firewall_rows() {
 probe_client() { # <client> <port> <other ports> <allowed> <refused>
   local client="$1" out line ok check target detail
   out="$(dc exec -T -u node \
-    -e PROBE_PORT="$2" -e PROBE_OTHER_PORTS="$3" -e PROBE_ALLOWED="$4" -e PROBE_REFUSED="$5" -e PROBE_POOLER="$FAKE_POOLER" \
+    -e PROBE_PORT="$2" -e PROBE_OTHER_PORTS="$3" -e PROBE_ALLOWED="$4" -e PROBE_REFUSED="$5" -e PROBE_POOLER="$FAKE_POOLER" -e PROBE_CONNECTS="$REFUSED_CONNECTS" \
     "$client" node --input-type=module - <"$PROBE_SCRIPT" 2>/dev/null)"
   [ -n "$out" ] || { row FAIL "$client" "client probe ran" "no output"; return; }
   while read -r line; do
@@ -160,10 +179,54 @@ log_rows() { # the proxy's own record, per port
       row FAIL "$client" "egress log: $REFUSED_NAME refused by SNI" "no such line on port $port"
     fi
   done
+  local literal
+  for pair in 3128:workspace 3129:apply 3130:workspace-ingest; do
+    port="${pair%%:*}"
+    client="${pair#*:}"
+    for literal in "$IPV4_LITERAL" "$IPV6_LITERAL" "$CANARY"; do
+      if grep -F "port=$port TCP_DENIED/200 CONNECT $literal:443 " <<<"$log" | grep -c 'server=-$' >/dev/null; then
+        row PASS "$client" "egress log: CONNECT $literal refused" "port=$port TCP_DENIED ... server=-"
+      else
+        row FAIL "$client" "egress log: CONNECT $literal refused" "no such line on port $port"
+      fi
+    done
+    if grep -qE "port=$port .* sni=- bump=terminate server=-" <<<"$log"; then
+      row PASS "$client" "egress log: no SNI terminated" "port=$port ... sni=- bump=terminate"
+    else
+      row FAIL "$client" "egress log: no SNI terminated" "no such line on port $port"
+    fi
+  done
   if grep -qE "port=3130 TCP_DENIED/[0-9]+ CONNECT $API_HOST:443" <<<"$log"; then
     row PASS "workspace-ingest" "egress log: $API_HOST not on its list" "port=3130 TCP_DENIED CONNECT $API_HOST"
   else
     row FAIL "workspace-ingest" "egress log: $API_HOST not on its list" "no such line on port 3130"
+  fi
+}
+
+dns_rows() { # what egress asked its only upstream resolver: the listed names and the control, never the canary
+  local log
+  dc exec -T egress getent hosts "$CONTROL_NAME" >/dev/null 2>&1 # NXDOMAIN is fine: the query is what counts
+  sleep 2
+  log="$(dc logs --no-color --no-log-prefix "$DNSLOG_SERVICE" 2>&1)"
+  if grep -qF "\"A IN $API_HOST. " <<<"$log"; then
+    row PASS dnslog "egress's lookups reach the logging resolver" "A IN $API_HOST. logged"
+  else
+    row FAIL dnslog "egress's lookups reach the logging resolver" "no query for $API_HOST in the dnslog log"
+  fi
+  if grep -qF "$CONTROL_NAME." <<<"$log"; then
+    row PASS dnslog "an unlisted name looked up in egress is logged" "$CONTROL_NAME logged (control)"
+  else
+    row FAIL dnslog "an unlisted name looked up in egress is logged" "the control name is missing: the log proves nothing"
+  fi
+  if grep -qF "$CANARY" <<<"$log"; then
+    row FAIL dnslog "no query for the refused canary name" "$CANARY was resolved"
+  else
+    row PASS dnslog "no query for the refused canary name" "$(grep -c ' IN ' <<<"$log") queries logged, none for $CANARY"
+  fi
+  if grep -qF "in-addr.arpa" <<<"$log" || grep -qF "ip6.arpa" <<<"$log"; then
+    row FAIL dnslog "no reverse lookup of an address literal" "$(grep -oE '[^ ]+\.(in-addr|ip6)\.arpa' <<<"$log" | head -1)"
+  else
+    row PASS dnslog "no reverse lookup of an address literal" "no in-addr.arpa or ip6.arpa query"
   fi
 }
 
@@ -175,12 +238,13 @@ all_probes() {
 }
 
 echo "== start (${SERVICES[*]})"
-dc up -d "${SERVICES[@]}" >/dev/null 2>&1 || echo "up reported a failure; the rows below say where"
+dc up -d "$DNSLOG_SERVICE" "${SERVICES[@]}" >/dev/null 2>&1 || echo "up reported a failure; the rows below say where"
 wait_clients
 all_probes
 cli_row workspace
 cli_row apply
 log_rows
+dns_rows
 
 wait_egress_healthy() {
   local deadline=$((SECONDS + START_WAIT_S))
