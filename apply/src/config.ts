@@ -63,6 +63,22 @@ export const DISALLOWED_TOOLS = ['Bash', 'Read', 'Write', 'Edit', 'WebFetch', 'W
 export const MCP_SERVERS = ['bb2dash', 'db'] as const;
 export const SKILL_NAME = 'inbox-apply';
 
+/**
+ * The announcement reader (Phase 26): a second request kind through the same worker. One agent, no
+ * pair: the session reads each post and records its decision itself, so the gate lets the session
+ * (and only in this run kind) call `record_review`.
+ */
+export const ANNOUNCEMENT_SKILL_NAME = 'announcement-review';
+export const ANNOUNCEMENT_MODEL = 'sonnet';
+/** The reader's one write tool (`mcp-sql/rpc.ts`): a decision for one announcement. */
+export const RECORD_REVIEW_TOOL = 'mcp__db__record_review';
+/** announcement_review_prepare returns at most this many (migration 211); the run is told no more. */
+export const ANNOUNCEMENT_BATCH_MAX = 6;
+/** The `--run` argument of the tool gate's command in the announcement run's settings file. */
+export const GATE_RUN_ARG = '--run';
+export const RUN_KINDS = ['inbox', 'announcement'] as const;
+export type RunKind = (typeof RUN_KINDS)[number];
+
 /** In-image paths: the seam with `docker/apply/Dockerfile`. */
 export const PATHS = Object.freeze({
   /** The worker's own directory: created by the entrypoint, 0700, owned by `node`. */
@@ -70,9 +86,12 @@ export const PATHS = Object.freeze({
   mcpConfig: '/run/apply/mcp.json',
   aliveFile: '/run/apply/alive',
   settings: '/app/apply/claude/settings.json',
+  /** Same hook, started with `--run announcement`: the gate then allows record_review and no agent. */
+  settingsAnnouncement: '/app/apply/claude/settings-announcement.json',
   /** The CLI's working directory: it holds `.claude/skills/inbox-apply` and nothing else. */
   runCwd: '/app/apply/run',
   skillDir: '/app/apply/run/.claude/skills/inbox-apply',
+  announcementSkillDir: '/app/apply/run/.claude/skills/announcement-review',
   sqlServer: '/app/apply/dist/mcp-sql/server.js',
   materialsServer: '/app/mcp-materials/dist/index.js',
   dbUrlSecret: '/run/secrets/inbox_apply_db_url',

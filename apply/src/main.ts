@@ -21,7 +21,7 @@ import { createPgQuery, newPgClient, redactDsn, type QueryFn } from '../../works
 import { childEnv, spawnClaude } from '../../workspace/src/providers/claude-cli.js';
 import { buildAgents, runClaude, type RunDeps } from './claude.js';
 import { PATHS, loadConfig, type ApplyConfig } from './config.js';
-import { createRpc } from './db.js';
+import { createAnnouncementRpc, createRpc } from './db.js';
 import { runLoop } from './loop.js';
 import { writeMcpConfig } from './mcp-config.js';
 
@@ -55,6 +55,7 @@ export interface Worker {
 export function startWorker(deps: WorkerDeps): Worker {
   const stopping = new AbortController();
   const rpc = createRpc(deps.query);
+  const announcementRpc = createAnnouncementRpc(deps.query);
   const agents = buildAgents(deps.readSkillFile('context.md'), deps.readSkillFile('writer.md'));
   deps.writeMcpConfig();
 
@@ -75,6 +76,10 @@ export function startWorker(deps: WorkerDeps): Worker {
   const done = runLoop({
     rpc,
     log: deps.log,
+    announcements: {
+      rpc: announcementRpc,
+      runClaude: (input) => runClaude({ ...input, budgetUsd: deps.config.budgetUsd }, runDeps, stopping.signal),
+    },
     runClaude: (input) => runClaude({ ...input, agents, budgetUsd: deps.config.budgetUsd }, runDeps, stopping.signal),
     // The loop sleeps only after a pass: under `--once` that is the moment to stop instead.
     sleep: (ms) => {

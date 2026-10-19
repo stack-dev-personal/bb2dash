@@ -17,6 +17,7 @@
  * Every step is an injected port, so the pass runs on fakes in loop.test.ts.
  */
 
+import { runAnnouncementPass, type AnnouncementDeps } from './announcement-pass.js';
 import { planBatch, skipSet, templatedDecision, type Prepared } from './batch.js';
 import { MAX_RUNS_PER_DAY, POLL_INTERVAL_MS } from './config.js';
 import type { ApplyRpc } from './db.js';
@@ -32,6 +33,8 @@ export interface PassDeps {
   readonly runClaude: (input: RunInput) => Promise<ClaudeOutcome>;
   readonly log: (line: string) => void;
   readonly maxRunsPerDay?: number;
+  /** Phase 26: the announcement reader's ports. Absent, the worker serves the Inbox only. */
+  readonly announcements?: AnnouncementDeps;
 }
 
 export type PassOutcome = 'idle' | 'done' | 'failed';
@@ -108,7 +111,8 @@ async function archivedSoFar(d: PassDeps, requestId: number): Promise<number> {
 
 export async function runPass(d: PassDeps): Promise<PassOutcome> {
   const request = await d.rpc.claim();
-  if (request === null) return 'idle';
+  // Inbox requests first, exactly as before; only an idle pass looks for an announcement review.
+  if (request === null) return d.announcements === undefined ? 'idle' : runAnnouncementPass(d.announcements, d);
   d.log(`pass: claimed request ${request.id}`);
   let started = false;
   try {
