@@ -13,6 +13,9 @@
 --   6. skip: marks refused once, no-ops after
 --   7. an edited announcement is reviewed again
 --   8. close: done files one follow-up while unreviewed ones remain; failed files none
+--   9. round 2: quotes (8 characters, a digit or day or month name), ISO times with an offset,
+--      due_date refused where a due_at is held, a foreign open conflict turns a change into an ask,
+--      bb_item_id left null, the announcement cap, attempts and the refusal of a poison post
 --
 -- Every call is made under `set local role inbox_apply_runner` (181 grants db_test_runner the role
 -- with inherit false). RUN IT: `node scripts/db-test.mjs --only phase26_211_reader_functions.sql`.
@@ -114,7 +117,7 @@ begin
     from pg_class c
     cross join (values ('select'), ('insert'), ('update'), ('delete'), ('truncate')) p(priv)
    where c.relnamespace = 'public'::regnamespace
-     and c.relname in ('announcement_reviews', 'announcement_review_writes', 'announcements', 'v_announcements_unreviewed')
+     and c.relname in ('announcement_reviews', 'announcement_review_writes', 'announcement_review_attempts', 'announcements', 'v_announcements_unreviewed')
      and has_table_privilege('inbox_apply_runner', c.oid, p.priv);
   if v_got is distinct from 'announcements:select' then
     v_fail := v_fail || format('the role holds %s on the announcement tables', v_got);
@@ -154,6 +157,7 @@ begin
     v_body  := case i when 1 then E'Hello class,\nQuiz 7 will be held in class on  Thursday 10/29.\n  Bring a pencil.'
                       when 2 then 'Homework 3 is now due on Thursday, November 5th at 9:30 AM. It is worth 20 points.'
                       when 3 then 'Class is cancelled today.' when 4 then 'Welcome to the course.'
+                      when 7 then 'Homework 4 is now worth 30 points.'
                       else 'Filler text ' || i end;
     insert into announcements (course_id, posted_at, title, body, bb_item_id)
     values ('ECN.304', now() - ((10 - i) * interval '1 minute'), v_title, v_body, '_t26_211_' || i)
@@ -165,6 +169,11 @@ begin
   values ('ECN.304/t26-hw', 'ECN.304', 'Homework 3', 'homework', '2026-11-01 14:00+00', 10);
   insert into assignments (id, course_id, title, type, due_at)
   values ('IST.323/t26-other', 'IST.323', 'Other course homework', 'homework', '2026-11-02 14:00+00');
+  insert into assignments (id, course_id, title, type, due_at, points_possible)
+  values ('ECN.304/t26-hw2', 'ECN.304', 'Homework 4', 'homework', '2026-11-03 14:00+00', 5);
+  insert into attention_items (kind, course_id, entity, ref, field, question, suggested)
+  values ('conflict', 'ECN.304', 'assignment', 'ECN.304/t26-hw2', 'points_possible', 'Standing conflict from the transform',
+          '{"source":"stage_assignments"}');
 end $$;
 
 -- =============================================================================================
@@ -306,6 +315,28 @@ begin
               where e ? 'body' or not (e ?& array['id','course_id','title','posted_at','modified_at','bb_item_id'])) then
     raise exception 'FAIL 3: prepare returned text, or lacks a header field';
   end if;
+  -- One attempt per announcement handed out; a second prepare of the same request counts once.
+  if (select count(*) from announcement_review_attempts where request_id = v_req) <> 6 then
+    raise exception 'FAIL 3: prepare recorded % attempts, expected 6', (select count(*) from announcement_review_attempts where request_id = v_req);
+  end if;
+  select * into r from pg_temp.t26_as_runner(format('select announcement_review_prepare(%s) as p', v_req));
+  if (select count(*) from announcement_review_attempts where request_id = v_req) <> 6 then
+    raise exception 'FAIL 3: a second prepare of one request added attempts';
+  end if;
+  -- The announcement reader has its own daily cap: an Inbox apply run today does not count, an
+  -- announcement run does.
+  insert into agent_requests (kind, scope, state, claimed_by, claimed_at, finished_at, result)
+  values ('inbox_feedback', 'all', 'done', 'inbox-apply-runner', now(), now(), '{"claude":{"started":true},"lines":[]}');
+  select * into r from pg_temp.t26_as_runner(format('select announcement_review_prepare(%s) as p', v_req));
+  if (r.res->0->'p'->>'runs_today')::int <> 0 then
+    raise exception 'FAIL 3: an Inbox apply run counted toward the announcement cap (%)', r.res->0->'p'->>'runs_today';
+  end if;
+  insert into agent_requests (kind, scope, state, claimed_by, claimed_at, finished_at, result)
+  values ('announcement_review', 'all', 'done', 'inbox-apply-runner', now(), now(), '{"claude":{"started":true},"lines":[]}');
+  select * into r from pg_temp.t26_as_runner(format('select announcement_review_prepare(%s) as p', v_req));
+  if (r.res->0->'p'->>'runs_today')::int <> 1 then
+    raise exception 'FAIL 3: runs_today is %, expected 1 after one announcement run', r.res->0->'p'->>'runs_today';
+  end if;
 end $$;
 
 -- =============================================================================================
@@ -417,6 +448,33 @@ begin
       jsonb_build_array(v_ask || '{"assignment_id":"ECN.304/t26-hw"}', v_ask || '{"assignment_id":"ECN.304/t26-hw"}')));
 
   -- all or nothing: a good add beside a bad ask writes no add
+  -- round 2: quotes
+  perform pg_temp.t26_refused('a quote of 5 characters once whitespace is gone', v_req, v_f1,
+    jsonb_build_object('outcome', 'acted', 'summary', 's', 'add', jsonb_build_array(v_add || '{"quote":"Quiz 7"}')));
+  perform pg_temp.t26_refused('an ask quote of 6 characters', v_req, v_f1,
+    jsonb_build_object('outcome', 'acted', 'summary', 's', 'ask', jsonb_build_array(v_ask || '{"quote":"a  pen"}')));
+  perform pg_temp.t26_refused('an add quote with no digit, weekday or month', v_req, v_f1,
+    jsonb_build_object('outcome', 'acted', 'summary', 's', 'add', jsonb_build_array(v_add || '{"quote":"Hello class, bring a pencil"}')));
+  perform pg_temp.t26_refused('a change quote with no digit, weekday or month', v_req, v_f1,
+    jsonb_build_object('outcome', 'acted', 'summary', 's', 'change', jsonb_build_array(v_chg || '{"quote":"Hello class, bring a pencil"}')));
+  -- round 2: times
+  perform pg_temp.t26_refused('a due_at with no offset', v_req, v_f1,
+    jsonb_build_object('outcome', 'acted', 'summary', 's', 'add',
+      jsonb_build_array(v_add || '{"due_date":null,"due_at":"2026-10-29T19:30:00"}')));
+  perform pg_temp.t26_refused('an event_start that is only a date', v_req, v_f1,
+    jsonb_build_object('outcome', 'acted', 'summary', 's', 'add',
+      jsonb_build_array(v_add || '{"due_date":null,"event_start":"2026-10-29"}')));
+  perform pg_temp.t26_refused('a due_date written 10/29/2026', v_req, v_f1,
+    jsonb_build_object('outcome', 'acted', 'summary', 's', 'add', jsonb_build_array(v_add || '{"due_date":"10/29/2026"}')));
+  perform pg_temp.t26_refused('a change to due_at with no offset', v_req, v_f1,
+    jsonb_build_object('outcome', 'acted', 'summary', 's', 'change',
+      jsonb_build_array(v_chg || '{"field":"due_at","to_value":"2026-11-05T14:30:00"}')));
+  perform pg_temp.t26_refused('a change to due_date written 11/05/2026', v_req, v_f1,
+    jsonb_build_object('outcome', 'acted', 'summary', 's', 'change',
+      jsonb_build_array(v_chg || '{"field":"due_date","to_value":"11/05/2026"}')));
+  perform pg_temp.t26_refused('a due_date change on a row that holds a due_at', v_req, v_f1,
+    jsonb_build_object('outcome', 'acted', 'summary', 's', 'change',
+      jsonb_build_array(v_chg || '{"field":"due_date","to_value":"2026-11-05"}')));
   perform pg_temp.t26_refused('a good add beside a bad ask', v_req, v_f1,
     jsonb_build_object('outcome', 'acted', 'summary', 's', 'add', jsonb_build_array(v_add),
                        'ask', jsonb_build_array(v_ask || '{"quote":"not in the post at all"}')));
@@ -456,7 +514,7 @@ begin
   select a.* into v_row from assignments a where a.id = 'ECN.304/t26-quiz-7';
   if v_row.title <> 'Quiz 7' or v_row.type::text <> 'quiz' or v_row.source::text <> 'blackboard'
      or v_row.confidence::text <> 'tentative' or v_row.recurrence::text <> 'one_off'
-     or v_row.bb_item_id <> '_t26_211_1' or v_row.due_date <> date '2026-10-29' or v_row.due_at is not null
+     or v_row.bb_item_id is not null or v_row.due_date <> date '2026-10-29' or v_row.due_at is not null
      or v_row.submission::text <> 'in_class' or v_row.series_key <> 'ECN.304/quiz' or v_row.sequence_no <> 7
      or v_row.bb_column_id is not null
      or v_row.source_ref <> format('announcement _t26_211_1 (%s)', (select posted_at::date from announcements where id = v_f1)) then
@@ -560,6 +618,28 @@ begin
   if (select outcome from announcement_reviews where announcement_id = v_f4) <> 'nothing'
      or exists (select 1 from announcement_review_writes where announcement_id = v_f4) then
     raise exception 'FAIL 5d: the nothing decision wrote a log row or the wrong outcome';
+  end if;
+
+  -- 5e. an open conflict the transform raised stands; the change is asked instead.
+  select * into r from pg_temp.t26_rec(v_req, (select id from _t211 where label = 'f7'),
+    jsonb_build_object('outcome', 'acted', 'summary', 'Homework 4 is now worth 30 points.',
+      'change', jsonb_build_array(jsonb_build_object('assignment_id', 'ECN.304/t26-hw2', 'field', 'points_possible',
+        'to_value', 30, 'question', 'Is Homework 4 worth 30 points?', 'quote', 'is now worth 30 points'))));
+  if not r.ok then raise exception 'FAIL 5e: the change was refused: % %', r.state, r.msg; end if;
+  select i.* into v_row from attention_items i
+   where i.suggested->>'announcement_id' = (select id from _t211 where label = 'f7')::text;
+  if v_row.kind <> 'stack_must_confirm' or v_row.ref <> 'ECN.304/t26-hw2' or v_row.field <> 'announcement'
+     or v_row.question not like 'The announcement gives points_possible = 30 for ECN.304/t26-hw2.%' then
+    raise exception 'FAIL 5e: the foreign-conflict change reads %', row_to_json(v_row);
+  end if;
+  if (select count(*) from attention_items where kind = 'conflict' and ref = 'ECN.304/t26-hw2'
+        and field = 'points_possible' and state = 'open' and suggested->>'source' = 'stage_assignments') <> 1
+     or exists (select 1 from attention_items where kind = 'conflict' and ref = 'ECN.304/t26-hw2'
+                  and suggested->>'source' = 'announcement') then
+    raise exception 'FAIL 5e: the transform''s conflict was overwritten, or an announcement conflict was raised beside it';
+  end if;
+  if (select action from announcement_review_writes where announcement_id = (select id from _t211 where label = 'f7')) <> 'ask' then
+    raise exception 'FAIL 5e: the write log does not say ask';
   end if;
 end $$;
 
@@ -681,6 +761,63 @@ begin
     format('select announcement_review_close(%s, ''done'', ''{}''::jsonb) as c', v_follow));
   if not r.ok or r.res->0->'c' <> 'null'::jsonb then
     raise exception 'FAIL 8: a run that reviewed nothing filed a follow-up: % %', r.ok, r.res;
+  end if;
+end $$;
+
+-- =============================================================================================
+-- 9. Poison posts: two runs ended by a timeout or a budget refuse the post; an outage never does
+-- =============================================================================================
+do $$
+declare
+  v_f6 bigint := (select id from _t211 where label = 'f6');
+  v_f8 bigint := (select id from _t211 where label = 'f8');
+  r4 bigint; r5 bigint; r6 bigint; r record;
+begin
+  -- f6 was handed to the first request (attempt 1); f8 to none yet. Unreviewed: f6 and f8.
+  insert into agent_requests (kind, scope, state, claimed_by, claimed_at)
+  values ('announcement_review', 'all', 'claimed', 'inbox-apply-runner', now()) returning id into r4;
+  select * into r from pg_temp.t26_as_runner(format('select announcement_review_prepare(%s) as p', r4));
+  if (select count(*) from announcement_review_attempts where announcement_id = v_f6) <> 2
+     or (select count(*) from announcement_review_attempts where announcement_id = v_f8) <> 1 then
+    raise exception 'FAIL 9: the attempts after two prepares are f6 % and f8 %',
+      (select count(*) from announcement_review_attempts where announcement_id = v_f6),
+      (select count(*) from announcement_review_attempts where announcement_id = v_f8);
+  end if;
+  select * into r from pg_temp.t26_as_runner(
+    format('select announcement_review_close(%s, ''failed'', %L::jsonb) as c', r4, '{"error":"timed_out","lines":[]}'));
+  if not r.ok then raise exception 'FAIL 9: close failed: % %', r.state, r.msg; end if;
+  if (select outcome from announcement_reviews where announcement_id = v_f6) <> 'refused'
+     or (select summary from announcement_reviews where announcement_id = v_f6) <> 'two runs ended without a decision' then
+    raise exception 'FAIL 9: f6, with two attempts, was not refused by a timed-out close';
+  end if;
+  if not exists (select 1 from v_announcements_unreviewed where id = v_f8) then
+    raise exception 'FAIL 9: f8, with one attempt, was refused';
+  end if;
+
+  -- An outage never refuses: f8 gets its second attempt and the run ends sign_in_expired.
+  insert into agent_requests (kind, scope, state, claimed_by, claimed_at)
+  values ('announcement_review', 'all', 'claimed', 'inbox-apply-runner', now()) returning id into r5;
+  select * into r from pg_temp.t26_as_runner(format('select announcement_review_prepare(%s) as p', r5));
+  select * into r from pg_temp.t26_as_runner(
+    format('select announcement_review_close(%s, ''failed'', %L::jsonb) as c', r5, '{"error":"sign_in_expired","lines":[]}'));
+  if not exists (select 1 from v_announcements_unreviewed where id = v_f8) then
+    raise exception 'FAIL 9: an outage (sign_in_expired) refused a post';
+  end if;
+  insert into agent_requests (kind, scope, state, claimed_by, claimed_at)
+  values ('announcement_review', 'all', 'claimed', 'inbox-apply-runner', now()) returning id into r6;
+  select * into r from pg_temp.t26_as_runner(
+    format('select announcement_review_close(%s, ''failed'', %L::jsonb) as c', r6, '{"error":"budget_exceeded","lines":[]}'));
+  -- r6 was handed nothing (no prepare), so it refuses nothing, even with f8 at two attempts.
+  if not exists (select 1 from v_announcements_unreviewed where id = v_f8) then
+    raise exception 'FAIL 9: a request that was handed nothing refused a post';
+  end if;
+  insert into agent_requests (kind, scope, state, claimed_by, claimed_at)
+  values ('announcement_review', 'all', 'claimed', 'inbox-apply-runner', now()) returning id into r6;
+  select * into r from pg_temp.t26_as_runner(format('select announcement_review_prepare(%s) as p', r6));
+  select * into r from pg_temp.t26_as_runner(
+    format('select announcement_review_close(%s, ''failed'', %L::jsonb) as c', r6, '{"error":"budget_exceeded","lines":[]}'));
+  if (select outcome from announcement_reviews where announcement_id = v_f8) <> 'refused' then
+    raise exception 'FAIL 9: f8 was not refused by a budget_exceeded close with three attempts';
   end if;
 end $$;
 
