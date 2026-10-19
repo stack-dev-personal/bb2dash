@@ -100,3 +100,14 @@ turn: `claude -p --no-session-persistence --output-format json`, one 350-word an
 
 Ten turns in five pairs, no error, no limit message, no rate-limit text on stderr. One slow answer in the first pair
 (37 s of API time) did not recur in the next three pairs. The plan did not push back: D is built.
+
+### PM rulings, 25b
+
+| date | ruling | why |
+|---|---|---|
+| 2026-10-19 | E's names, signatures and columns are frozen in `../briefs/119b_PHASE25B_contract.md` before E's streams are cut | two streams (database and tool; page) build against one contract |
+| 2026-10-19 | the brief's `v_inbox_feedback` means every reader of answered Inbox items on the apply side: prod has no view of that name; `v_inbox_queue`, `v_sync_status` and the functions 119b lists leave `assistant_proposal` out | read on prod 2026-10-19 |
+| 2026-10-19 | an approval that writes stores `applied`; `approved` stays in the check, unused in v1 | 206 decides and writes in one transaction, so nothing is ever approved and not yet written |
+| 2026-10-19 | expiry is also swept hourly (`workspace_proposals_expire()`, a `pg_cron` job), besides the view and the decide call | the Inbox count and Home read `attention_items`, not the view; without the sweep an expired proposal would count as waiting |
+| 2026-10-19 | the tool is served by a credential-free MCP server in `workspace/`; the runner makes the call to 204 on its own login over a per-turn socket | 204 is `workspace_runner`'s only (brief: "the runner inserts only through 204"); the materials server holds the service key and must not be the writer |
+| 2026-10-19 | E's page stream (web/ only) starts while D builds; E's database and tool stream waits for D's merge into the phase branch | Stack's order exists because D and E both touch `workspace/` and `compose.yaml` and the pinned function lists; `web/` touches neither |
