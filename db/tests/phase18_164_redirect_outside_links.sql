@@ -6,7 +6,7 @@
 --
 --   0. installed: sync_file_outside_link is 164's, SECURITY DEFINER, owned by postgres, path pinned,
 --      executable by sync_runner and db_test_runner and nobody else; stage_gaps, close_cleared_gaps and
---      sync_file_worklist carry 164's marked lines; sync_runner executes exactly the fifteen;
+--      sync_file_worklist carry 164's marked lines; sync_runner executes exactly the sixteen;
 --      v_bb_files_current exposes outside_url, still security_invoker, still closed to anon
 --   a. the column's check: http(s) only, no whitespace or control characters, 2048 at most
 --   b. the function refuses each bad URL (null, empty, not http(s), no host, credentials, IP literals
@@ -133,16 +133,16 @@ begin
     v_fail := v_fail || 'a re-created function changed who can execute it'::text;
   end if;
 
-  -- sync_runner executes exactly the fifteen SECURITY DEFINER functions.
+  -- sync_runner executes exactly the sixteen SECURITY DEFINER functions.
   if (select string_agg(p.proname, ',' order by p.proname)
         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
        where n.nspname = 'public' and p.prosecdef
          and has_function_privilege('sync_runner', p.oid, 'execute'))
      is distinct from
-     'sync_claim,sync_close,sync_enqueue,sync_file_outside_link,sync_file_stored,sync_file_worklist,'
+     'sync_claim,sync_close,sync_enqueue,sync_file_outside_link,sync_file_stored,sync_file_text_put,sync_file_worklist,'
      'sync_login_ok,sync_login_required,sync_next,sync_own_claims,sync_register_run,'
      'sync_request_inbox_apply,sync_requeue_orphans,sync_run_outcome,sync_sweep_stale' then
-    v_fail := v_fail || 'sync_runner does not execute exactly the fifteen'::text;
+    v_fail := v_fail || 'sync_runner does not execute exactly the sixteen'::text;
   end if;
 
   -- 164's trigger: outside_url follows source_url (BEFORE UPDATE OF source_url, per row, path pinned).
