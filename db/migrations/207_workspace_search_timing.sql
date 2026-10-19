@@ -22,7 +22,7 @@
 --      clock_timestamp(), each call's rows counted so the whole search runs. It returns the eleven
 --      times in milliseconds, in call order: no text, no id, no row.
 --      Refusal: fewer than eleven stored gte-small vectors (22023).
---      Time guard: before each timed call it compares the time spent so far with BUDGET_MS (5 s) and
+--      Time guard: before each timed call it compares the time spent so far with c_budget_ms (5 s) and
 --      stops with 57014 once past it, so a slow index cannot hold the doctor. A statement_timeout set
 --      inside a function does not re-arm the running statement's timer, so the guard is the
 --      function's own clock; the role's statement_timeout (15 s, 142) still bounds the whole
@@ -58,12 +58,12 @@ create or replace function public.workspace_search_timing()
 as $function$
 declare
   -- The doctor's method (brief 119, item C): one warm-up, then eleven timed calls.
-  CALLS        constant integer := 11;
+  c_calls        constant integer := 11;
   -- The function's own clock: once past this, no further call is started.
-  BUDGET_MS    constant double precision := 5000;
+  c_budget_ms    constant double precision := 5000;
   -- How much of a unit's text stands in for the question's words.
-  QUESTION_LEN constant integer := 80;
-  MODEL        constant text := 'gte-small';
+  c_question_len constant integer := 80;
+  c_model        constant text := 'gte-small';
   v_vectors    extensions.vector[];
   v_questions  text[];
   v_started    timestamptz;
@@ -78,22 +78,22 @@ begin
            row_number() over (order by e.id) as rn,
            count(*) over () as n
       from bb_text_embeddings e
-     where e.model = MODEL
+     where e.model = c_model
   ),
   picked as (
     select g.k, r.embedding, r.text_id
-      from generate_series(0, CALLS - 1) as g(k)
+      from generate_series(0, c_calls - 1) as g(k)
       join ranked r
-        on r.n >= CALLS
-       and r.rn = 1 + floor(g.k::double precision * (r.n - 1) / (CALLS - 1))::bigint
+        on r.n >= c_calls
+       and r.rn = 1 + floor(g.k::double precision * (r.n - 1) / (c_calls - 1))::bigint
   )
-  select array_agg(p.embedding order by p.k), array_agg(left(t.text, QUESTION_LEN) order by p.k)
+  select array_agg(p.embedding order by p.k), array_agg(left(t.text, c_question_len) order by p.k)
     into v_vectors, v_questions
     from picked p
     join bb_file_text t on t.id = p.text_id;
 
-  if coalesce(cardinality(v_vectors), 0) <> CALLS then
-    raise exception 'workspace_search_timing: fewer than % stored % vectors to time with', CALLS, MODEL
+  if coalesce(cardinality(v_vectors), 0) <> c_calls then
+    raise exception 'workspace_search_timing: fewer than % stored % vectors to time with', c_calls, c_model
       using errcode = '22023';
   end if;
 
@@ -101,10 +101,10 @@ begin
   select count(*) into v_rows from workspace_search(v_questions[1], v_vectors[1]);
 
   v_started := clock_timestamp();
-  for i in 1 .. CALLS loop
+  for i in 1 .. c_calls loop
     v_spent_ms := extract(epoch from (clock_timestamp() - v_started)) * 1000;
-    if v_spent_ms > BUDGET_MS then
-      raise exception 'workspace_search_timing: past its % ms budget after % of % calls', BUDGET_MS, i - 1, CALLS
+    if v_spent_ms > c_budget_ms then
+      raise exception 'workspace_search_timing: past its % ms budget after % of % calls', c_budget_ms, i - 1, c_calls
         using errcode = '57014';
     end if;
     v_t0 := clock_timestamp();
