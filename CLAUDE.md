@@ -43,6 +43,16 @@ Supabase project: `goultdzqcavefcgnifdy` (us-east-1, Postgres 17). Full access v
   himself, status only when his words say so, scores as Blackboard shows them, every write in that
   day's log (since Phase 23: in `inbox_apply_writes` when it is made, and in the day file once the
   exporter has run). `reading_progress` has no such path. Status values and labels live in `web/src/lib/progress-status.ts`.
+* Announcement reader (Phase 26, brief 120, migrations 210–212). After a sync closes done, the `sync` container
+  files an `announcement_review` request, and the `apply` container runs `/announcement-review` (Sonnet) on new or
+  edited posts.
+  * Scope: each post is read against its own course's planner rows and materials.
+  * It writes `assignments` only through `announcement_review_record`:
+    * it adds work nothing records, as `tentative`, with each value quoted from the post (the database checks the quote);
+    * it asks on every change, via `deadline` / `conflict` / `stack_must_confirm` with `suggested.source = 'announcement'`;
+    * each write is logged in `announcement_review_writes`.
+  * It never writes `assignment_progress` or `reading_progress`.
+  * `bind_announcement_rows` (212) binds a new gradebook column to the matching announcement row before `stage_assignments`.
 * Grades show one deterministic figure, "graded so far" (`web/src/lib/graded-so-far.ts`), computed
   only from mirrored Blackboard scores, `grade_components` and column links; what it leaves out is
   named under it. No what-if, no projections.
@@ -132,9 +142,10 @@ Supabase project: `goultdzqcavefcgnifdy` (us-east-1, Postgres 17). Full access v
   client-side (RLS is the boundary). Since Phase 14 (R-28) the sync runs in Docker: the `sync`
   container (`compose.yaml`, `docker/sync/`, `sync/`) holds Blackboard's login, logs in through
   `http://127.0.0.1:6080/vnc.html`, and reaches the database only as the `sync_runner` role through its
-  SECURITY DEFINER functions (091, 093; sixteen since 200 (Phase 25a), which added `sync_file_text_put`, the sync's
-  one way to store a course file's text units once 201 drops the open insert policy `bb_file_text_anon_insert`; the
-  Windows fallback `ingest/pull_files.mjs` calls it with the same login; 164 added `sync_file_outside_link`: a file whose
+  SECURITY DEFINER functions (091, 093; eighteen since 200 and 213: Phase 25a's 200 added `sync_file_text_put`, the
+  sync's one way to store a course file's text units once 201 drops the open insert policy `bb_file_text_anon_insert`
+  (the Windows fallback `ingest/pull_files.mjs` calls it with the same login); Phase 26's 210 added
+  `sync_request_announcement_review` and 213 `sync_file_pull_outcomes`; 164 had added `sync_file_outside_link`: a file whose
   link redirects to another site is saved as `bb_files.outside_url` and never requested). Secrets live in `SECRETS_DIR` (`C:/Users/stack/.bb2dash-secrets/`),
   outside every repo; the service key's only home is `bb2dash_mcp_service_key` there. Never
   `docker compose up` or recreate `sync` while a sync is open, and never touch the `bb-profile` volume (it is

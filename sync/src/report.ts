@@ -51,6 +51,13 @@ export interface ReportInput {
    * sync's error (Phase 24a): a failed sync files no Inbox apply request. Left out, it fails the sync.
    */
   unitsPosted?: number;
+  /**
+   * Phase 26 (migration 213): the failures that are new or changed since the last sync, from
+   * sync_file_pull_outcomes. Only these are named in the lines, so a file that stays gone is not
+   * repeated on every sync. Absent or null (the call failed): every failure is named, as before.
+   * The stored `files.not_pulled` is the full list either way.
+   */
+  newFailures?: NotPulled[] | null;
 }
 
 const EMPTY_FILES: FilesSummary = Object.freeze({ pulled: 0, not_pulled: [] }) as FilesSummary;
@@ -62,7 +69,12 @@ function clip(text: string, max: number): string {
 
 /** The one line Activity shows for the files step; its exact text is what task 28 quotes. */
 export function filesLine(files: FilesSummary): string {
-  const notPulled = files.not_pulled.length;
+  return filesLineFor(files, files.not_pulled);
+}
+
+/** The files line with N = `failures`. buildReport leaves the line out when there is nothing to say. */
+export function filesLineFor(files: FilesSummary, failures: readonly NotPulled[]): string {
+  const notPulled = failures.length;
   const linked = files.linked ?? 0;
   if (linked > 0) {
     const noun = linked === 1 ? 'a link' : 'links';
@@ -73,9 +85,9 @@ export function filesLine(files: FilesSummary): string {
 }
 
 /** One line per not-pulled file, at most NOT_PULLED_LINES_MAX, then a count of the rest. */
-export function notPulledLines(files: FilesSummary): string[] {
-  const shown = files.not_pulled.slice(0, NOT_PULLED_LINES_MAX).map((f) => `Not pulled: file ${f.id} (${clip(f.reason, REASON_MAX)})`);
-  const rest = files.not_pulled.length - shown.length;
+export function notPulledLines(files: FilesSummary, failures: readonly NotPulled[] = files.not_pulled): string[] {
+  const shown = failures.slice(0, NOT_PULLED_LINES_MAX).map((f) => `Not pulled: file ${f.id} (${clip(f.reason, REASON_MAX)})`);
+  const rest = failures.length - shown.length;
   return rest > 0 ? [...shown, `…and ${rest} more not pulled`] : shown;
 }
 
@@ -122,7 +134,10 @@ export function buildReport(input: ReportInput): { state: 'done' | 'failed'; rep
     error = LOGIN_REQUIRED;
   }
 
-  lines.push(filesLine(input.files), ...notPulledLines(input.files));
+  const failures = input.newFailures ?? input.files.not_pulled;
+  if (input.files.pulled > 0 || (input.files.linked ?? 0) > 0 || failures.length > 0) {
+    lines.push(filesLineFor(input.files, failures), ...notPulledLines(input.files, failures));
+  }
 
   if (input.embedError) {
     const message = clip(input.embedError, ERROR_MAX);

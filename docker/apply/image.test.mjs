@@ -81,6 +81,10 @@ test('the run folder holds the skill and nothing the worker can write', () => {
   assert.ok(runtimeStage.includes('RUN chown -R root:root /app/apply/run && chmod -R a-w /app/apply/run && chmod 0555 /app/apply/run'));
   assert.match(config, /runCwd: '\/app\/apply\/run'/);
   assert.match(config, /skillDir: '\/app\/apply\/run\/\.claude\/skills\/inbox-apply'/);
+  // Phase 26: the announcement reader's skill is a second project skill in the same root-owned folder.
+  assert.ok(runtimeStage.includes('COPY skills/announcement-review /app/apply/run/.claude/skills/announcement-review'));
+  assert.ok(config.includes("announcementSkillDir: '/app/apply/run/.claude/skills/announcement-review'"));
+  assert.ok(fs.existsSync(path.join(REPO, 'skills', 'announcement-review', 'SKILL.md')), 'skills/announcement-review/SKILL.md');
   for (const file of ['SKILL.md', 'context.md', 'writer.md']) {
     assert.ok(fs.existsSync(path.join(REPO, 'skills', 'inbox-apply', file)), `skills/inbox-apply/${file}`);
   }
@@ -90,6 +94,7 @@ test('the run folder holds the skill and nothing the worker can write', () => {
 test('the layout the worker names is the layout the image builds', () => {
   for (const [name, literal] of [
     ['settings', '/app/apply/claude/settings.json'],
+    ['settingsAnnouncement', '/app/apply/claude/settings-announcement.json'],
     ['sqlServer', '/app/apply/dist/mcp-sql/server.js'],
     ['materialsServer', '/app/mcp-materials/dist/index.js'],
     ['dbUrlSecret', '/run/secrets/inbox_apply_db_url'],
@@ -112,6 +117,9 @@ test('the layout the worker names is the layout the image builds', () => {
   const hook = JSON.parse(read('apply/claude/settings.json')).hooks.PreToolUse[0];
   assert.equal(hook.matcher, '*');
   assert.equal(hook.hooks[0].command, 'node /app/apply/dist/hooks/tool-gate.js');
+  const announcementHook = JSON.parse(read('apply/claude/settings-announcement.json')).hooks.PreToolUse[0];
+  assert.equal(announcementHook.matcher, '*');
+  assert.equal(announcementHook.hooks[0].command, 'node /app/apply/dist/hooks/tool-gate.js --run announcement');
 });
 
 test('the pinned CA is copied once, root\'s and read-only', () => {
@@ -149,7 +157,7 @@ test('the service is kept away from the Blackboard login', () => {
 
 test('the build context is an allow-list of what the Dockerfile copies', () => {
   const lines = read('docker/apply/Dockerfile.dockerignore').split('\n').filter((line) => line && !line.startsWith('#'));
-  assert.deepEqual(lines, ['*', '!docker/apply/', '!apply/', '!workspace/src/', '!mcp-server/', '!skills/inbox-apply/', '**/node_modules', '**/dist', '**/coverage', '**/.env', '**/.env.*']);
+  assert.deepEqual(lines, ['*', '!docker/apply/', '!apply/', '!workspace/src/', '!mcp-server/', '!skills/inbox-apply/', '!skills/announcement-review/', '**/node_modules', '**/dist', '**/coverage', '**/.env', '**/.env.*']);
   const sources = [...dockerfile.matchAll(/^COPY (?!--from)(.+) \S+$/gm)].flatMap((match) => match[1].trim().split(/\s+/));
   const allowed = lines.filter((line) => line.startsWith('!')).map((line) => line.slice(1));
   for (const source of sources) {

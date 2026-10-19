@@ -22,7 +22,7 @@
 
 import type { RunOutcome, SyncRpc } from './db.js';
 import type { Verdict } from './login.js';
-import { buildReport, failureReport, loginRequiredReport, type FilesSummary } from './report.js';
+import { buildReport, failureReport, loginRequiredReport, type FilesSummary, type NotPulled } from './report.js';
 
 export const POLL_INTERVAL_MS = 25_000;
 /**
@@ -82,7 +82,18 @@ async function finishRun(d: PassDeps, id: string, outcome: RunOutcome, attempts:
       filesError = message(error);
     }
   }
+  // Migration 213: which failures are new. Skipped when the files step threw (there is no list to
+  // record); a failed call falls back to naming every failure and never fails the sync.
+  let newFailures: NotPulled[] | null = null;
+  if (outcome.status !== 'failed' && filesError === null) {
+    try {
+      newFailures = await d.rpc.filePullOutcomes(files.files.not_pulled);
+    } catch (error) {
+      d.log(`pass: could not record the files not pulled for request ${id}: ${message(error)}; every failure is listed`);
+    }
+  }
   const { state, report } = buildReport({
+    newFailures,
     foldStatus: outcome.status,
     files: files.files,
     claimAttempts: attempts,
@@ -93,7 +104,10 @@ async function finishRun(d: PassDeps, id: string, outcome: RunOutcome, attempts:
   });
   await d.rpc.close(id, state, report);
   d.log(`pass: request ${id} closed ${state}`);
-  if (state === 'done') await requestInboxApply(d, id);
+  if (state === 'done') {
+    await requestInboxApply(d, id);
+    await requestAnnouncementReview(d, id);
+  }
   return state;
 }
 
@@ -110,6 +124,21 @@ async function requestInboxApply(d: PassDeps, syncId: string): Promise<void> {
     }
   } catch (error) {
     d.log(`pass: could not file the Inbox apply request after sync ${syncId}: ${message(error)}`);
+  }
+}
+
+/**
+ * Step 12 (Phase 26, migration 210): the same ask for the announcement reader. Its own try, so a
+ * failure of either request never skips the other and never changes the sync's outcome.
+ */
+async function requestAnnouncementReview(d: PassDeps, syncId: string): Promise<void> {
+  try {
+    const requestId = await d.rpc.requestAnnouncementReview(syncId);
+    if (requestId !== null) {
+      d.log(`pass: announcement review request ${requestId} is open for the unreviewed announcements (after sync ${syncId})`);
+    }
+  } catch (error) {
+    d.log(`pass: could not file the announcement review request after sync ${syncId}: ${message(error)}`);
   }
 }
 

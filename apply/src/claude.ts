@@ -21,6 +21,10 @@ import type { CliExit, CliProcess, SpawnOptions } from '../../workspace/src/prov
 import { parseLine, readInit } from '../../workspace/src/stream-json.js';
 import {
   AGENT_TOOL_NAMES,
+  ANNOUNCEMENT_MODEL,
+  ANNOUNCEMENT_SKILL_NAME,
+  RECORD_REVIEW_TOOL,
+  type RunKind,
   CONTEXT_AGENT,
   CONTEXT_MODEL,
   DISALLOWED_TOOLS,
@@ -113,8 +117,47 @@ export function buildArgs(input: CliArgsInput): string[] {
   ];
 }
 
+export interface AnnouncementArgsInput {
+  readonly requestId: number;
+  readonly announcementIds: readonly number[];
+  readonly budgetUsd: number;
+  readonly paths?: { readonly mcpConfig: string; readonly settingsAnnouncement: string };
+}
+
+/**
+ * The announcement run's arguments (Phase 26): one session on sonnet, no agents, the read tool, the
+ * one write tool and the materials tools. The prompt is after `--` and holds numbers only; the
+ * settings file is the announcement one, so the gate knows which kind of run it is guarding.
+ */
+export function buildAnnouncementArgs(input: AnnouncementArgsInput): string[] {
+  const paths = input.paths ?? PATHS;
+  if (input.announcementIds.length === 0) throw new Error('claude: a run needs at least one announcement');
+  if (!Number.isFinite(input.budgetUsd) || input.budgetUsd <= 0) throw new Error('claude: the budget must be a positive amount');
+  const ids = input.announcementIds.map((id) => positiveInt(id, 'an announcement id')).join(',');
+  return [
+    '-p',
+    '--model', ANNOUNCEMENT_MODEL,
+    // As in the inbox run: the CLI always holds its agent tool, so it is named here and the gate
+    // refuses every call to it in this run kind. No `--agents`: there is no second role.
+    '--tools', AGENT_TOOL_NAMES[0],
+    '--allowedTools', QUERY_TOOL, RECORD_REVIEW_TOOL, ...MATERIALS_TOOLS,
+    '--disallowedTools', ...DISALLOWED_TOOLS,
+    '--permission-mode', REQUIRED_PERMISSION_MODE,
+    '--strict-mcp-config',
+    '--mcp-config', paths.mcpConfig,
+    '--setting-sources', 'project',
+    '--settings', paths.settingsAnnouncement,
+    '--output-format', 'stream-json',
+    '--verbose',
+    '--include-hook-events',
+    '--max-budget-usd', input.budgetUsd.toFixed(BUDGET_DECIMALS),
+    '--',
+    `/${ANNOUNCEMENT_SKILL_NAME} ${positiveInt(input.requestId, 'the request id')} --unattended --announcements ${ids}`,
+  ];
+}
+
 /** Why the init line does not pass, one sentence per reason; empty when it passes. */
-export function checkInit(line: unknown, pinnedVersion: string = CLAUDE_CODE_VERSION): string[] {
+export function checkInit(line: unknown, pinnedVersion: string = CLAUDE_CODE_VERSION, kind: RunKind = 'inbox'): string[] {
   const init = readInit(line);
   if (init === null || !isRecord(line)) return ['the first line is not an init line'];
   const problems: string[] = [];
@@ -126,15 +169,20 @@ export function checkInit(line: unknown, pinnedVersion: string = CLAUDE_CODE_VER
   for (const server of init.mcpServers) {
     if (server.status !== MCP_CONNECTED) problems.push(`the MCP server ${server.name} is ${server.status}, not connected`);
   }
-  for (const tool of [QUERY_TOOL, APPLY_TOOL, ...MATERIALS_TOOLS]) {
+  // Both SQL tools are listed whichever run this is (one server); the gate decides who may call which.
+  for (const tool of [QUERY_TOOL, APPLY_TOOL, RECORD_REVIEW_TOOL, ...MATERIALS_TOOLS]) {
     if (!init.tools.includes(tool)) problems.push(`tools does not hold ${tool}`);
   }
   for (const tool of DISALLOWED_TOOLS) {
     if (init.tools.includes(tool)) problems.push(`tools holds ${tool}`);
   }
-  if (!strings(line.skills).includes(SKILL_NAME)) problems.push(`skills does not hold ${SKILL_NAME}`);
+  const skill = kind === 'announcement' ? ANNOUNCEMENT_SKILL_NAME : SKILL_NAME;
+  if (!strings(line.skills).includes(skill)) problems.push(`skills does not hold ${skill}`);
+  // Only the inbox run defines agents; the announcement run must hold neither of them.
   for (const agent of [CONTEXT_AGENT, WRITER_AGENT]) {
-    if (!strings(line.agents).includes(agent)) problems.push(`agents does not hold ${agent}`);
+    const held = strings(line.agents).includes(agent);
+    if (kind === 'inbox' && !held) problems.push(`agents does not hold ${agent}`);
+    if (kind === 'announcement' && held) problems.push(`agents holds ${agent}`);
   }
   return problems;
 }
@@ -184,9 +232,9 @@ interface StreamFacts {
 const NO_FACTS: StreamFacts = { initProblems: null, sawInit: false, assistantError: null, rateLimitStatus: null, overage: false, result: null };
 
 /** The facts with one stdout line folded in: a new object, the old one untouched. */
-function read(line: Json, facts: StreamFacts): StreamFacts {
+function read(line: Json, facts: StreamFacts, kind: RunKind): StreamFacts {
   if (line.type === 'system' && line.subtype === 'init' && !facts.sawInit) {
-    return { ...facts, sawInit: true, initProblems: checkInit(line) };
+    return { ...facts, sawInit: true, initProblems: checkInit(line, CLAUDE_CODE_VERSION, kind) };
   }
   if (line.type === 'assistant' && typeof line.error === 'string') return { ...facts, assistantError: line.error };
   if (line.type === 'rate_limit_event' && isRecord(line.rate_limit_info)) {
@@ -248,7 +296,8 @@ function outcomeOf(end: RunEnd, log: (line: string) => void): ClaudeOutcome {
  * Run the CLI once for a batch and report how it ended. `signal` is the worker's stop: an abort
  * kills the run and it reads as interrupted.
  */
-export async function runClaude(input: CliArgsInput, deps: RunDeps, signal: AbortSignal): Promise<ClaudeOutcome> {
+export async function runClaude(input: CliArgsInput | AnnouncementArgsInput, deps: RunDeps, signal: AbortSignal): Promise<ClaudeOutcome> {
+  const kind: RunKind = 'announcementIds' in input ? 'announcement' : 'inbox';
   const timeoutMs = deps.timeoutMs ?? RUN_TIMEOUT_MS;
   const graceMs = deps.killGraceMs ?? KILL_GRACE_MS;
   if (signal.aborted) return failed('interrupted', 'The worker was stopping before the run started.');
@@ -263,7 +312,7 @@ export async function runClaude(input: CliArgsInput, deps: RunDeps, signal: Abor
 
   let child: CliProcess;
   try {
-    child = deps.spawn([CLAUDE_BIN, ...buildArgs(input)], { cwd: deps.cwd ?? PATHS.runCwd, env: deps.childEnv(token) });
+    child = deps.spawn([CLAUDE_BIN, ...('announcementIds' in input ? buildAnnouncementArgs(input) : buildArgs(input))], { cwd: deps.cwd ?? PATHS.runCwd, env: deps.childEnv(token) });
   } catch (error) {
     deps.log(`claude: could not start: ${error instanceof Error ? error.message : 'unknown error'}`);
     return failed('cli_error', 'The Claude CLI could not be started.');
@@ -294,7 +343,7 @@ export async function runClaude(input: CliArgsInput, deps: RunDeps, signal: Abor
     for await (const lineText of linesOf(child.stdout)) {
       const line = parseLine(lineText);
       if (line === null) continue;
-      facts = read(line, facts);
+      facts = read(line, facts, kind);
       if (facts.initProblems !== null && facts.initProblems.length > 0 && !asked) {
         deps.log(`claude: the init line was refused: ${facts.initProblems.join('; ')}`);
         kill();

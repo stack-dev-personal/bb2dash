@@ -86,6 +86,9 @@ begin
    where n.nspname = 'public' and p.prosecdef
      and has_function_privilege('inbox_apply_runner', p.oid, 'execute');
   if v_got is distinct from
+     -- 211 (Phase 26) gives the role the announcement reader's five functions.
+     'announcement_review_claim,announcement_review_close,announcement_review_prepare,'
+     'announcement_review_record,announcement_review_skip,'
      'inbox_apply_archive,inbox_apply_begin_item,inbox_apply_claim,inbox_apply_close,'
      'inbox_apply_prepare,inbox_apply_run_facts,raise_attention' then
     v_fail := v_fail || format('the role executes SECURITY DEFINER functions %s', v_got);
@@ -97,6 +100,8 @@ begin
    where n.nspname = 'public' and c.relkind in ('r', 'v', 'm', 'p')
      and has_table_privilege('inbox_apply_runner', c.oid, p.priv);
   if v_got is distinct from
+     -- 211 gives the role select on announcements (and nothing on the review tables).
+     'announcements:select,'
      'assignment_progress:insert,assignment_progress:select,assignment_progress:update,'
      'assignments:insert,assignments:select,assignments:update,attention_items:select,'
      'bb_gradebook:select,course_staff:insert,course_staff:select,course_staff:update,'

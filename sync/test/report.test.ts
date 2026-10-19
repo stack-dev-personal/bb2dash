@@ -120,7 +120,7 @@ describe('the report shape', () => {
     const r = buildReport({ foldStatus: 'ok', files: { pulled: 0, not_pulled: [] }, claimAttempts: 1, embedError: 'exit 1', unitsPosted: 0 });
     expect(r.state).toBe('done');
     expect(r.report.error).toBeNull();
-    expect(r.report.lines).toEqual(['Files: nothing new to pull', 'Embedding did not finish: exit 1; it is tried again at the next sync']);
+    expect(r.report.lines).toEqual(['Embedding did not finish: exit 1; it is tried again at the next sync']);
   });
 
   it('an embed failure on a pass that posted units still fails the sync', () => {
@@ -143,5 +143,38 @@ describe('the report shape', () => {
       embedError: 'x',
     });
     expect(report.lines.every((l) => typeof l === 'string' && l.length > 0)).toBe(true);
+  });
+});
+
+describe('repeated file failures (Phase 26, migration 213)', () => {
+  const gone = { id: '3713', reason: 'gone: status 404' };
+  const base = { foldStatus: 'ok' as const, claimAttempts: 1 };
+
+  it('a failure the database already knew adds no line, and the stored list stays whole', () => {
+    const r = buildReport({ ...base, files: { pulled: 0, not_pulled: [gone] }, newFailures: [] });
+    expect(r.report.lines).toEqual([]);
+    expect(r.report.files.not_pulled).toEqual([gone]);
+  });
+
+  it('a new failure is named, with N counting only the new ones', () => {
+    const other = { id: '9', reason: 'refused: x' };
+    const r = buildReport({ ...base, files: { pulled: 2, not_pulled: [gone, other] }, newFailures: [other] });
+    expect(r.report.lines).toEqual(['Files: 2 pulled, 1 not pulled', 'Not pulled: file 9 (refused: x)']);
+    expect(r.report.files.not_pulled).toHaveLength(2);
+  });
+
+  it('pulled files with no new failure keep their line', () => {
+    expect(buildReport({ ...base, files: { pulled: 3, not_pulled: [gone] }, newFailures: [] }).report.lines).toEqual(['Files: 3 pulled']);
+  });
+
+  it('a link saved with nothing else keeps its line', () => {
+    expect(buildReport({ ...base, files: { pulled: 0, not_pulled: [], linked: 1 }, newFailures: [] }).report.lines).toEqual([
+      'Files: 0 pulled, 1 saved as a link, 0 not pulled',
+    ]);
+  });
+
+  it('without the database answer every failure is listed, as before', () => {
+    const r = buildReport({ ...base, files: { pulled: 0, not_pulled: [gone] }, newFailures: null });
+    expect(r.report.lines).toEqual(['Files: 0 pulled, 1 not pulled', 'Not pulled: file 3713 (gone: status 404)']);
   });
 });

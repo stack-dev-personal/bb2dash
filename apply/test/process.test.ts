@@ -68,7 +68,7 @@ function initLine(over: Record<string, unknown> = {}): Record<string, unknown> {
     type: 'system', subtype: 'init', claude_code_version: '2.1.289', apiKeySource: 'none', permissionMode: 'dontAsk',
     model: 'claude-sonnet-5-5', session_id: '00000000-0000-4000-8000-000000000001',
     mcp_servers: [{ name: 'db', status: 'connected' }, { name: 'bb2dash', status: 'connected' }],
-    tools: ['Task', 'mcp__db__query', 'mcp__db__apply_item', 'mcp__bb2dash__search_materials', 'mcp__bb2dash__get_material_text', 'mcp__bb2dash__list_courses'],
+    tools: ['Task', 'mcp__db__query', 'mcp__db__apply_item', 'mcp__db__record_review', 'mcp__bb2dash__search_materials', 'mcp__bb2dash__get_material_text', 'mcp__bb2dash__list_courses'],
     agents: ['general-purpose', CONTEXT_AGENT, WRITER_AGENT],
     skills: ['inbox-apply', 'loop'],
     ...over,
@@ -317,6 +317,7 @@ describe('the SQL server', () => {
         queries.push({ sql, limit });
         return { command: 'SELECT', rowCount: 1, rows: [{ n: 1 }] };
       },
+      recordReview: async () => ({ added: [], raised: [] }),
       applyItem: async (input) => {
         items.push(input);
         return { outcome: 'archived', statements: [{ command: 'UPDATE', rowCount: 1, rows: [{ id: 'IST.352/x', component_id: 12 }] }] };
@@ -335,7 +336,7 @@ describe('the SQL server', () => {
     });
     expect(await handle({ jsonrpc: '2.0', id: 2, method: 'ping' }, r)).toEqual({ jsonrpc: '2.0', id: 2, result: {} });
     expect(await handle({ jsonrpc: '2.0', id: 3, method: 'tools/list' }, r)).toEqual({ jsonrpc: '2.0', id: 3, result: { tools: TOOLS } });
-    expect(TOOLS.map((t) => t.name)).toEqual(['query', 'apply_item']);
+    expect(TOOLS.map((t) => t.name)).toEqual(['query', 'apply_item', 'record_review']);
     expect(await handle({ jsonrpc: '2.0', method: 'notifications/initialized' }, r)).toBeNull();
     expect(await handle('not a message', r)).toBeNull();
     expect(await handle({ jsonrpc: '2.0', id: 4, method: 'resources/list' }, r)).toMatchObject({ error: { code: -32601 } });

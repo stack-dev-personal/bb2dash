@@ -327,7 +327,7 @@ describe('the runner end to end, on fakes', () => {
       expect(second.run_id).not.toBe(runA);
       expect(db.bbRaw.filter((b) => b.run_id === second.run_id)).toHaveLength(9);
       expect(db.bbRaw).toHaveLength(18);
-      expect(second.result).toMatchObject({ lines: ['Files: nothing new to pull'] });
+      expect(second.result).toMatchObject({ lines: [] });
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true });
     }

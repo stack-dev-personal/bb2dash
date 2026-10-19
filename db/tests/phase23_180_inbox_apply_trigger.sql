@@ -1,7 +1,7 @@
 -- bb2dash :: db/tests/phase23_180_inbox_apply_trigger.sql
 -- Phase 23 (Inbox auto-apply; DECISIONS 2026-10-07). Tests migration 180:
 --
---   0. installed and shaped like 091's functions; sync_runner's DEFINER set is the sixteen (164 added sync_file_outside_link, 200 sync_file_text_put)
+--   0. installed and shaped like 091's functions; sync_runner's DEFINER set is the eighteen (164 added sync_file_outside_link, 200 sync_file_text_put)
 --   1. refusals that return null and insert nothing: a null id, a missing id, a sync that failed,
 --      a sync another claimant closed, a request that is not a sync
 --   2. an empty answered queue files nothing
@@ -47,10 +47,10 @@ begin
        where n.nspname = 'public' and p.prosecdef
          and has_function_privilege('sync_runner', p.oid, 'execute'))
      is distinct from
-     'sync_claim,sync_close,sync_enqueue,sync_file_outside_link,sync_file_stored,sync_file_text_put,sync_file_worklist,sync_login_ok,'
-     'sync_login_required,sync_next,sync_own_claims,sync_register_run,sync_request_inbox_apply,'
+     'sync_claim,sync_close,sync_enqueue,sync_file_outside_link,sync_file_pull_outcomes,sync_file_stored,sync_file_text_put,sync_file_worklist,sync_login_ok,'
+     'sync_login_required,sync_next,sync_own_claims,sync_register_run,sync_request_announcement_review,sync_request_inbox_apply,'
      'sync_requeue_orphans,sync_run_outcome,sync_sweep_stale' then
-    v_fail := v_fail || 'sync_runner does not execute exactly the sixteen'::text;
+    v_fail := v_fail || 'sync_runner does not execute exactly the eighteen'::text;
   end if;
 
   if cardinality(v_fail) > 0 then
