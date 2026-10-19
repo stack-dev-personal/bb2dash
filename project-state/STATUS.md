@@ -43,7 +43,7 @@ Live in prod (Supabase `bb2dash`, ref `goultdzqcavefcgnifdy`):
 | GUI (`web/`) | Next.js 16 + TS, Supabase Auth. Screens: Today (56-day fetch, 14 visible, ◂ ▸ paging; needs-attention row from `v_sync_status`), Course = Stream / Classwork (Blackboard folder tree, `?view=timeline` keeps the week rail) / Grades (Phase 10a) / Info, Materials, ⌘K search, `?item=` assignment + session popouts, **courses sidebar** (☰ toggles it; on the right, `--sidebar-side` flips; overlay drawer under 1024px), **Inbox** (`/inbox`, resolve + why-note per row), Sync button (enqueues `agent_requests`; since 2026-10-05 its label follows the container's runner, and `claude --model sonnet "/bb-sync <id>"` is copied only as the fallback for a row nothing claimed), Activity list, **Grades** (`/grades` by course: "Blackboard's number, as of <seen_at>" / "Blackboard publishes no total" / "not synced yet"; item rows with status pill, `score / possible`, seen, feedback disclosure; uncounted attendance, letter and non-total calculated columns in a collapsed group), **course Grades tab** (same table for the course's shells), **popout submission block** (status, attempt N of M, pulled-back and staged files with a sha256 match chip; no score line; feedback and score history moved in by 12b), **staged-upload drop zone** (popout + Classwork rows → Storage + `bb_files` row, "Staged in bb2dash — attach in Blackboard ↗"; no control reads "Submit"), **Planner** (`/planner?week=`, Mon–Sun week grid: class blocks with room + session topic, due items by New York wall clock or nested in their class block, Assignments band, today + now-line, quick-edit, click-to-popout; **planner events** (Phase 11b): click an empty half-hour slot or an Events-band cell → `PlannerEventForm` (six kinds, zone picker, in-person or online location, notes, course), per-kind blocks placed by New York wall clock with a zone chip for other zones, task checkbox, Events band for all-day, edit/delete from the block), **bell** (unread badge from `v_announcements_unread`; opening marks seen), **Announcements** (`/announcements`, all courses newest-first), public `/privacy` + `/terms` (for the Google consent screen), **graded so far** (Phase 12b replaced 10b's "Our model" line, projections, agreement sentence, what-if cells, placeholder rows, target solver and Reset scenario with one deterministic figure per course from mirrored scores, `grade_components` and column links, naming under it the parts it leaves out; the "Counts toward…" picker stays; score history moved to the popout); vitest 1812 tests (2026-09-21, row 15) |
 | Auth | one user (`emstacho@syr.edu`, uid `fd0b7c9d…`) created; **RLS owner-scoped** (migration 020, W-9 done) — every authenticated policy is `auth.uid() = public.app_owner()`, owner resolved by email; signups disabled 2026-09-10 per Stack (a dashboard setting SQL cannot read; 1 auth user on 2026-09-24) |
 
-## Phase 26: the announcement reader, 2026-10-19 (built, not merged; migrations not on prod)
+## Phase 26: the announcement reader, 2026-10-19: MERGED (#120 `f1aeaa8`, guard fix #122 `16f7b8a`) and CUT OVER the same day
 
 Brief `docs/planning/sprint-2/briefs/120_PHASE26_announcement_reader.md`, approved by Stack on 2026-10-19.
 Branch `feat/phase26-announcement-reader`. Migrations 210–212 in block 210–219, built in parallel with Phase 25.
@@ -77,11 +77,15 @@ Branch `feat/phase26-announcement-reader`. Migrations 210–212 in block 210–2
 * **Tests:**
   * SQL: 210–212 tested in rolled-back transactions on prod. Nothing was applied.
   * Worker and web tests: see the PR.
-* **Next:**
-  1. The Vercel preview of the Inbox cards for Stack's OK.
-  2. Merge on his word.
-  3. At cut-over, after Phase 25's migrations: apply 210–212 byte-identical, rebuild `sync` (no sync open) and
-     `apply` alone, and watch the first review.
+* **Cut over 2026-10-19 (~21:34Z), on Stack’s word, ahead of Phase 25 (his pick "Go now, fix both checks"):**
+  * 210, 211, 212 and 213 are on prod, each byte-identical (md5 of the stored statements = the repo file: `81d2fdaf`, `980576b4`,
+    `2f78504e`, `62d6d1ac`). They were applied with no sync or apply request open.
+  * 213’s guard and the five pinned tests ignore Phase 25’s `sync_file_text_put` (#122). 200’s guard got the mirror change
+    on Phase 25’s branch (`7425e99`).
+  * `sync` and `apply` were rebuilt alone from `16f7b8a`. Both are healthy, and the apply worker’s idle passes are clean.
+  * 27 posts older than 14 days are `before_floor`; 7 wait for the first review, which the next sync that closes done will file.
+* **Still open:** the first live review and its Inbox items, checked against the brief’s table; `phase26_211` run verbatim
+  through `node scripts/db-test.mjs`; the four Phase 26 worktrees, to be removed on his word.
 
 ## Course rail after the grouped side nav (2026-10-15)
 
