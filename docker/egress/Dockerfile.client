@@ -1,0 +1,25 @@
+# bb2dash Phase 25a, W-100, PROBE ONLY: a client with the workspace image's Node and CLI pins.
+# Built only by compose.probe.yaml as bb2dash-egress-client:p25-probe; never a live tag.
+#
+# Not the workspace image: that one needs the harness CA context and carries the runner. This one
+# has the same two pins that matter to P-1 and P-2 and nothing of bb2dash's code or secrets:
+#   Node 22.23.3 (node:22.23.3-bookworm-slim)          the version in the live images
+#   @anthropic-ai/claude-code 2.1.289                   the CLI pinned in docker/workspace/Dockerfile
+#   undici 6.28.1                                       the undici Node 22.23.3 bundles (P-2 fallback)
+FROM node:22.23.3-bookworm-slim
+
+ARG CLAUDE_CODE_VERSION=2.1.289
+ARG UNDICI_VERSION=6.28.1
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl openssl \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN npm install -g --no-audit --no-fund "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+
+WORKDIR /probe
+RUN npm init -y >/dev/null && npm install --no-audit --no-fund "undici@${UNDICI_VERSION}"
+COPY probe/fetch-probe.mjs /probe/fetch-probe.mjs
+
+USER node
+CMD ["sleep", "infinity"]
