@@ -105,14 +105,20 @@ Every date, time and point value in a decision must be **quoted from the post** 
 value does not go in; the item becomes an `ask` whose question says what is missing.
 
 * "In class" or "at the start of class" with no clock time: use the course's meeting `start_time`
-  on that date, in America/New_York, written as UTC. A 3:30 PM Thursday class on 2026-10-22 is
-  `2026-10-22T19:30:00Z` (EDT is UTC-4 until 2026-11-01, then UTC-5). If the course has no meeting
+  on that date, in America/New_York, written with its offset. A 3:30 PM Thursday class on 2026-10-22 is
+  `2026-10-22T15:30:00-04:00` or the same instant `2026-10-22T19:30:00Z` (EDT is UTC-4 until
+  2026-11-01, then UTC-5). If the course has no meeting
   that weekday, or two that differ, ask.
-* A day with no time ("due Friday"): set `due_date` only, never a made-up time.
+* A day with no time ("due Friday"): set `due_date` only (`YYYY-MM-DD`), never a made-up time.
+* **Formats.** Every `due_at`, `event_start` and `due_at` change value is ISO-8601 **with an explicit
+  offset** (`2026-10-22T15:30:00-04:00` or `...T19:30:00Z`), never a bare local time. `due_date` is
+  `YYYY-MM-DD`.
 * Points only if the post gives them. Never infer them from the syllabus here.
 * A past date is still the post's date; do not "fix" it.
-* Quotes: `quote` must be copied **character for character** from the title or body, 500 characters
-  at most. Pick the shortest span that carries the fact, and avoid spans with curly quotes,
+* Quotes: `quote` must be copied **character for character** from the title or body, at least 8 and
+  at most 500 characters. For an `add` or `change`, the quote must also **contain what supports the
+  value**: the date, the number or the weekday the value comes from ("Thursday, 10/22", "quiz #2 to
+  9/9/2026"), so a quote that merely names the quiz is not enough. Pick the shortest span that carries the fact, and avoid spans with curly quotes,
   non-breaking spaces or line breaks: the database compares after lowercasing and collapsing
   whitespace, nothing more. Every add, change and ask carries its own quote.
 
@@ -126,14 +132,14 @@ Call `mcp__db__record_review` once per announcement, with `request` (from your a
   "outcome": "nothing" | "acted",
   "summary": "one sentence, at most 300 characters, what the post says and what you did",
   "add":    [ { "slug": "quiz-5", "title": "Quiz 5", "type": "quiz",
-               "due_at": "2026-10-22T19:30:00Z", "due_date": null,
+               "due_at": "2026-10-22T15:30:00-04:00", "due_date": null,
                "event_start": null, "submission": "in_class",
                "series_key": "ECN.304/quiz", "sequence_no": 5,
                "points_possible": null, "description": null,
                "question": "the notice Stack reads, at most 300 characters",
-               "quote": "verbatim from the post" } ],
+               "quote": "verbatim, 8+ characters, with the date or number" } ],
   "change": [ { "assignment_id": "ECN.304/quiz-4", "field": "due_at" | "due_date" | "points_possible",
-                "to_value": "2026-10-29T19:30:00Z",
+                "to_value": "2026-10-29T15:30:00-04:00",
                 "question": "at most 300 characters", "quote": "..." } ],
   "ask":    [ { "assignment_id": "IST.323/group-presentation-7" | null,
                "question": "at most 300 characters", "quote": "..." } ]
@@ -155,9 +161,11 @@ reason: fix it and call again):
   (`quiz-5`, not `quiz-05`, unless the course writes it with the zero). The row is stored
   tentative and from the announcement; Stack confirms it, not you.
 * `change`: the row exists **in this announcement's course**; `field` is `due_at`, `due_date` or
-  `points_possible`. Change `due_date` only when the row has no `due_at`; if the row has a `due_at`
-  and the post gives a day but no time, ask instead of splitting the row. `to_value` is the new
-  value as JSON (a timestamp string, a date string, a number).
+  `points_possible`. To move a row that has a `due_at`, change `due_at`, **never** `due_date`; change
+  `due_date` only on a row that has no `due_at`. If the row has a `due_at` and the post gives a day
+  but no time, ask instead of splitting the row. `to_value` is the new
+  value as JSON: a timestamp string with an offset for `due_at`, `YYYY-MM-DD` for `due_date`, a number
+  for `points_possible`.
 * `ask`: `assignment_id`, when given, exists in this course; use null for a question about
   something that has no row.
 * `question` is what Stack reads in the Inbox. Write it plainly, with the course and the item
@@ -184,7 +192,7 @@ quiz, number 5, 10/22, in class, no clock time, no points.
 { "outcome": "acted",
   "summary": "ECN 304 quiz in class Thursday 10/22, from the required reading p.31 to p.37; added as Quiz 5.",
   "add": [ { "slug": "quiz-5", "title": "Quiz 5", "type": "quiz",
-             "due_at": "2026-10-22T19:30:00Z", "due_date": null, "event_start": null,
+             "due_at": "2026-10-22T15:30:00-04:00", "due_date": null, "event_start": null,
              "submission": "in_class", "series_key": "ECN.304/quiz", "sequence_no": 5,
              "points_possible": null, "description": "In class; questions from the required reading, p.31 to p.37.",
              "question": "Added Quiz 5 for ECN 304, Thursday 10/22 in class (3:30 PM from the class meeting time), from the announcement.",
@@ -192,10 +200,10 @@ quiz, number 5, 10/22, in class, no clock time, no points.
   "change": [], "ask": [] }
 ```
 
-  The quote is copied exactly as the post spells it; if its apostrophe is a curly one in the body,
-  quote "have a quiz in class this Thursday, 10/22" instead. The description restates only what the
+  The quote is copied exactly as the post spells it and carries the weekday and date; if its
+  apostrophe is a curly one in the body, quote "have a quiz in class this Thursday, 10/22" instead. The description restates only what the
   post says.
-* If `ECN.304/quiz-5` already exists with `due_at` 2026-10-22T19:30Z (Stack added it by hand on
+* If `ECN.304/quiz-5` already exists with `due_at` 2026-10-22T19:30Z (the same instant as 15:30-04:00) (Stack added it by hand on
   2026-10-19), the facts agree: `{"outcome":"nothing","summary":"Quiz 5 on 10/22 is already in the planner with the same date.","add":[],"change":[],"ask":[]}`.
   If it exists with a different date, that is a `change` of `due_at`, not an add.
 
@@ -203,8 +211,9 @@ quiz, number 5, 10/22, in class, no clock time, no points.
 #1 and quiz #2 to 9/9/2026". Two rows are named; both exist.
 
 * Read both rows. If each has `due_at` null and a `due_date`, record two `change` entries
-  (`field: "due_date"`, `to_value: "2026-09-09"`, the same quote), the question showing old against
-  new for each.
+  (`field: "due_date"`, `to_value: "2026-09-09"`, quote "both quiz #1 and quiz #2 to 9/9/2026"), the
+  question showing old against new for each. A row with a `due_at` is changed through `due_at`
+  (never `due_date`), and only if the post gives a time; it gives none, so it is an ask.
 * If either row is confirmed with a `due_at` time, the post gives a day and no time: do not split
   the row. Record one `ask` per row (or one for both, `assignment_id: null`) asking whether the
   time stays. "Pushed out" with no date would also be an `ask`, never a guess.
