@@ -184,6 +184,19 @@ describe('the files step', () => {
     expect(r.files.not_pulled[0]!.reason).toBe('refused: status 401 at the first hop, and the login check did not answer');
   });
 
+  it('a multi-line failure keeps only its first line, so no call log or cookie is stored (sync 6020)', async () => {
+    const playwrightTimeout = new Error(
+      'apiRequestContext.get: Timeout 30000ms exceeded.\nCall log:\n  - → GET https://blackboard.syracuse.edu/x\n    - cookie: JSESSIONID=SECRET123; samlSessionId=SECRET456',
+    );
+    const { p } = ports([row('3713')], { hop: vi.fn(async () => { throw playwrightTimeout; }) });
+    const r = await runFilesStep(p);
+    expect(r.files.not_pulled).toHaveLength(1);
+    const reason = r.files.not_pulled[0]!.reason;
+    expect(reason).toContain('Timeout 30000ms exceeded.');
+    expect(reason).not.toContain('\n');
+    expect(reason).not.toMatch(/JSESSIONID|samlSessionId|SECRET|Call log/);
+  });
+
   it('gone (404) is reported in not_pulled and never reaches sync_file_stored', async () => {
     const { p, stored } = ports([row('31')], { hop: hopFor({ 'https://blackboard.syracuse.edu/bbcswebdav/xid-31_1': 404 }) });
     const r = await runFilesStep(p);

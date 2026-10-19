@@ -42,6 +42,25 @@ describe('fileOutsideLink (migration 164)', () => {
   });
 });
 
+describe('filePullOutcomes (migration 213)', () => {
+  it('sends each id as a JSON number, which 213 requires (sync 6020 sent text and every entry was refused)', async () => {
+    const { rpc, query } = rpcOver([{ fresh: [{ id: 3713, reason: 'gone: status 404' }] }]);
+    expect(await rpc.filePullOutcomes([{ id: '3713', reason: 'gone: status 404' }])).toEqual([
+      { id: '3713', reason: 'gone: status 404' },
+    ]);
+    const [sql, params] = query.mock.calls[0]!;
+    expect(sql).toBe('select public.sync_file_pull_outcomes($1::jsonb) as fresh');
+    expect(JSON.parse(params![0] as string)).toEqual([{ id: 3713, reason: 'gone: status 404' }]);
+  });
+
+  it('refuses an id that is not a positive whole number before it asks the database anything', async () => {
+    const { rpc, query } = rpcOver([]);
+    await expect(rpc.filePullOutcomes([{ id: 'x1', reason: 'r' }])).rejects.toThrow(/sync_file_pull_outcomes/);
+    await expect(rpc.filePullOutcomes([{ id: '0', reason: 'r' }])).rejects.toThrow(/sync_file_pull_outcomes/);
+    expect(query).not.toHaveBeenCalled();
+  });
+});
+
 describe('fileTextPut (migration 200)', () => {
   const units = [{ unit_kind: 'page', unit_no: 1, text: 'one' }, { unit_kind: 'page', unit_no: 2, text: 'two' }];
 
