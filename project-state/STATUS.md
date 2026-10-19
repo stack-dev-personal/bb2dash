@@ -62,8 +62,11 @@ Branch `feat/phase25-after-24b`; three Opus workers, each in its own worktree. N
   the CONNECT host and the TLS server name are both listed; firewalls allow only egress and the pooler; DNS closed.
   Probes P-1 to P-3 passed (`docker/egress/PROBES.md`); an end-to-end run in a throwaway project passed 64 of 64
   checks. `sync`, `bb2dash-mcp` and `harness-jobs` stay open (question 2).
-* **Tests on the merged branch:** workspace 1026, apply 137, mcp-server 143, workspace-ingest 120, sync 188 (vitest);
-  scripts 378, acceptance 56, docker 97, ingest 170 (node --test); typecheck and builds clean. SQL suite: the units
+* **Review:** a code review and a security review found two HIGH holes in `squid.conf` (Squid resolved refused names, so DNS
+  stayed a way out; a bare IP address passed the name check through its reverse DNS) and one MEDIUM (the shared 5432
+  pooler, now named as open by decision); all fixed with the LOWs (119a, "Round 1 fixed"); the egress e2e passed 92 of 92.
+* **Tests on the final branch:** workspace 1033, apply 137, mcp-server 143, workspace-ingest 120, sync 189 (vitest);
+  scripts 378, acceptance 56, docker 100, ingest 177 (node --test); bb2dash-stack 400; typecheck and builds clean. SQL suite: the units
   for 200, 201 and 207 and the function-count units wait on prod; `phase18_post_embed_checks` (a) is red on file
   3713, a GEO.103 reading Blackboard no longer lists (outside the phase; Stack's call).
 * **Cut-over (waits for Stack's word; `docker/egress/README.md`):** apply 200; rebuild `sync` between syncs; one
