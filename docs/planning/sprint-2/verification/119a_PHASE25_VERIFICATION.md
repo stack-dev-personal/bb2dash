@@ -29,3 +29,21 @@ PR #119) merged in as d7c2c55.
 ## Outside the phase
 
 * `phase18_post_embed_checks` (a) fails on **file 3713**, a GEO.103 reading ("When the Soviet Union Freed the Arctic from Capitalist Slavery", reading 57), `text_status` pending since 2026-10-13, never downloaded, and marked `missing_since_run`: Blackboard no longer lists it, so no sync can pull it. Not caused by Phase 25. Left for Stack: re-post or drop it, or name it in the check's exceptions.
+
+## Review round 1 (2026-10-19), on the branch at dbb81b1a
+
+`/code-review`-style review (HIGH effort) and a security review, each by an Opus agent, read-only.
+
+| finding | severity | where | owner, fix |
+|---|---|---|---|
+| Squid resolves every CONNECT host before the allow-list (`deny private_dst` is a `dst` ACL ahead of the name checks), so a refused `<data>.attacker.tld` still leaves through DNS | HIGH (both reviews) | `docker/egress/squid.conf:56` | W-100: per-port `deny !names` first, then `private_dst`, then the allows; e2e proves no lookup for a refused name |
+| `dstdomain` without `-n` matches an IP-literal CONNECT through its reverse DNS, so a server whose PTR says `api.anthropic.com` gets a spliced tunnel | HIGH (both reviews) | `squid.conf:40-45` | W-100: `-n` on every `dstdomain`, IP literals refused outright, an e2e case to a public IP |
+| a ClientHello without SNI is spliced on the CONNECT host | LOW | `squid.conf:77-78` | W-100: `ssl::server_name --client-requested` |
+| the 5432 pooler is shared by every Supabase tenant; the firewall cannot tell projects apart | MEDIUM (security) | `docker/egress/README.md` | W-100: named under "still open, by decision" |
+| a file over 200's caps is refused whole and downloaded again by every sync | LOW | `200:43-44`, `sync/src/files.ts:236-241` | W-101: recorded as failed with a reason |
+| the fallback can commit part of a file after a reconnect; no pg timeouts; `sslmode=require` accepted | LOW | `ingest/text_put.mjs` | W-101: one client per file, timeouts, `verify-full` |
+| docs still describe the REST insert 201 removes | LOW | `ingest/AGENT_BRIEF.md`, `ingest/PILOT_IST352.md`, bb-course-pull skill | W-101 |
+| the doctor row reads a broken image or a slow search as "unknown"; probe timeouts outlast the doctor's kill | LOW | `doctor/lib/checks-search.mjs:126-127`, `207:104-109`, `search-timing.ts:67` | W-102 |
+| the egress README's cut-over table leaves 207 out | docs | `docker/egress/README.md` | W-100 |
+
+Checked and sound by both: 200's conflict target, grants and `search_path`; 207 returns numbers only, no table grant for either runner (prod catalog); the three firewalls; the proxy settings reaching every child process with no token added; egress runs as `proxy`, read-only, no capability, no secret.
