@@ -15,11 +15,12 @@ RUN apt-get update \
 COPY squid.conf /etc/squid/squid.conf
 COPY entrypoint.sh /usr/local/bin/egress-entrypoint
 COPY healthcheck.sh /usr/local/bin/egress-healthcheck
+COPY sni-present.sh /usr/local/bin/egress-sni-present
 # A Windows checkout may hand over CRLF; a shebang line must end in LF. The files are root's and
 # read-only to `proxy`, which Squid runs as.
-RUN sed -i 's/\r$//' /etc/squid/squid.conf /usr/local/bin/egress-entrypoint /usr/local/bin/egress-healthcheck \
+RUN sed -i 's/\r$//' /etc/squid/squid.conf /usr/local/bin/egress-entrypoint /usr/local/bin/egress-healthcheck /usr/local/bin/egress-sni-present \
  && chmod 0644 /etc/squid/squid.conf \
- && chmod 0755 /usr/local/bin/egress-entrypoint /usr/local/bin/egress-healthcheck
+ && chmod 0755 /usr/local/bin/egress-entrypoint /usr/local/bin/egress-healthcheck /usr/local/bin/egress-sni-present
 
 # The config must parse. The parse wants the certificate file to exist, so a throwaway one is made
 # for it in a build-only folder and removed in the same layer: the image holds no key.
