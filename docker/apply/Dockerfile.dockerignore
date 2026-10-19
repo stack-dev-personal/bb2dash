@@ -12,6 +12,7 @@
 !workspace/src/
 !mcp-server/
 !skills/inbox-apply/
+!skills/announcement-review/
 **/node_modules
 **/dist
 **/coverage

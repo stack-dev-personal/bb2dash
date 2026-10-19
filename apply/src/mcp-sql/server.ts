@@ -26,7 +26,7 @@ import { readTextOrNull } from '../../../workspace/src/config.js';
 import { newPgClient, redactDsn, type PgClientLike } from '../../../workspace/src/db.js';
 import { DECISION_SCHEMA } from '../batch.js';
 import { loadConfig } from '../config.js';
-import { handle, type ApplyItemInput, type ApplyItemResult, type SqlRunner, type StatementResult } from './rpc.js';
+import { handle, type ApplyItemInput, type ApplyItemResult, type RecordReviewInput, type SqlRunner, type StatementResult } from './rpc.js';
 
 type DriverResult = { command?: string; rowCount?: number | null; rows?: Record<string, unknown>[] };
 /** The driver's own query call: text with values, or an object form that forces one statement. */
@@ -113,6 +113,24 @@ function createRunner(dsn: string, ca: string, log: (line: string) => void): Sql
         return { outcome: 'archived', statements: results };
       } finally {
         // After a commit this is a no-op; after anything else it undoes the whole item.
+        await settle(driver);
+      }
+    },
+
+    async recordReview(input: RecordReviewInput) {
+      const driver = await connected();
+      try {
+        // One function call is one transaction; the explicit begin keeps the settle below a no-op after the commit.
+        await driver.query('begin');
+        const answer = await driver.query('select public.announcement_review_record($1::bigint, $2::bigint, $3::jsonb) as result', [
+          input.request,
+          input.announcement,
+          JSON.stringify(input.decision),
+        ]);
+        await driver.query('commit');
+        const result = answer.rows?.[0]?.result;
+        return typeof result === 'object' && result !== null && !Array.isArray(result) ? (result as Record<string, unknown>) : {};
+      } finally {
         await settle(driver);
       }
     },

@@ -16,7 +16,8 @@
 #   /app/apply/          package.json, node_modules, dist/ (main.js, healthcheck.js,
 #                        hooks/tool-gate.js, mcp-sql/server.js), claude/settings.json
 #   /app/apply/run/      root's and 0555: the working directory of every `claude -p` run. It holds
-#                        .claude/skills/inbox-apply (SKILL.md, context.md, writer.md) and nothing else
+#                        .claude/skills/inbox-apply (SKILL.md, context.md, writer.md) and
+#                        .claude/skills/announcement-review (SKILL.md) and nothing else
 #   /app/mcp-materials/  package.json, node_modules, dist/index.js
 #   /app/certs/          prod-ca.crt, root's and 0444: the one pinned CA for the database connection
 #   /usr/local/share/npm-global/  Claude Code at its pinned version, owned by root
@@ -106,6 +107,7 @@ COPY apply/claude /app/apply/claude
 # loads project settings and skills from its working directory, so a file planted here would be
 # read by every later run: the folder and everything in it are root's, and it is 0555.
 COPY skills/inbox-apply /app/apply/run/.claude/skills/inbox-apply
+COPY skills/announcement-review /app/apply/run/.claude/skills/announcement-review
 RUN chown -R root:root /app/apply/run \
  && chmod -R a-w /app/apply/run \
  && chmod 0555 /app/apply/run

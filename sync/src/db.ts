@@ -83,6 +83,11 @@ export interface SyncRpc {
    * now when answered items wait and none was open; null when the answered queue is empty.
    */
   requestInboxApply(after: string): Promise<string | null>;
+  /**
+   * After a sync this runner closed done (Phase 26, migration 210): the open announcement review
+   * request's id, filed now when announcements wait unreviewed and none was open; else null.
+   */
+  requestAnnouncementReview(after: string): Promise<string | null>;
 }
 
 const FOLD_STATUSES: readonly FoldStatus[] = ['running', 'ok', 'partial', 'failed'];
@@ -200,6 +205,12 @@ export function createRpc(query: QueryFn): SyncRpc {
     async requestInboxApply(after) {
       const id = await scalar('select public.sync_request_inbox_apply($1::bigint)::text as id', [asId(after, 'sync_request_inbox_apply')]);
       return optionalId(id, 'sync_request_inbox_apply');
+    },
+    async requestAnnouncementReview(after) {
+      const id = await scalar('select public.sync_request_announcement_review($1::bigint)::text as id', [
+        asId(after, 'sync_request_announcement_review'),
+      ]);
+      return optionalId(id, 'sync_request_announcement_review');
     },
   };
 }
