@@ -49,14 +49,13 @@ begin
   if (select string_agg(p.proname, ',' order by p.proname)
         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
        where n.nspname = 'public' and p.prosecdef
-         and p.proname <> 'sync_file_text_put' -- Phase 25's 200 may land before or after this; it is checked there
          and has_function_privilege('sync_runner', p.oid, 'execute'))
      is distinct from
      'sync_claim,sync_close,sync_enqueue,sync_file_outside_link,sync_file_pull_outcomes,sync_file_stored,'
-     'sync_file_worklist,sync_login_ok,sync_login_required,sync_next,sync_own_claims,sync_register_run,'
+     'sync_file_text_put,sync_file_worklist,sync_login_ok,sync_login_required,sync_next,sync_own_claims,sync_register_run,'
      'sync_request_announcement_review,sync_request_inbox_apply,sync_requeue_orphans,sync_run_outcome,'
      'sync_sweep_stale' then
-    v_fail := v_fail || 'sync_runner does not execute exactly the seventeen'::text;
+    v_fail := v_fail || 'sync_runner does not execute exactly the eighteen (200 added sync_file_text_put)'::text;
   end if;
   if cardinality(v_fail) > 0 then
     raise exception 'FAIL phase26_213 (shape): %', array_to_string(v_fail, '; ');

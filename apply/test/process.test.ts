@@ -271,14 +271,28 @@ describe('one run of the CLI', () => {
 
 describe('the MCP config', () => {
   it('names exactly the two servers by path, and no key, token or DSN', () => {
-    const config = JSON.parse(mcpConfigText());
+    const config = JSON.parse(mcpConfigText({}));
     expect(Object.keys(config.mcpServers).sort()).toEqual(['bb2dash', 'db']);
     expect(config.mcpServers.db).toEqual({ command: 'node', args: [PATHS.sqlServer] });
     expect(config.mcpServers.bb2dash.env).toEqual({
       SUPABASE_URL: 'https://goultdzqcavefcgnifdy.supabase.co',
       SUPABASE_SERVICE_ROLE_FILE: PATHS.serviceKeySecret,
     });
-    expect(mcpConfigText()).not.toMatch(/postgres|sb_secret|eyJ|password/i);
+    expect(mcpConfigText({})).not.toMatch(/postgres|sb_secret|eyJ|password/i);
+  });
+
+  it("carries the worker's proxy settings to the materials server only (Phase 25a)", () => {
+    const config = JSON.parse(
+      mcpConfigText({ HTTPS_PROXY: 'http://egress:3129', NO_PROXY: 'localhost,127.0.0.1', NODE_USE_ENV_PROXY: '1', CLAUDE_CODE_OAUTH_TOKEN: 'never-passed' }),
+    );
+    expect(config.mcpServers.bb2dash.env).toEqual({
+      SUPABASE_URL: 'https://goultdzqcavefcgnifdy.supabase.co',
+      SUPABASE_SERVICE_ROLE_FILE: PATHS.serviceKeySecret,
+      HTTPS_PROXY: 'http://egress:3129',
+      NO_PROXY: 'localhost,127.0.0.1',
+      NODE_USE_ENV_PROXY: '1',
+    });
+    expect(config.mcpServers.db).toEqual({ command: 'node', args: [PATHS.sqlServer] });
   });
 
   it('is written readable by the worker alone', () => {

@@ -8,6 +8,7 @@
 
 import fs from 'node:fs';
 
+import { proxyEnv } from '../../workspace/src/config.js';
 import { PATHS } from './config.js';
 
 export const MCP_CONFIG_MODE = 0o600;
@@ -18,14 +19,18 @@ export interface McpConfigFs {
   chmodSync(file: string, mode: number): unknown;
 }
 
-export function mcpConfigText(): string {
+/**
+ * The config text. The materials server carries the worker's proxy settings (Phase 25a): its fetch
+ * reaches the project host through the egress proxy only.
+ */
+export function mcpConfigText(env: Readonly<Record<string, string | undefined>> = process.env): string {
   const config = {
     mcpServers: {
       // The class materials: search_materials, get_material_text, list_courses.
       bb2dash: {
         command: 'node',
         args: [PATHS.materialsServer],
-        env: { SUPABASE_URL, SUPABASE_SERVICE_ROLE_FILE: PATHS.serviceKeySecret },
+        env: { SUPABASE_URL, SUPABASE_SERVICE_ROLE_FILE: PATHS.serviceKeySecret, ...proxyEnv(env) },
       },
       // SQL as inbox_apply_runner: query (read-only) and execute_sql (the writer's batches).
       db: { command: 'node', args: [PATHS.sqlServer] },

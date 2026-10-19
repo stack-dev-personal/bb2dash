@@ -4,9 +4,12 @@
 name: bb2dash
 
 services:
-  # The runner (`sync/dist/main.js`): it takes queued sync requests through the fourteen `sync_runner`
+  # The runner (`sync/dist/main.js`): it takes queued sync requests through the eighteen `sync_runner`
   # functions, holds Stack's Blackboard login in `bb-profile` (Chromium headful on Xvfb, the login page
   # at http://127.0.0.1:6080/vnc.html), pulls files into `course-files` and runs the embed step.
+  #
+  # Egress OPEN (Phase 25a, brief 119 question 2): no firewall and no proxy. Chromium must reach
+  # Blackboard, Microsoft's login and Duo, whose names change; `sync` is named as open, not closed.
   sync:
     build:
       context: .
@@ -64,6 +67,7 @@ services:
   #   docker compose --profile mcp build bb2dash-mcp
   #   docker compose --profile mcp run --rm -T bb2dash-mcp
   # stdio only: no port, no restart policy and no healthcheck; it exits when its client closes stdin.
+  # Egress OPEN (Phase 25a): no firewall and no proxy; it runs beside a host Claude Code session.
   bb2dash-mcp:
     profiles: [mcp]
     build:
@@ -93,8 +97,9 @@ services:
   #
   # Kept away from the Blackboard login (B-43, B-44 as amended 2026-10-07): its own network, never
   # `default`, so it shares none with `sync`; neither `bb-profile` nor `course-files` is mounted;
-  # no port is published. The firewall the entrypoint raises lets it reach api.anthropic.com, the
-  # bb2dash project's API and the session pooler, and nothing else.
+  # no port is published. The firewall the entrypoint raises lets it reach the egress proxy (port 3129,
+  # which tunnels to api.anthropic.com and the bb2dash project's API only) and the session pooler,
+  # and nothing else; DNS is closed once those two are pinned (Phase 25a).
   #
   # Profile `apply`, so a plain `up` never builds, starts, waits on or restarts it. From
   # bb2dash-stack/, with COMPOSE_PROFILES naming it: `docker compose up -d --build apply`. Never a
@@ -130,8 +135,23 @@ services:
       ENABLE_TOOL_SEARCH: "false"
       # The soft cap `--max-budget-usd` receives for one run; the worker refuses a value outside 0.10–10.00.
       APPLY_RUN_BUDGET_USD: "${APPLY_RUN_BUDGET_USD:-3.00}"
+      # Phase 25a: every HTTPS request goes through the egress proxy, on this service's own port
+      # (3129), which lets api.anthropic.com and the project host through by name and TLS server name; the firewall refuses tcp/443 to
+      # every address. NODE_USE_ENV_PROXY makes Node's fetch read HTTPS_PROXY. NO_PROXY keeps loopback
+      # direct; nothing else is direct (the pooler link is Postgres on tcp/5432, never HTTP).
+      HTTPS_PROXY: http://egress:3129
+      NODE_USE_ENV_PROXY: "1"
+      NO_PROXY: localhost,127.0.0.1
     networks:
       - apply-net
+    # The firewall resolves and pins egress at start and checks a request through it, so egress must
+    # be healthy first. `docker compose restart egress` restarts this service too (restart: true), and
+    # its firewall pins egress again; a recreated egress keeps its addresses (docker/egress/e2e). If
+    # egress ever comes back on another address, restart this service by name (Phase 25a).
+    depends_on:
+      egress:
+        condition: service_healthy
+        restart: true
     volumes:
       # The CLI's transcripts (kept 30 days): what a run did, for a look afterwards. Not a credential.
       - apply-claude-home:/home/node/.claude
@@ -211,9 +231,24 @@ services:
       # missing or empty file stops the runner. Baked into the image, root's and read-only: a path
       # to a public certificate, not a secret.
       WORKSPACE_DB_CA_FILE: /app/certs/prod-ca.crt
+      # Phase 25a: every HTTPS request goes through the egress proxy, on this service's own port
+      # (3128), which lets api.anthropic.com and the project host through by name and TLS server name; the firewall refuses tcp/443 to
+      # every address. NODE_USE_ENV_PROXY makes Node's fetch read HTTPS_PROXY. NO_PROXY keeps loopback
+      # direct; nothing else is direct (the pooler link is Postgres on tcp/5432, never HTTP).
+      HTTPS_PROXY: http://egress:3128
+      NODE_USE_ENV_PROXY: "1"
+      NO_PROXY: localhost,127.0.0.1
     # Its own network, never `default`: it shares none with `sync`. No port is published.
     networks:
       - workspace-net
+    # The firewall resolves and pins egress at start and checks a request through it, so egress must
+    # be healthy first. `docker compose restart egress` restarts this service too (restart: true), and
+    # its firewall pins egress again; a recreated egress keeps its addresses (docker/egress/e2e). If
+    # egress ever comes back on another address, restart this service by name (Phase 25a).
+    depends_on:
+      egress:
+        condition: service_healthy
+        restart: true
     # The CLI's ~/.claude is a tmpfs owned by node (freeze amendment F-4; probe P-2): with
     # --no-session-persistence nothing is kept, and nothing survives a restart. The named volume
     # workspace-claude-home is no longer mounted by anyone; its entry below stays so that this file
@@ -246,8 +281,9 @@ services:
   # through the four workspace_ingest_runner functions, downloads a signed link, hands a parsed file to
   # workspace-extract through the exchange volume, puts the units and embeds them. It holds no model, no
   # Claude token and no service key; its firewall (docker/workspace-ingest/init-firewall.sh) allows the
-  # project host on tcp/443 and its pooler on tcp/5432 and nothing else. The root is NOT read-only: the
-  # firewall pins names in /etc/hosts. Profile workspace: a plain up never starts it.
+  # egress proxy on port 3130 (which tunnels to the project host only) and its pooler on tcp/5432 and
+  # nothing else, and closes DNS (Phase 25a). The root is NOT read-only: the firewall pins names in
+  # /etc/hosts. Profile workspace: a plain up never starts it.
   workspace-ingest:
     profiles: [workspace]
     build:
@@ -266,8 +302,24 @@ services:
       - no-new-privileges:true
     # For the entrypoint's firewall alone; it then drops to node with an empty bounding set.
     cap_add: [NET_ADMIN, NET_RAW]
+    environment:
+      # Phase 25a: every HTTPS request goes through the egress proxy, on this service's own port
+      # (3130), which lets the project host through by name and TLS server name; the firewall refuses tcp/443 to
+      # every address. NODE_USE_ENV_PROXY makes Node's fetch read HTTPS_PROXY. NO_PROXY keeps loopback
+      # direct; nothing else is direct (the pooler link is Postgres on tcp/5432, never HTTP).
+      HTTPS_PROXY: http://egress:3130
+      NODE_USE_ENV_PROXY: "1"
+      NO_PROXY: localhost,127.0.0.1
     networks:
       - ingest-net
+    # The firewall resolves and pins egress at start and checks a request through it, so egress must
+    # be healthy first. `docker compose restart egress` restarts this service too (restart: true), and
+    # its firewall pins egress again; a recreated egress keeps its addresses (docker/egress/e2e). If
+    # egress ever comes back on another address, restart this service by name (Phase 25a).
+    depends_on:
+      egress:
+        condition: service_healthy
+        restart: true
     volumes:
       - ingest-exchange:/exchange
     secrets:
@@ -325,6 +377,61 @@ services:
         max-size: 10m
         max-file: "3"
 
+  # The egress proxy (Phase 25a, brief 119 item A, W-100): Squid 6.13 in peek-and-splice mode, no
+  # decryption (docker/egress/). The only way out on HTTPS for the three containers with a firewall:
+  # each has its own port and its own list of names (squid.conf), and a tunnel is spliced only when
+  # the CONNECT host is on that list AND the TLS server name is that same name; anything else is
+  # refused before the far server is contacted. It sits on the three client networks, and Squid
+  # resolves names itself and refuses private addresses. Its access log is this container's stdout
+  # (`docker compose logs egress`): one line per tunnel with the port, the name, the SNI and the outcome.
+  #
+  # Not behind it, named as open (brief 119 question 2): `sync` (Blackboard, Microsoft's login and
+  # Duo), `bb2dash-mcp` (a host session's stdio server) and bb2dash-stack's `harness-jobs`; and
+  # `pg_net` inside the database, which needs Supabase. `workspace-extract` has no network at all.
+  #
+  # Profiles workspace and apply, the profiles of its clients, so a plain `up` never starts it. Start
+  # and rebuild it alone, by name (`docker compose up -d --build egress`): it comes back on the same
+  # addresses and its clients carry on. `docker compose restart egress` restarts its three clients too
+  # (their depends_on, restart: true), which raise their firewalls again: never during a turn or a run.
+  egress:
+    profiles: [workspace, apply]
+    build:
+      context: ./docker/egress
+      dockerfile: Dockerfile
+    image: bb2dash-egress:local
+    platform: linux/amd64
+    init: true
+    restart: unless-stopped
+    # Squid runs as proxy (uid 13 in the Debian image) from the start: it never holds root.
+    user: proxy
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    pids_limit: 64
+    # The certificate an ssl-bump port needs, made at each start and trusted by nothing, and Squid's
+    # scratch; the root is read-only.
+    tmpfs:
+      - /run/egress:uid=13,gid=13,mode=0700,size=1m
+      - /tmp:uid=13,gid=13,mode=0700,size=16m
+    networks:
+      - workspace-net
+      - apply-net
+      - ingest-net
+    # Healthy while Squid listens on all three ports; it reads the socket tables and connects nowhere.
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/egress-healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
 volumes:
   bb-profile:
   course-files:
@@ -345,11 +452,11 @@ volumes:
   apply-claude-home:
 
 networks:
-  # The ingest worker's own bridge: it shares none with the sync or the Workspace.
+  # The ingest worker's own bridge: it shares none with the sync or the Workspace (egress sits on it).
   ingest-net:
-  # The Workspace's own bridge, so it is on no network another service is on.
+  # The Workspace's own bridge, so it is on no network another service is on (egress apart).
   workspace-net:
-  # The apply worker's own bridge, for the same reason: never the network `sync` is on.
+  # The apply worker's own bridge, for the same reason: never the network `sync` is on (egress apart).
   apply-net:
 
 secrets:

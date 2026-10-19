@@ -35,6 +35,8 @@ import {
   cleanSecret,
   loadConfig,
   parseTurnBudget,
+  PROXY_ENV_NAMES,
+  proxyEnv,
   readOauthToken,
   refusedEnvNames,
 } from '../src/config.js';
@@ -686,5 +688,19 @@ describe('claude/settings.json', () => {
 
   it('holds only the retention setting and the hook', () => {
     expect(Object.keys(settings).sort()).toEqual(['cleanupPeriodDays', 'hooks']);
+  });
+});
+
+describe('proxyEnv (Phase 25a)', () => {
+  it('names the three settings a fetching child needs', () => {
+    expect([...PROXY_ENV_NAMES]).toEqual(['HTTPS_PROXY', 'NO_PROXY', 'NODE_USE_ENV_PROXY']);
+  });
+
+  it('copies those that are set and not empty, and nothing else', () => {
+    expect(proxyEnv({ HTTPS_PROXY: 'http://egress:3128', NO_PROXY: '', NODE_USE_ENV_PROXY: '1', HTTP_PROXY: 'x', PATH: '/bin' })).toEqual({
+      HTTPS_PROXY: 'http://egress:3128',
+      NODE_USE_ENV_PROXY: '1',
+    });
+    expect(proxyEnv({})).toEqual({});
   });
 });

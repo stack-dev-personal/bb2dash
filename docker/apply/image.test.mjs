@@ -47,18 +47,21 @@ const runtime = dockerfile
   .filter((line) => line && !line.startsWith('#'));
 const runtimeStage = runtime.slice(runtime.findLastIndex((line) => /^FROM\s/.test(line)) + 1);
 
-test('the firewall is the Workspace script with five literals changed, and nothing else', () => {
+test('the firewall is the Workspace script with six literals changed, and nothing else', () => {
   const generated = forkFirewall(fs.readFileSync(SOURCE, 'utf8'));
   assert.equal(fs.readFileSync(TARGET, 'utf8').replace(/\r\n/g, '\n'), generated, 'run: node docker/apply/fork-firewall.mjs --write');
-  assert.equal(SUBSTITUTIONS.length, 5);
+  assert.equal(SUBSTITUTIONS.length, 6);
   assert.match(generated, /readonly -a DSN_SECRETS=\(\n {2}"inbox_apply_db_url"\n\)\n/);
-  // The names it allows on tcp/443 are the Workspace's two, untouched.
-  assert.match(generated, /readonly -a HTTPS_HOSTS=\(\n {2}"api\.anthropic\.com"\n {2}"goultdzqcavefcgnifdy\.supabase\.co"\n\)\n/);
+  // Phase 25a: HTTPS only through the egress proxy, on apply's own port; no name is allowed by address.
+  assert.match(generated, /^readonly EGRESS_PORT=3129\n/m);
+  assert.match(generated, /^readonly EGRESS_SET=apply-egress\n/m);
+  assert.doesNotMatch(generated, /HTTPS_HOSTS|HTTPS_PORT/);
 });
 
 test('a literal that moved in the Workspace script stops the fork instead of dropping a rule', () => {
   const source = fs.readFileSync(SOURCE, 'utf8');
-  assert.throws(() => forkFirewall(source.replace('readonly HTTPS_SET=workspace-https', 'readonly HTTPS_SET=renamed')), /the HTTPS set occurs 0 times/);
+  assert.throws(() => forkFirewall(source.replace('readonly EGRESS_SET=workspace-egress', 'readonly EGRESS_SET=renamed')), /the egress set occurs 0 times/);
+  assert.throws(() => forkFirewall(source.replace('readonly EGRESS_PORT=3128', 'readonly EGRESS_PORT=3999')), /the proxy port occurs 0 times/);
   assert.throws(() => forkFirewall(`${source}\nreadonly POSTGRES_SET=workspace-postgres\n`), /the Postgres set occurs 2 times/);
 });
 

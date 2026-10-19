@@ -158,7 +158,6 @@ export function startRunner(d: RunnerDeps): { stop(): Promise<void>; done: Promi
           hop: browser.hop,
           fetchSigned: (url) => d.fetchImpl(url),
           storagePost: supabase.storagePost,
-          textPost: supabase.textPost,
           extract: d.extract,
           embed: d.embed,
           fs: fs.promises,

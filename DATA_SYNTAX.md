@@ -557,9 +557,11 @@ is one row with these columns: `course_units_indexed`, `course_units_waiting`, `
 `ingest_polled_age_seconds`. It reads no table of the `storage` schema. A course unit has no failed
 state: one that could not be embedded still waits and is tried at the next sync.
 
-**Direct touches.** Three older ones stand, one is closed by 24a, and 24a adds two (both the
-page's). (1) The sync inserts a course file's units into `bb_file_text` over REST with the publishable
-key, under the insert-only policy `bb_file_text_anon_insert` (007). (2) `get_material_text` reads one
+**Direct touches.** Two older ones stand, two are closed (198 in 24a, 201 in 25a), and 24a adds two
+(both the page's). (1) *Closed by 201 (Phase 25a):* the sync inserted a course file's units into
+`bb_file_text` over REST with the publishable key, under the insert-only policy
+`bb_file_text_anon_insert` (007); since 200 the sync and the Windows fallback store them through
+`sync_file_text_put` as `sync_runner`, and 201 drops the policy. (2) `get_material_text` reads one
 course unit from `bb_file_text` over REST with the service key. (3) The owner's session holds the owner
 policy on both course tables, for every command (020). (4) *Closed by 198:* the policy
 `bb_text_embeddings_anon_insert` (010) let a holder of the publishable key insert a vector row; 198

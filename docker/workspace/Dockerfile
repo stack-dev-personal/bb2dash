@@ -13,7 +13,8 @@
 # The in-image layout is frozen (brief 102, Seams, "W-64 and W-65"); workspace/test/mcp-config.test.ts
 # pins the same literals:
 #
-#   /app/workspace/      package.json, node_modules, dist/ (runner.js, healthcheck.js, hooks/tool-gate.js),
+#   /app/workspace/      package.json, node_modules, dist/ (runner.js, healthcheck.js, search-probe.js,
+#                        hooks/tool-gate.js),
 #                        claude/settings.json, prompts/*.md
 #   /app/mcp-materials/  package.json, node_modules, dist/index.js, dist/batch.js
 #   /app/certs/          prod-ca.crt, root's and 0444: the one pinned CA. The runner checks the pooler's

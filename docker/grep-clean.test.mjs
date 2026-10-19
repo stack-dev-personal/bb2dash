@@ -30,6 +30,7 @@ export const IMAGES = Object.freeze([
   { name: 'workspace', dockerfile: 'docker/workspace/Dockerfile', context: '.' },
   { name: 'apply', dockerfile: 'docker/apply/Dockerfile', context: '.' },
   { name: 'workspace-ingest', dockerfile: 'docker/workspace-ingest/Dockerfile', context: '.' },
+  { name: 'egress', dockerfile: 'docker/egress/Dockerfile', context: 'docker/egress' },
 ]);
 
 /** What BuildKit appends to a Dockerfile's name to find that Dockerfile's own ignore file. */

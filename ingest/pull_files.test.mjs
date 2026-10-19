@@ -15,7 +15,6 @@ import assert from 'node:assert/strict';
 import {
   anonHeaders,
   bbFilesUpdateSql,
-  textPostOutcome,
   bytesLookValid,
   duplicateIsAcceptable,
   encodeKey,
@@ -493,12 +492,6 @@ test('restale: document text never reaches the owner SQL — it is staged on dis
   assert.equal(pf.stagedUnitsPath('/tmp/d', 72).replace(/\\/g, '/'), '/tmp/d/restale_units/72.json');
 });
 
-test('restale-post: a unique-key conflict means the owner SQL has not run yet', () => {
-  assert.equal(pf.restalePostOutcome(201, ''), 'posted');
-  assert.equal(pf.restalePostOutcome(409, '{"code":"23505"}'), 'owner_sql_pending');
-  assert.equal(pf.restalePostOutcome(400, '{"code":"42501"}'), 'error');
-});
-
 test('restale: argument errors — no --bucket with --restale, and the two restale runs are exclusive', () => {
   assert.equal(pf.argError({ manifest: 'm', downloads: 'd' }), null);
   assert.match(pf.argError({ manifest: 'm', downloads: 'd', restale: true, bucket: 'my_submissions' }), /--restale/);
@@ -512,13 +505,6 @@ test('restale: argument errors — no --bucket with --restale, and the two resta
 // File 163 (sync 443, 2026-10-01): its text had been extracted by hand from the same file, so the
 // unit POST answered 409 / 23505, the row errored after Storage already held its bytes, and no SQL
 // was emitted — a row that could never be pulled. Existing units are kept and the bytes still land.
-test('textPostOutcome: 2xx posted; 409 or 23505 means the units are already there; anything else errors', () => {
-  assert.equal(textPostOutcome(201, ''), 'posted');
-  assert.equal(textPostOutcome(409, '{"code":"23505"}'), 'already_present');
-  assert.equal(textPostOutcome(400, 'duplicate key ... 23505'), 'already_present');
-  assert.equal(textPostOutcome(401, 'no'), 'error');
-  assert.equal(textPostOutcome(500, ''), 'error');
-});
 
 test('bbFilesUpdateSql: textKept says the existing units were kept, and status stays extracted', () => {
   const sql = bbFilesUpdateSql({ id: 163, key: 'ECN.304/readings/G.pdf', relpath: 'ECN.304/readings/G.pdf', sha256: 'abc', size: 12, mime: 'application/pdf', textStatus: 'extracted', pulledOn: '2026-10-01', textKept: true });

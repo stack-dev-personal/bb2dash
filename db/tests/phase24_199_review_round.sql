@@ -3,7 +3,8 @@
 -- Tests migration 199 (four findings of the code review and the security review):
 --
 --   0. installed and fenced: the five re-stated functions are definer, pinned, executable by their one
---      role alone; the two roles still execute eleven and four definer functions
+--      role alone; the two roles execute twelve (eleven until 207 added workspace_search_timing; RED
+--      against prod until 207 is applied) and four definer functions
 --   1. workspace_job_claim: the newest finished message is never a rolling job's input and `through`
 --      never reaches it (a last answer of 20,000 bytes: no job when nothing else is old, and when
 --      older messages are due the job stops short of it); the next request's context still holds it
@@ -136,7 +137,7 @@ begin
   end if;
   select count(*) into v_n from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prosecdef
      and has_function_privilege('workspace_runner', p.oid, 'execute');
-  if v_n <> 11 then v_fail := v_fail || format('workspace_runner executes %s definer functions', v_n); end if;
+  if v_n <> 12 then v_fail := v_fail || format('workspace_runner executes %s definer functions', v_n); end if;
   select count(*) into v_n from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prosecdef
      and has_function_privilege('workspace_ingest_runner', p.oid, 'execute');
   if v_n <> 4 then v_fail := v_fail || format('workspace_ingest_runner executes %s definer functions', v_n); end if;
