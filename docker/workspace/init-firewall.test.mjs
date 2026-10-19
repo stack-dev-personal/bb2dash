@@ -2,16 +2,16 @@
 //
 //   node --test docker/workspace/init-firewall.test.mjs        (on Windows: from Git Bash)
 //
-// A dry run of docker/workspace/init-firewall.sh (brief 102 task 12; 102a, PM rulings T1) against fake
-// iptables, ip6tables, iptables-save, ipset, dig and curl that only log what they were asked. Each
-// test copies the script into a scratch folder with its five place constants and its PATH line pointed
-// at that folder, runs it with a real bash, and reads the log back.
+// A dry run of docker/workspace/init-firewall.sh (brief 102 task 12; 102a, PM rulings T1; Phase 25a,
+// the egress proxy) against fake iptables, ip6tables, iptables-save, ipset, dig and curl that only log
+// what they were asked. Each test copies the script into a scratch folder with its five place
+// constants and its PATH line pointed at that folder, runs it with a real bash, and reads the log back.
 //
 // What this proves: the script's own logic. Which rules it asks for and in what order, what a
 // connection to a given address and port would meet under those rules (a small model of the OUTPUT
 // chain, below), every path that must end at deny-all, and what is printed.
-// What it does not prove: anything about netfilter, Docker's resolver or the real hosts. Those are
-// task 12's container checks.
+// What it does not prove: anything about netfilter, Docker's resolver, the proxy or the real hosts.
+// Those are docker/egress/e2e/run-e2e.sh's.
 //
 // The image never copies this file (the Dockerfile copies named files only).
 
@@ -30,15 +30,20 @@ const SOURCE = fs.readFileSync(SCRIPT, 'utf8');
 const PIN_MARK = '# pinned by init-firewall.sh';
 const DENY_ALL_LINE = 'Firewall left at deny-all except loopback';
 const EX_ALREADY_RAISED = 75;
-const HTTPS_SET = 'workspace-https';
+const EGRESS_SET = 'workspace-egress';
 const POSTGRES_SET = 'workspace-postgres';
 
+const EGRESS = 'egress';
+const EGRESS_PORT = 3128;
 const API = 'api.anthropic.com';
-const PROJECT = 'goultdzqcavefcgnifdy.supabase.co';
+const DENIED = 'example.com';
 const POOLER = 'aws-0-us-east-1.pooler.supabase.com';
 const OTHER_POOLER = 'aws-1-us-east-1.pooler.supabase.com';
+/** The proxy on this container's bridge; the model API's and the project's public addresses. */
+const EGRESS_ADDRESS = '172.20.0.5';
 const API_ADDRESS = '160.79.104.10';
 const PROJECT_ADDRESSES = Object.freeze(['104.18.38.10', '172.64.149.246']);
+const DENIED_ADDRESS = '23.192.228.80';
 const POOLER_ADDRESS = '44.216.29.125';
 const OTHER_POOLER_ADDRESS = '52.45.94.125';
 const RESOLVER = '127.0.0.11';
@@ -80,17 +85,23 @@ const toBashPath = (file) =>
  * scratch world of the run in hand) and returns what the test asked for. Each fake exists twice
  * with this one body: as a function the script's shell is given (no process per call, which is
  * what makes a run slow on Windows), and as a program on PATH for the one call made through xargs.
+ *
+ * DNS closes the way it does in a container: once iptables is asked to refuse a resolver, the fake
+ * dig answers nothing (unless DNS_STAYS_OPEN=1, a resolver the rule did not reach). The fake curl
+ * answers by route: through the proxy (-x) or direct (--noproxy), and by name.
  */
 const FAKE_TOOLS = Object.freeze({
-  iptables: 'echo "iptables $*" >>"$W/calls.log"; if [ -n "${FAIL_IPTABLES:-}" ] && [[ "$*" == $FAIL_IPTABLES ]]; then return 4; fi; return 0',
+  iptables:
+    'echo "iptables $*" >>"$W/calls.log"; if [ -n "${FAIL_IPTABLES:-}" ] && [[ "$*" == $FAIL_IPTABLES ]]; then return 4; fi; if [[ "$*" == "-A OUTPUT -d "*" -j REJECT"* ]]; then : >"$W/dns-closed"; fi; return 0',
   ip6tables: 'echo "ip6tables $*" >>"$W/calls.log"; [ "${IP6TABLES_WORKS:-1}" = 1 ] || return 3; return 0',
   // Docker's DNS redirect as iptables-save prints it, and one rule that is not Docker's.
   'iptables-save':
     'echo "iptables-save $*" >>"$W/calls.log"; printf "%s\\n" "-A OUTPUT -d 127.0.0.11/32 -j DOCKER_OUTPUT" "-A DOCKER_OUTPUT -d 127.0.0.11/32 -p udp -m udp --dport 53 -j DNAT --to-destination 127.0.0.11:40001" "-A POSTROUTING -d 10.9.9.9/32 -j MASQUERADE"',
   ipset: 'echo "ipset $*" >>"$W/calls.log"; return 0',
-  // Answers from $W/dns/<name>, one address a line; no file, no answer.
-  dig: 'local name="${@: -1}" a; echo "dig $*" >>"$W/calls.log"; [ -f "$W/dns/$name" ] || return 0; while read -r a; do printf "%s.\\t60\\tIN\\tA\\t%s\\n" "$name" "$a"; done <"$W/dns/$name"',
-  curl: 'local url="${@: -1}"; echo "curl $*" >>"$W/calls.log"; case "$url" in *example.com*) return "${CURL_DENIED_EXIT:-7}";; *) return "${CURL_ALLOWED_EXIT:-0}";; esac',
+  // Answers from $W/dns/<name>, one address a line; no file, no answer; DNS closed, no answer.
+  dig: 'local name="${@: -1}" a; echo "dig $*" >>"$W/calls.log"; if [ -f "$W/dns-closed" ] && [ "${DNS_STAYS_OPEN:-0}" != 1 ]; then return 9; fi; [ -f "$W/dns/$name" ] || return 0; while read -r a; do printf "%s.\\t60\\tIN\\tA\\t%s\\n" "$name" "$a"; done <"$W/dns/$name"',
+  curl:
+    'local url="${@: -1}" route=direct; echo "curl $*" >>"$W/calls.log"; [[ " $* " == *" -x "* ]] && route=proxy; case "$route:$url" in proxy:*example.com*) return "${CURL_PROXY_DENIED_EXIT:-60}";; direct:*example.com*) return "${CURL_DIRECT_DENIED_EXIT:-7}";; proxy:*) return "${CURL_ALLOWED_EXIT:-0}";; *) return 7;; esac',
 });
 // The script sets IFS to newline and tab; a fake joins its arguments with spaces whoever calls it.
 const fakeFunction = (name) => `${name}() {\n  local IFS=' '\n  ${FAKE_TOOLS[name]}\n}\n`;
@@ -122,9 +133,9 @@ function redirectedScript(worldDir) {
 }
 
 const BASE_WORLD = Object.freeze({
-  dns: { [API]: [API_ADDRESS], [PROJECT]: PROJECT_ADDRESSES, [POOLER]: [POOLER_ADDRESS] },
+  dns: { [EGRESS]: [EGRESS_ADDRESS], [API]: [API_ADDRESS], [POOLER]: [POOLER_ADDRESS], [DENIED]: [DENIED_ADDRESS] },
   // The file as a Windows editor leaves it: a byte-order mark and CRLF.
-  secrets: { workspace_runner_db_url: `\uFEFF${dsn(POOLER)}\r\n` },
+  secrets: { workspace_runner_db_url: `﻿${dsn(POOLER)}\r\n` },
   hosts: '127.0.0.1 localhost\n172.20.0.2 abc123\n',
   resolvConf: `nameserver ${RESOLVER}\noptions ndots:0\n`,
   inet6: '00000000000000000000000000000001 01 80 10 80       lo\n',
@@ -249,6 +260,8 @@ function verdict(chain, address, proto, port) {
 
 const pinsOf = (hosts) => hosts.split('\n').filter((line) => line.endsWith(PIN_MARK));
 const lookups = (calls) => calls.filter((call) => call.startsWith('dig '));
+const lookedUp = (calls) => lookups(calls).map((call) => call.split(' ').at(-1));
+const curls = (calls) => calls.filter((call) => call.startsWith('curl '));
 
 /** No part of a connection string in the log: not its password, not its user. */
 function assertNoSecret(out) {
@@ -264,7 +277,8 @@ function assertDenyAll(run, status = 1) {
   const chain = outputChain(run.calls);
   assert.equal(chain.policy, 'DROP');
   assert.deepEqual(chain.rules.map((rule) => rule.text), ['-o lo -j ACCEPT']);
-  for (const address of [API_ADDRESS, POOLER_ADDRESS, STRANGER, GATEWAY]) assert.equal(verdict(chain, address, 'tcp', 443), 'blocked');
+  for (const address of [API_ADDRESS, POOLER_ADDRESS, STRANGER, GATEWAY, EGRESS_ADDRESS]) assert.equal(verdict(chain, address, 'tcp', 443), 'blocked');
+  assert.equal(verdict(chain, EGRESS_ADDRESS, 'tcp', EGRESS_PORT), 'blocked');
   assertNoSecret(run.out);
 }
 
@@ -272,7 +286,7 @@ const lazy = (make) => {
   let made;
   return () => (made ??= make());
 };
-/** The start every rule test reads: three names, both database secrets on one pooler. */
+/** The start every rule test reads: the proxy, one database secret on one pooler. */
 const happy = lazy(() => raise(makeWorld()));
 
 // --- the tests ----------------------------------------------------------------------------------------
@@ -283,30 +297,28 @@ describe('docker/workspace/init-firewall.sh, dry run against fake tools', { conc
     for (const dir of scratchDirs) fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  test('a start that works: one lookup a name, every address pinned, nothing of a connection string printed', async () => {
+  test('a start that works: the proxy and the pooler looked up once and pinned, DNS closed, nothing of a connection string printed', async () => {
     const run = await happy();
     assert.equal(run.status, 0, run.out);
     assert.equal(run.out.includes(DENY_ALL_LINE), false);
-    assert.deepEqual(lookups(run.calls).map((call) => call.split(' ').at(-1)), [API, PROJECT, POOLER]);
-    assert.deepEqual(pinsOf(run.hosts), [
-      `${API_ADDRESS} ${API} ${PIN_MARK}`,
-      ...PROJECT_ADDRESSES.map((address) => `${address} ${PROJECT} ${PIN_MARK}`),
-      `${POOLER_ADDRESS} ${POOLER} ${PIN_MARK}`,
-    ]);
+    // The proxy, the pooler, the refused name's address for the direct check, then the end check's
+    // lookup that must find DNS closed. No HTTPS name is looked up any more: the proxy resolves those.
+    assert.deepEqual(lookedUp(run.calls), [EGRESS, POOLER, DENIED, DENIED]);
+    assert.deepEqual(pinsOf(run.hosts), [`${EGRESS_ADDRESS} ${EGRESS} ${PIN_MARK}`, `${POOLER_ADDRESS} ${POOLER} ${PIN_MARK}`]);
     assert.match(run.hosts, /^127\.0\.0\.1 localhost$/m);
-    assert.match(run.out, /Firewall raised: 3 name\(s\) allowed/);
+    assert.equal(run.hosts.includes(DENIED_ADDRESS), false, 'the refused name is never pinned');
+    assert.match(run.out, /Firewall raised: 2 name\(s\) allowed, DNS closed/);
     assertNoSecret(run.out);
   });
 
-  test('the port rule (T1 c): tcp/443 to the two HTTPS names, tcp/5432 to the pooler, and no rule without a port', async () => {
+  test('the rules (T1 c, Phase 25a): DNS refused before loopback, the proxy on its one port, the pooler on 5432, nothing else', async () => {
     const chain = outputChain((await happy()).calls);
     assert.equal(chain.policy, 'DROP');
     assert.deepEqual(chain.rules.map((rule) => rule.text), [
+      `-d ${RESOLVER} -j REJECT --reject-with icmp-admin-prohibited`,
       '-o lo -j ACCEPT',
-      `-p udp -d ${RESOLVER} --dport 53 -j ACCEPT`,
-      `-p tcp -d ${RESOLVER} --dport 53 -j ACCEPT`,
       '-m state --state ESTABLISHED,RELATED -j ACCEPT',
-      `-p tcp --dport 443 -m set --match-set ${HTTPS_SET} dst -j ACCEPT`,
+      `-p tcp --dport ${EGRESS_PORT} -m set --match-set ${EGRESS_SET} dst -j ACCEPT`,
       `-p tcp --dport 5432 -m set --match-set ${POSTGRES_SET} dst -j ACCEPT`,
       '-j REJECT --reject-with icmp-admin-prohibited',
     ]);
@@ -314,55 +326,91 @@ describe('docker/workspace/init-firewall.sh, dry run against fake tools', { conc
       assert.equal(rule.proto, 'tcp', rule.text);
       assert.ok(rule.port, `a set is never allowed on every port: ${rule.text}`);
     }
-    assert.deepEqual([...chain.sets.keys()].sort(), [HTTPS_SET, POSTGRES_SET]);
-    assert.deepEqual([...chain.sets.get(HTTPS_SET)].sort(), [API_ADDRESS, ...PROJECT_ADDRESSES].sort());
+    assert.equal(chain.rules.some((rule) => rule.port === '443'), false, 'no rule opens tcp/443 to anything');
+    assert.deepEqual([...chain.sets.keys()].sort(), [EGRESS_SET, POSTGRES_SET]);
+    assert.deepEqual([...chain.sets.get(EGRESS_SET)], [EGRESS_ADDRESS]);
     assert.deepEqual([...chain.sets.get(POSTGRES_SET)], [POOLER_ADDRESS]);
   });
 
-  test('by literal address: an allowed address answers on its own port only, and no other address on any', async () => {
+  test('by literal address: the proxy on its port and the pooler on 5432 answer; tcp/443 is refused everywhere', async () => {
     const chain = outputChain((await happy()).calls);
     const cases = [
-      [API_ADDRESS, 'tcp', 443, 'open'],
-      [PROJECT_ADDRESSES[0], 'tcp', 443, 'open'],
-      [PROJECT_ADDRESSES[1], 'tcp', 443, 'open'],
+      [EGRESS_ADDRESS, 'tcp', EGRESS_PORT, 'open'],
       [POOLER_ADDRESS, 'tcp', 5432, 'open'],
-      // An allowed address on a port that is not allowed.
-      [API_ADDRESS, 'tcp', 80, 'blocked'],
-      [API_ADDRESS, 'tcp', 5432, 'blocked'],
-      [PROJECT_ADDRESSES[0], 'tcp', 80, 'blocked'],
-      [PROJECT_ADDRESSES[0], 'tcp', 8443, 'blocked'],
+      // HTTPS straight to the internet, the model API and the project included.
+      [API_ADDRESS, 'tcp', 443, 'blocked'],
+      [PROJECT_ADDRESSES[0], 'tcp', 443, 'blocked'],
+      [PROJECT_ADDRESSES[1], 'tcp', 443, 'blocked'],
+      [DENIED_ADDRESS, 'tcp', 443, 'blocked'],
+      [STRANGER, 'tcp', 443, 'blocked'],
+      // The proxy on another port: 443, and the other clients' proxy ports.
+      [EGRESS_ADDRESS, 'tcp', 443, 'blocked'],
+      [EGRESS_ADDRESS, 'tcp', 3129, 'blocked'],
+      [EGRESS_ADDRESS, 'tcp', 3130, 'blocked'],
+      [EGRESS_ADDRESS, 'udp', EGRESS_PORT, 'blocked'],
+      // The pooler on another port.
       [POOLER_ADDRESS, 'tcp', 443, 'blocked'],
       [POOLER_ADDRESS, 'tcp', 6543, 'blocked'],
-      // tcp only: not QUIC, not a stray datagram.
-      [API_ADDRESS, 'udp', 443, 'blocked'],
       [POOLER_ADDRESS, 'udp', 5432, 'blocked'],
-      // A public address that is not allowed, on the allowed ports.
-      [STRANGER, 'tcp', 443, 'blocked'],
+      // A stranger on the allowed ports, and DNS anywhere.
       [STRANGER, 'tcp', 5432, 'blocked'],
+      [STRANGER, 'tcp', EGRESS_PORT, 'blocked'],
       [STRANGER, 'udp', 53, 'blocked'],
+      [RESOLVER, 'udp', 53, 'blocked'],
+      [RESOLVER, 'tcp', 53, 'blocked'],
     ];
     for (const [address, proto, port, want] of cases) assert.equal(verdict(chain, address, proto, port), want, `${address} ${proto}/${port}`);
+    // Loopback itself stays open (the stdio MCP servers, the healthcheck).
+    assert.equal(verdict(chain, '127.0.0.1', 'tcp', 8080), 'open');
   });
 
-  test("DNS may go only to the resolvers in /etc/resolv.conf, and a resolver's address opens nothing else", async () => {
+  test('DNS is closed to every resolver in /etc/resolv.conf, the loopback one before loopback is allowed', async () => {
     const second = '192.168.65.7';
     const run = await raise(makeWorld({ resolvConf: `nameserver ${RESOLVER}\nnameserver ${second}\nnameserver fe80::1\nsearch example.org\n` }));
     assert.equal(run.status, 0, run.out);
     const chain = outputChain(run.calls);
-    const dnsRules = chain.rules.filter((rule) => rule.port === '53').map((rule) => rule.text);
-    assert.deepEqual(dnsRules, [RESOLVER, second].flatMap((resolver) => ['udp', 'tcp'].map((proto) => `-p ${proto} -d ${resolver} --dport 53 -j ACCEPT`)));
-    assert.equal(verdict(chain, second, 'udp', 53), 'open');
-    assert.equal(verdict(chain, second, 'tcp', 443), 'blocked');
+    const texts = chain.rules.map((rule) => rule.text);
+    for (const resolver of [RESOLVER, second]) {
+      assert.ok(texts.indexOf(`-d ${resolver} -j REJECT --reject-with icmp-admin-prohibited`) < texts.indexOf('-o lo -j ACCEPT'), resolver);
+      for (const proto of ['udp', 'tcp']) assert.equal(verdict(chain, resolver, proto, 53), 'blocked', `${resolver} ${proto}/53`);
+    }
     assert.equal(verdict(chain, '8.8.8.8', 'udp', 53), 'blocked');
-    assert.equal(verdict(chain, '8.8.8.8', 'tcp', 53), 'blocked');
+    assert.match(run.out, /Closing DNS to 127\.0\.0\.11/);
+    assert.match(run.out, /Skipping a resolver that is not an IPv4 address/);
+  });
+
+  test('every name is looked up before the first filter rule, and none after DNS is closed but the end check', async () => {
+    const { calls } = await happy();
+    const firstRule = calls.findIndex((call) => call.startsWith('iptables -A '));
+    const digs = calls.map((call, at) => [call, at]).filter(([call]) => call.startsWith('dig '));
+    assert.deepEqual(
+      digs.filter(([, at]) => at < firstRule).map(([call]) => call.split(' ').at(-1)),
+      [EGRESS, POOLER, DENIED],
+    );
+    assert.deepEqual(
+      digs.filter(([, at]) => at > firstRule).map(([call]) => call.split(' ').at(-1)),
+      [DENIED],
+      'after the rules, only the end check asks, and it must get nothing',
+    );
   });
 
   test('no rule opens the Docker network: the gateway and the Docker host are refused like any other address', async () => {
     const chain = outputChain((await happy()).calls);
     for (const address of [GATEWAY, DOCKER_HOST, '172.20.0.3']) {
-      for (const port of [6080, 443, 5432, 80]) assert.equal(verdict(chain, address, 'tcp', port), 'blocked', `${address}:${port}`);
+      for (const port of [6080, 443, 5432, 80, EGRESS_PORT]) assert.equal(verdict(chain, address, 'tcp', port), 'blocked', `${address}:${port}`);
     }
     for (const rule of chain.rules) assert.equal(String(rule.dest ?? '').includes('/'), false, `no rule names a network: ${rule.text}`);
+  });
+
+  test('the proxy must answer on a private address: a public answer for its name stops the start', async () => {
+    const run = await raise(makeWorld({ dns: { [EGRESS]: [STRANGER] } }));
+    assertDenyAll(run);
+    assert.match(run.out, /egress did not resolve to a private IPv4 address/);
+    assert.equal(run.calls.some((call) => call.startsWith('ipset add') && call.endsWith(STRANGER)), false);
+
+    const mixed = await raise(makeWorld({ dns: { [EGRESS]: [STRANGER, '127.0.0.1', EGRESS_ADDRESS] } }));
+    assert.equal(mixed.status, 0, mixed.out);
+    assert.deepEqual([...outputChain(mixed.calls).sets.get(EGRESS_SET)], [EGRESS_ADDRESS]);
   });
 
   test('a second run in the same container is refused before it changes anything', async () => {
@@ -381,7 +429,7 @@ describe('docker/workspace/init-firewall.sh, dry run against fake tools', { conc
       ['a host that is not a pooler', { workspace_runner_db_url: dsn('db.goultdzqcavefcgnifdy.supabase.co') }, /workspace_runner_db_url: its host does not end \.pooler\.supabase\.com/],
       ['an unencoded / in the password', { workspace_runner_db_url: `postgresql://${FAKE_USER}:${FAKE_PASSWORD}/x@${POOLER}:5432/postgres` }, /workspace_runner_db_url: its host does not end/],
       ['a missing file', { workspace_runner_db_url: null }, /workspace_runner_db_url: the secret file is missing or not readable/],
-      ['a file holding only a byte-order mark and CRLF', { workspace_runner_db_url: '\uFEFF\r\n' }, /workspace_runner_db_url: the secret file is empty/],
+      ['a file holding only a byte-order mark and CRLF', { workspace_runner_db_url: '﻿\r\n' }, /workspace_runner_db_url: the secret file is empty/],
     ];
     for (const [label, secrets, sentence] of cases) {
       const run = await raise(makeWorld({ secrets }));
@@ -410,7 +458,7 @@ describe('docker/workspace/init-firewall.sh, dry run against fake tools', { conc
     }
   });
 
-  test('the header says what a start prints, and a start prints no more: names and the resolver, never an address of an allowed host (U2)', async () => {
+  test('the header says what a start prints, and a start prints no more: names and the resolver, never an address (U2)', async () => {
     const header = SOURCE.slice(0, SOURCE.indexOf('set -euo pipefail'));
     assert.match(header, /^# What it prints/m, 'the header has its "What it prints" paragraph');
     // The pooler's host name is itself a part of a connection string, so the sentence names the parts that never show.
@@ -418,24 +466,46 @@ describe('docker/workspace/init-firewall.sh, dry run against fake tools', { conc
     assert.match(header, /^# never prints the address of an allowed host\.$/m);
 
     const run = await happy();
-    for (const name of [API, PROJECT, POOLER]) assert.ok(run.out.includes(name), `${name} is named in the log`);
+    for (const name of [EGRESS, POOLER, 'https://example.com', 'https://api.anthropic.com']) assert.ok(run.out.includes(name), `${name} is named in the log`);
     const addresses = new Set(run.out.match(/\b\d{1,3}(\.\d{1,3}){3}\b/g) ?? []);
     assert.deepEqual([...addresses], [RESOLVER], "the one address in the log is the resolver's");
     assertNoSecret(run.out);
   });
 
-  test('a name that does not resolve stops the start at deny-all', async () => {
-    assertDenyAll(await raise(makeWorld({ dns: { [API]: null } })));
+  test('a name that does not resolve stops the start at deny-all: the proxy, the pooler, or the refused name', async () => {
+    assertDenyAll(await raise(makeWorld({ dns: { [EGRESS]: null } })));
     assertDenyAll(await raise(makeWorld({ dns: { [POOLER]: [] } })));
+    const noDenied = await raise(makeWorld({ dns: { [DENIED]: null } }));
+    assertDenyAll(noDenied);
+    assert.match(noDenied.out, /example\.com did not resolve to a public IPv4 address, so the direct check cannot run/);
   });
 
-  test('the end check: example.com reachable, or api.anthropic.com unreachable, stops the start at deny-all', async () => {
-    const open = await raise(makeWorld(), { CURL_DENIED_EXIT: '0' });
-    assertDenyAll(open);
-    assert.match(open.out, /was able to reach https:\/\/example\.com/);
-    const closed = await raise(makeWorld(), { CURL_ALLOWED_EXIT: '7' });
-    assertDenyAll(closed);
-    assert.match(closed.out, /unable to reach https:\/\/api\.anthropic\.com/);
+  test('the end check: four ways to fail, each stops the start at deny-all', async () => {
+    const dnsOpen = await raise(makeWorld(), { DNS_STAYS_OPEN: '1' });
+    assertDenyAll(dnsOpen);
+    assert.match(dnsOpen.out, /DNS still answers for example\.com/);
+    const proxyLets = await raise(makeWorld(), { CURL_PROXY_DENIED_EXIT: '0' });
+    assertDenyAll(proxyLets);
+    assert.match(proxyLets.out, /was able to reach https:\/\/example\.com through egress/);
+    const directOpen = await raise(makeWorld(), { CURL_DIRECT_DENIED_EXIT: '0' });
+    assertDenyAll(directOpen);
+    assert.match(directOpen.out, /was able to reach https:\/\/example\.com directly/);
+    const proxyDown = await raise(makeWorld(), { CURL_ALLOWED_EXIT: '7' });
+    assertDenyAll(proxyDown);
+    assert.match(proxyDown.out, /unable to reach https:\/\/api\.anthropic\.com through egress/);
+  });
+
+  test('every curl of the end check names its route, so a proxy variable in the environment changes nothing', async () => {
+    const run = await raise(makeWorld(), { HTTPS_PROXY: 'http://elsewhere.example:8080', https_proxy: 'http://elsewhere.example:8080' });
+    assert.equal(run.status, 0, run.out);
+    const checks = curls(run.calls);
+    assert.equal(checks.length, 3);
+    for (const call of checks) {
+      assert.ok(call.startsWith('curl -q '), `curl reads no .curlrc: ${call}`);
+      assert.ok(call.includes(` -x http://${EGRESS}:${EGRESS_PORT} `) || call.includes(' --noproxy * '), `the route is named: ${call}`);
+    }
+    const direct = checks.find((call) => call.includes('--noproxy'));
+    assert.ok(direct.includes(`--resolve ${DENIED}:443:${DENIED_ADDRESS} `), 'the direct try goes to the address looked up before DNS closed');
   });
 
   test('IPv6 (T1 d): when ip6tables cannot set its rules, any IPv6 address off loopback stops the start', async () => {
@@ -474,26 +544,26 @@ describe('docker/workspace/init-firewall.sh, dry run against fake tools', { conc
     assert.deepEqual(code.filter((line) => earlyExitReader.test(line)), []);
   });
 
-  test('an answer that is not a public IPv4 address is never allowed (T1 b)', async () => {
-    const onlyPrivate = await raise(makeWorld({ dns: { [API]: [DOCKER_HOST] } }));
+  test('an answer for the pooler that is not a public IPv4 address is never allowed (T1 b)', async () => {
+    const onlyPrivate = await raise(makeWorld({ dns: { [POOLER]: [DOCKER_HOST] } }));
     assertDenyAll(onlyPrivate);
     assert.equal(onlyPrivate.calls.filter((call) => call.startsWith('ipset add') && call.endsWith(DOCKER_HOST)).length, 0);
 
-    const mixed = await raise(makeWorld({ dns: { [API]: ['10.0.0.5', API_ADDRESS, 'not-an-address', '127.0.0.1', '169.254.169.254', '100.64.0.1'] } }));
+    const mixed = await raise(makeWorld({ dns: { [POOLER]: ['10.0.0.5', POOLER_ADDRESS, 'not-an-address', '127.0.0.1', '169.254.169.254', '100.64.0.1'] } }));
     assert.equal(mixed.status, 0, mixed.out);
     const chain = outputChain(mixed.calls);
-    assert.deepEqual([...chain.sets.get(HTTPS_SET)].sort(), [API_ADDRESS, ...PROJECT_ADDRESSES].sort());
-    assert.deepEqual(pinsOf(mixed.hosts).filter((line) => line.includes(` ${API} `)), [`${API_ADDRESS} ${API} ${PIN_MARK}`]);
+    assert.deepEqual([...chain.sets.get(POSTGRES_SET)], [POOLER_ADDRESS]);
+    assert.deepEqual(pinsOf(mixed.hosts).filter((line) => line.includes(` ${POOLER} `)), [`${POOLER_ADDRESS} ${POOLER} ${PIN_MARK}`]);
   });
 
   test('every address of the one answer is allowed and pinned (T1 a), and a pin an earlier start left is taken out', async () => {
-    const stale = `203.0.113.9 ${API} ${PIN_MARK}\n`;
+    const stale = `203.0.113.9 ${API} ${PIN_MARK}\n172.20.0.99 ${EGRESS} ${PIN_MARK}\n`;
     const run = await raise(makeWorld({ hosts: `${BASE_WORLD.hosts}${stale}` }));
     assert.equal(run.status, 0, run.out);
-    assert.equal(run.hosts.includes('203.0.113.9'), false, 'the stale pin is gone');
+    assert.equal(run.hosts.includes('203.0.113.9'), false, 'the stale pin of a name no longer allowed is gone');
+    assert.equal(run.hosts.includes('172.20.0.99'), false, "the proxy's stale pin is gone");
     assert.match(run.hosts, /^127\.0\.0\.1 localhost$/m);
-    assert.deepEqual(pinsOf(run.hosts).filter((line) => line.includes(` ${PROJECT} `)).length, PROJECT_ADDRESSES.length);
-    assert.equal(pinsOf(run.hosts).length, 4);
+    assert.equal(pinsOf(run.hosts).length, 2);
   });
 
   test('an answer that repeats an address: each address is allowed, pinned and counted once', async () => {
@@ -511,23 +581,32 @@ describe('docker/workspace/init-firewall.sh, dry run against fake tools', { conc
     const chain = outputChain(run.calls);
     assert.deepEqual([...chain.sets.get(POSTGRES_SET)].sort(), [...addresses].sort());
     assert.equal(run.calls.filter((call) => call.startsWith('ipset add ') && call.includes(` ${POSTGRES_SET} `)).length, addresses.length, 'one ipset add an address');
-    assert.equal(lookups(run.calls).length, 3, 'still one lookup a name');
+    assert.deepEqual(lookedUp(run.calls), [EGRESS, POOLER, DENIED, DENIED], 'still one lookup a name');
   });
 
   test('a rule that cannot be added stops the start at deny-all with the failing command\'s own code', async () => {
     assertDenyAll(await raise(makeWorld(), { FAIL_IPTABLES: '-A OUTPUT -p tcp --dport 5432 -m set*' }), 4);
+    assertDenyAll(await raise(makeWorld(), { FAIL_IPTABLES: '-A OUTPUT -d 127.0.0.11 -j REJECT*' }), 4);
   });
 
   test('Phase 24a: the one database secret is the runner database login; the harness URL is no longer read or named', async () => {
     assert.doesNotMatch(SOURCE, /harness_database_url/);
     const run = await raise(makeWorld({ secrets: { harness_database_url: dsn(OTHER_POOLER) }, dns: { [OTHER_POOLER]: [OTHER_POOLER_ADDRESS] } }));
     assert.equal(run.status, 0, run.out);
-    assert.equal(lookups(run.calls).length, 3);
+    assert.deepEqual(lookedUp(run.calls), [EGRESS, POOLER, DENIED, DENIED]);
     assert.equal(run.out.includes(OTHER_POOLER), false);
     assertNoSecret(run.out);
   });
 
-  // --- the two pure functions, read into a shell (the script runs `main` only when executed) ------------
+  test('Phase 25a: no HTTPS name is allowed by address any more; the proxy is the one way out on HTTPS', () => {
+    const live = SOURCE.split('\n').filter((line) => !line.trim().startsWith('#')).join('\n');
+    assert.doesNotMatch(live, /HTTPS_HOSTS|HTTPS_SET|HTTPS_PORT/);
+    assert.doesNotMatch(live, /--dport 53 -j ACCEPT|--dport "?\$?\{?HTTPS/);
+    assert.match(live, /^readonly EGRESS_HOST=egress$/m);
+    assert.match(live, /^readonly EGRESS_PORT=3128$/m);
+  });
+
+  // --- the pure functions, read into a shell (the script runs `main` only when executed) ----------------
 
   /** Runs `body` once per line of `inputs` with the script's functions defined; one `status<TAB>stdout` line each. */
   async function eachLine(body, inputs) {
@@ -594,5 +673,13 @@ describe('docker/workspace/init-firewall.sh, dry run against fake tools', { conc
     const body = 'is_public_ipv4 "$input"; printf "%s\\t%s\\n" "$?" "$input"';
     const results = await eachLine(body, [...publicOnes, ...internal]);
     assert.deepEqual(results, [...publicOnes.map((address) => ['0', address]), ...internal.map((address) => ['1', address])]);
+  });
+
+  test('is_private_ipv4: RFC 1918 only (where Docker puts a bridge), never loopback, link-local or public', async () => {
+    const privateOnes = [EGRESS_ADDRESS, '10.0.0.5', '172.16.0.1', '172.31.255.254', '192.168.65.254'];
+    const others = ['127.0.0.1', RESOLVER, '169.254.169.254', '100.64.0.1', '172.15.0.1', '172.32.0.1', API_ADDRESS, STRANGER, '0.0.0.0'];
+    const body = 'is_private_ipv4 "$input"; printf "%s\\t%s\\n" "$?" "$input"';
+    const results = await eachLine(body, [...privateOnes, ...others]);
+    assert.deepEqual(results, [...privateOnes.map((address) => ['0', address]), ...others.map((address) => ['1', address])]);
   });
 });
