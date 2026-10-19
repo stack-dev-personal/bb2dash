@@ -620,7 +620,10 @@ begin
     raise exception 'FAIL 5d: the nothing decision wrote a log row or the wrong outcome';
   end if;
 
-  -- 5e. an open conflict the transform raised stands; the change is asked instead.
+  -- 5e. an open conflict the transform raised stands; the change is asked instead. f7 was not in
+  -- prepare's first six, so it is handed to the request the way prepare would.
+  insert into announcement_review_attempts (announcement_id, request_id)
+  values ((select id from _t211 where label = 'f7'), v_req);
   select * into r from pg_temp.t26_rec(v_req, (select id from _t211 where label = 'f7'),
     jsonb_build_object('outcome', 'acted', 'summary', 'Homework 4 is now worth 30 points.',
       'change', jsonb_build_array(jsonb_build_object('assignment_id', 'ECN.304/t26-hw2', 'field', 'points_possible',
@@ -640,6 +643,54 @@ begin
   end if;
   if (select action from announcement_review_writes where announcement_id = (select id from _t211 where label = 'f7')) <> 'ask' then
     raise exception 'FAIL 5e: the write log does not say ask';
+  end if;
+end $$;
+
+-- =============================================================================================
+-- 5f. An announcement handed to a DIFFERENT request is refused to this one, by record and by skip
+-- =============================================================================================
+do $$
+declare
+  v_req   bigint := (select id from _t211 where label = 'req');
+  v_other bigint;
+  v_f9    bigint;
+  r record;
+  v_log   int := (select count(*) from announcement_review_writes);
+  v_att   int := (select count(*) from attention_items where suggested->>'source' = 'announcement');
+begin
+  insert into agent_requests (kind, scope, state, claimed_by, claimed_at, finished_at)
+  values ('announcement_review', 'all', 'done', 'phase26_211 setup', now(), now()) returning id into v_other;
+  insert into announcements (course_id, posted_at, title, body, bb_item_id)
+  values ('ECN.304', now(), 'Quiz 9 on Friday 10/30', 'Quiz 9 is on Friday 10/30 in class.', '_t26_211_9')
+  returning id into v_f9;
+  insert into announcement_review_attempts (announcement_id, request_id) values (v_f9, v_other);
+  insert into _t211 values ('f9', v_f9, null);
+
+  select * into r from pg_temp.t26_rec(v_req, v_f9, jsonb_build_object('outcome', 'nothing', 'summary', 'Not mine to decide.'));
+  if r.ok or r.state <> '22023' or r.msg not like 'announcement_review_record:%was not handed to request%' then
+    raise exception 'FAIL 5f: record of another request''s announcement gave % % "%"', r.ok, r.state, r.msg;
+  end if;
+  select * into r from pg_temp.t26_as_runner(format('select announcement_review_skip(%s, %s, %L) as s', v_req, v_f9, 'not mine'));
+  if r.ok or r.state <> '22023' or r.msg not like 'announcement_review_skip:%was not handed to request%' then
+    raise exception 'FAIL 5f: skip of another request''s announcement gave % % "%"', r.ok, r.state, r.msg;
+  end if;
+  if exists (select 1 from announcement_reviews where announcement_id = v_f9)
+     or (select count(*) from announcement_review_writes) <> v_log
+     or (select count(*) from attention_items where suggested->>'source' = 'announcement') <> v_att
+     or not exists (select 1 from v_announcements_unreviewed where id = v_f9) then
+    raise exception 'FAIL 5f: a refused call wrote something';
+  end if;
+  -- An already-reviewed announcement still skips to false, handed or not (f4 is reviewed).
+  select * into r from pg_temp.t26_as_runner(
+    format('select announcement_review_skip(%s, %s, %L) as s', v_other, (select id from _t211 where label = 'f4'), 'late'));
+  if r.ok then
+    -- v_other is not a claim, so this is refused on the claim; use the real request instead.
+    raise exception 'FAIL 5f: a non-claimed request was allowed to skip';
+  end if;
+  select * into r from pg_temp.t26_as_runner(
+    format('select announcement_review_skip(%s, %s, %L) as s', v_req, (select id from _t211 where label = 'f4'), 'late'));
+  if not r.ok or r.res->0->'s' <> 'false'::jsonb then
+    raise exception 'FAIL 5f: skip of an already-reviewed announcement gave % %', r.ok, r.res;
   end if;
 end $$;
 
