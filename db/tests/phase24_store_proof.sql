@@ -22,7 +22,7 @@
 --   7b. who holds a right on the five content tables: row security on all five; the grid of grants
 --      AND policies (a right is both); the policies; the two columns the owner may update
 --
--- It is green only once 190 to 198 are on prod (so it is RED before: one vector column exists where
+-- It is green only once 190 to 198 and 201 are on prod (so it is RED before: one vector column exists where
 -- two are expected). Proof 8's four greps and proof 9 are not SQL; the verification file holds them.
 -- RUN IT: `node scripts/db-test.mjs --only phase24_store_proof.sql`.
 
@@ -281,8 +281,9 @@ begin
             group by r.who, t.rel)
     select string_agg(g.who || '|' || g.rel || '|' || g.may, ';' order by g.who collate "C", g.rel collate "C")
       into v_got from grid g;
+    -- Since 201 (Phase 25a) anon holds no right here: the sync's unit insert is 200's
+    -- sync_file_text_put, and the policy bb_file_text_anon_insert is gone.
     if v_got is distinct from
-       'anon|bb_file_text|INSERT;'
        'authenticated|bb_file_text|DELETE, INSERT, SELECT, UPDATE;'
        'authenticated|bb_text_embeddings|DELETE, INSERT, SELECT, UPDATE;'
        'authenticated|workspace_document_text|SELECT;'
@@ -303,7 +304,6 @@ begin
        and p.tablename in ('bb_file_text', 'bb_text_embeddings', 'workspace_documents',
                            'workspace_document_text', 'workspace_text_embeddings');
     if v_got is distinct from
-       'bb_file_text|bb_file_text_anon_insert|{anon}|INSERT|f;'
        'bb_file_text|bb_file_text_owner_all|{authenticated}|ALL|t;'
        'bb_text_embeddings|bb_text_embeddings_owner_all|{authenticated}|ALL|t;'
        'workspace_document_text|workspace_document_text_owner_select|{authenticated}|SELECT|t;'

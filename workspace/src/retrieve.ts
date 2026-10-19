@@ -20,7 +20,7 @@
 
 import { spawn } from 'node:child_process';
 
-import { MATERIALS_ENV, PATHS } from './config.js';
+import { MATERIALS_ENV, PATHS, proxyEnv } from './config.js';
 import { PASSAGES_MAX, MEMORY_ITEMS_MAX } from './context/budget.js';
 import { QUERY_MAX_CHARS, type Plan } from './plan.js';
 import { parseBatchAnswer, type AttachmentRead, type Hit, type QueryAnswer } from './store-types.js';
@@ -129,11 +129,20 @@ export interface RetrieverDeps {
   readonly spec?: BatchSpec;
 }
 
-const DEFAULT_SPEC: BatchSpec = Object.freeze({
-  command: 'node',
-  args: Object.freeze([PATHS.batchEntry]),
-  env: Object.freeze({ ...MATERIALS_ENV, PATH: process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin' }),
-});
+/**
+ * How the batch child is started: the materials server's batch entry with the two materials values,
+ * the parent's proxy settings (Phase 25a: the batch fetches the project host, and only the egress
+ * proxy reaches it) and PATH. Nothing else of the runner's environment.
+ */
+export function batchSpec(env: Readonly<Record<string, string | undefined>>): BatchSpec {
+  return Object.freeze({
+    command: 'node',
+    args: Object.freeze([PATHS.batchEntry]),
+    env: Object.freeze({ ...MATERIALS_ENV, ...proxyEnv(env), PATH: env.PATH ?? '/usr/local/bin:/usr/bin:/bin' }),
+  });
+}
+
+const DEFAULT_SPEC: BatchSpec = batchSpec(process.env);
 
 function requestBody(request: RetrieveRequest): string {
   return JSON.stringify({

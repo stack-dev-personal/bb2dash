@@ -76,7 +76,9 @@ and 1 missing file; the 9/8 validation found 3 files that only the deep scan see
 
 ## Step 4 — Extract text
 - Stage files to the cloud workspace; run `ingest/extract_text.py` (pdftotext per page, python-docx
-  whole doc, python-pptx per slide incl. notes, openpyxl per sheet). Insert into `bb_file_text`.
+  whole doc, python-pptx per slide incl. notes, openpyxl per sheet). Store the units through
+  `sync_file_text_put` (migration 200) as `sync_runner`: `ingest/pull_files.mjs` does it with the
+  sync container's login (`ingest/text_put.mjs`). Since 201 there is no REST insert into `bb_file_text`.
   Set `text_status = extracted | failed | na` (na for images/media).
 
 ## Step 5 — Apply what the documents say

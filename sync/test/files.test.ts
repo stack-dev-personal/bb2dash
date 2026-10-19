@@ -8,7 +8,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { storageKeyFor } from '../../ingest/pull_files.mjs';
-import type { FileStoredArgs, WorklistRow } from '../src/db.js';
+import type { FileStoredArgs, TextUnit, WorklistRow } from '../src/db.js';
 import {
   EMBED_TIMEOUT_MS,
   makeEmbedder,
@@ -66,6 +66,7 @@ function hopFor(statusByUrl: Record<string, number> = {}) {
 
 function ports(rows: WorklistRow[], over: Partial<FilesPorts> = {}) {
   const stored: FileStoredArgs[] = [];
+  const texts: { id: string; units: TextUnit[] }[] = [];
   const linked: { id: string; url: string }[] = [];
   const order: string[] = [];
   const p: FilesPorts = {
@@ -87,16 +88,17 @@ function ports(rows: WorklistRow[], over: Partial<FilesPorts> = {}) {
         order.push(`linked ${id}`);
         return true;
       }),
+      fileTextPut: vi.fn(async (id: string, units: TextUnit[]) => {
+        texts.push({ id, units });
+        order.push('text');
+        return { inserted: units.length, present: 0 };
+      }),
     },
     hop: hopFor(),
     fetchSigned: vi.fn(async () => new Response(PDF, { status: 200 })),
     storagePost: vi.fn(async () => {
       order.push('storage');
       return { status: 200, body: '{}' };
-    }),
-    textPost: vi.fn(async () => {
-      order.push('text');
-      return { status: 201, body: '' };
     }),
     extract: vi.fn(async () => [{ unit_kind: 'page', unit_no: 1, text: 'hello' }]),
     embed: vi.fn(async () => {
@@ -110,7 +112,7 @@ function ports(rows: WorklistRow[], over: Partial<FilesPorts> = {}) {
     log: () => {},
     ...over,
   };
-  return { p, stored, order, linked };
+  return { p, stored, order, linked, texts };
 }
 
 describe('the files step', () => {
@@ -342,6 +344,7 @@ describe('the files step', () => {
           if (a instanceof Error) throw a;
           return a;
         }),
+        fileTextPut: vi.fn(async (_id: string, units: TextUnit[]) => ({ inserted: units.length, present: 0 })),
       },
     });
     const r = await runFilesStep(p);
@@ -361,30 +364,69 @@ describe('the files step', () => {
     expect(stored.map((s) => s.id)).toEqual(['43', '44']);
   });
 
-  it('R2 item 2: an upload whose text POST failed is recorded on the next pass, past the Duplicate', async () => {
+  it('R2 item 2: an upload whose text put failed is recorded on the next pass, past the Duplicate', async () => {
     let storageCalls = 0;
-    const texts = [{ status: 500, body: 'boom' }, { status: 201, body: '' }];
-    const shared = {
-      storagePost: vi.fn(async () => (storageCalls++ === 0 ? { status: 200, body: '{}' } : { status: 409, body: '{"error":"Duplicate"}' })),
-      textPost: vi.fn(async () => texts.shift()!),
-    };
-    const first = ports([row('45')], shared);
+    const storagePost = vi.fn(async () => (storageCalls++ === 0 ? { status: 200, body: '{}' } : { status: 409, body: '{"error":"Duplicate"}' }));
+    const first = ports([row('45')], { storagePost });
+    first.p.rpc.fileTextPut = vi.fn(async () => { throw Object.assign(new Error('connection terminated'), { code: '08006' }); });
     const r1 = await runFilesStep(first.p);
-    expect(r1.files.not_pulled).toEqual([{ id: '45', reason: 'bb_file_text 500: boom' }]);
+    expect(r1.files.not_pulled).toEqual([{ id: '45', reason: 'sync_file_text_put refused: connection terminated' }]);
     expect(first.stored).toEqual([]);
 
-    const second = ports([row('45')], shared);
+    const second = ports([row('45')], { storagePost });
     const r2 = await runFilesStep(second.p);
     expect(r2.files).toEqual({ pulled: 1, not_pulled: [] });
     expect(second.stored.map((s) => [s.id, s.textStatus])).toEqual([['45', 'extracted']]);
   });
 
-  it('a text POST that answers 409/23505 keeps the units already there, and the file is recorded', async () => {
-    const { p, stored } = ports([row('46')], { textPost: vi.fn(async () => ({ status: 409, body: '{"code":"23505"}' })) });
+  it('Phase 25a: the units go through sync_file_text_put as kind, number and text, never over REST', async () => {
+    const { p, texts } = ports([row('48')], {
+      extract: vi.fn(async () => [{ unit_kind: 'page', unit_no: 1, text: 'one' }, { unit_kind: 'page', unit_no: 2, text: 'two' }]),
+    });
     const r = await runFilesStep(p);
-    expect(r.files.pulled).toBe(1);
-    expect(stored[0]!.textStatus).toBe('extracted');
+    expect(r.unitsPosted).toBe(2);
+    expect(texts).toEqual([{ id: '48', units: [{ unit_kind: 'page', unit_no: 1, text: 'one' }, { unit_kind: 'page', unit_no: 2, text: 'two' }] }]);
+    expect(Object.keys(p)).not.toContain('textPost');
+  });
+
+  it('units already there (file 163) are kept and the file is recorded; only the inserted ones count as posted', async () => {
+    const lines: string[] = [];
+    const { p, stored } = ports([row('46'), row('47')], { log: (l) => lines.push(l) });
+    const answers = [{ inserted: 0, present: 1 }, { inserted: 1, present: 1 }];
+    p.rpc.fileTextPut = vi.fn(async () => answers.shift()!);
+    p.extract = vi.fn(async () => [{ unit_kind: 'page', unit_no: 1, text: 'a' }]);
+    const r = await runFilesStep(p);
+    expect(r.files.pulled).toBe(2);
+    expect(stored.map((s) => s.textStatus)).toEqual(['extracted', 'extracted']);
+    expect(r.unitsPosted).toBe(1);
+    expect(lines).toContain('files: 46 already had 1 of 1 text unit(s); kept');
     expect(p.embed).toHaveBeenCalledTimes(1);
+  });
+
+  it('a file whose text 200 refuses as too large (54000) is stored with text_status failed and logged, so it is not pulled again', async () => {
+    const lines: string[] = [];
+    const { p, stored } = ports([row('3713')], { log: (l) => lines.push(l) });
+    p.rpc.fileTextPut = vi.fn(async () => {
+      throw Object.assign(new Error('sync_file_text_put: too large: a file puts at most 1000 units, not 1200'), { code: '54000' });
+    });
+    const r = await runFilesStep(p);
+    expect(r.files).toEqual({ pulled: 1, not_pulled: [] });
+    expect(r.unitsPosted).toBe(0);
+    expect(stored.map((s) => [s.id, s.textStatus])).toEqual([['3713', 'failed']]);
+    expect(lines).toContain('files: 3713 text not stored, too large for sync_file_text_put (sync_file_text_put: too large: a file puts at most 1000 units, not 1200); stored with text_status failed');
+  });
+
+  it('a unit with blank text is not sent (200 refuses it); a file with only blank units is stored with text_status failed', async () => {
+    const mixed = ports([row('49')], { extract: vi.fn(async () => [{ unit_kind: 'doc', unit_no: 1, text: '  ' }, { unit_kind: 'page', unit_no: 2, text: 'kept' }]) });
+    await runFilesStep(mixed.p);
+    expect(mixed.texts).toEqual([{ id: '49', units: [{ unit_kind: 'page', unit_no: 2, text: 'kept' }] }]);
+    expect(mixed.stored[0]!.textStatus).toBe('extracted');
+
+    const blank = ports([row('50')], { extract: vi.fn(async () => [{ unit_kind: 'doc', unit_no: 1, text: '' }]) });
+    const r = await runFilesStep(blank.p);
+    expect(r.files.pulled).toBe(1);
+    expect(blank.p.rpc.fileTextPut).not.toHaveBeenCalled();
+    expect(blank.stored[0]!.textStatus).toBe('failed');
   });
 
   it('a submission already in Storage (409 or Duplicate) is reported in not_pulled, never done, never stored', async () => {
@@ -456,12 +498,20 @@ describe('the files step', () => {
     expect(stored).toEqual([]);
   });
 
-  it('a text POST error leaves the row unstored and reported; an already-present answer keeps the text', async () => {
+  it('a refused text put leaves the row unstored and reported; an already-present answer keeps the text', async () => {
     const rows = [row('61'), row('62')];
-    const answers = [{ status: 500, body: 'boom' }, { status: 409, body: '23505' }];
-    const { p, stored } = ports(rows, { textPost: vi.fn(async () => answers.shift()!) });
+    const answers: ({ inserted: number; present: number } | Error)[] = [
+      Object.assign(new Error('sync_file_text_put: each unit needs a unit_kind of doc, page, sheet or slide\nDETAIL: x'), { code: '22023' }),
+      { inserted: 0, present: 1 },
+    ];
+    const { p, stored } = ports(rows);
+    p.rpc.fileTextPut = vi.fn(async () => {
+      const a = answers.shift()!;
+      if (a instanceof Error) throw a;
+      return a;
+    });
     const r = await runFilesStep(p);
-    expect(r.files.not_pulled).toEqual([{ id: '61', reason: 'bb_file_text 500: boom' }]);
+    expect(r.files.not_pulled).toEqual([{ id: '61', reason: 'sync_file_text_put refused: sync_file_text_put: each unit needs a unit_kind of doc, page, sheet or slide' }]);
     expect(stored.map((s) => s.id)).toEqual(['62']);
     expect(p.embed).toHaveBeenCalledTimes(1);
   });
@@ -471,7 +521,7 @@ describe('the files step', () => {
     const r = await runFilesStep(p);
     expect(r.files.pulled).toBe(1);
     expect(stored[0]!.textStatus).toBe('failed');
-    expect(p.textPost).not.toHaveBeenCalled();
+    expect(p.rpc.fileTextPut).not.toHaveBeenCalled();
   });
 
   it('sync_file_stored refusing (false or an error) is reported, not counted', async () => {
@@ -485,6 +535,7 @@ describe('the files step', () => {
           return a;
         }),
         fileOutsideLink: vi.fn(async () => true),
+        fileTextPut: vi.fn(async (_id: string, units: TextUnit[]) => ({ inserted: units.length, present: 0 })),
       },
     });
     const r = await runFilesStep(p);
@@ -570,7 +621,7 @@ describe('the move into course-files', () => {
 });
 
 describe('the adapters', () => {
-  it('Storage: POST bb-files/<encoded key> with the publishable key and no x-upsert; text: bb_file_text', async () => {
+  it('Storage: POST bb-files/<encoded key> with the publishable key and no x-upsert; no REST text insert is left', async () => {
     const calls: { url: string; init: RequestInit }[] = [];
     const fetchImpl = vi.fn(async (url: string, init: RequestInit) => {
       calls.push({ url, init });
@@ -578,14 +629,14 @@ describe('the adapters', () => {
     });
     const sb = makeSupabaseFiles('https://x.supabase.co', 'sb_publishable_abc', fetchImpl as unknown as typeof fetch);
     await sb.storagePost('IST.323/a b.pdf', Buffer.from('x'), 'application/pdf');
-    await sb.textPost([{ file_id: 1, unit_kind: 'page', unit_no: 1, text: 't' }]);
     expect(calls[0]!.url).toBe('https://x.supabase.co/storage/v1/object/bb-files/IST.323/a%20b.pdf');
     const h0 = calls[0]!.init.headers as Record<string, string>;
     expect(h0.apikey).toBe('sb_publishable_abc');
     expect(h0['Content-Type']).toBe('application/pdf');
     expect(Object.keys(h0).map((k) => k.toLowerCase())).not.toContain('x-upsert');
-    expect(calls[1]!.url).toBe('https://x.supabase.co/rest/v1/bb_file_text');
-    expect((calls[1]!.init.headers as Record<string, string>).Prefer).toBe('return=minimal');
+    expect(calls).toHaveLength(1);
+    // Phase 25a: the units go through sync_file_text_put over pg; the anon key is for Storage only.
+    expect(Object.keys(sb)).toEqual(['storagePost']);
   });
 
   it('R2 item 9: the extractor is pull_files\' extractUnits (the locked project), and uv gets only what it needs', async () => {

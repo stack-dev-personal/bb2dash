@@ -89,7 +89,8 @@ Supabase project: `goultdzqcavefcgnifdy` (us-east-1, Postgres 17). Full access v
   grades feed), each block fenced as data, and no transcript is kept. **Still read-only for the planner**:
   the assistant's tools are off, two read tools over the course materials pass a gate
   (`search_materials`, `get_material_text`, with a per-turn limit and the request's course scope), and no
-  notes store is read. The runner's login executes eleven SECURITY DEFINER functions and holds no table
+  notes store is read. The runner's login executes twelve SECURITY DEFINER functions (the twelfth, 207 from Phase 25a,
+  returns only eleven search timings, for the doctor's index row) and holds no table
   grant; through them, for a request or a job it holds, it reads the conversation, the course list, attached
   files' names and the feed's fixed columns (assignments, readings, the status of `assignment_progress` and
   `reading_progress`, posted scores). It can write neither planner state, a grade nor a fact table, and the
@@ -141,7 +142,10 @@ Supabase project: `goultdzqcavefcgnifdy` (us-east-1, Postgres 17). Full access v
   client-side (RLS is the boundary). Since Phase 14 (R-28) the sync runs in Docker: the `sync`
   container (`compose.yaml`, `docker/sync/`, `sync/`) holds Blackboard's login, logs in through
   `http://127.0.0.1:6080/vnc.html`, and reaches the database only as the `sync_runner` role through its
-  SECURITY DEFINER functions (091, 093; seventeen since 213 (210 added `sync_request_announcement_review`, 213 `sync_file_pull_outcomes`; 164 had added `sync_file_outside_link`): a file whose
+  SECURITY DEFINER functions (091, 093; eighteen since 200 and 213: Phase 25a's 200 added `sync_file_text_put`, the
+  sync's one way to store a course file's text units once 201 drops the open insert policy `bb_file_text_anon_insert`
+  (the Windows fallback `ingest/pull_files.mjs` calls it with the same login); Phase 26's 210 added
+  `sync_request_announcement_review` and 213 `sync_file_pull_outcomes`; 164 had added `sync_file_outside_link`: a file whose
   link redirects to another site is saved as `bb_files.outside_url` and never requested). Secrets live in `SECRETS_DIR` (`C:/Users/stack/.bb2dash-secrets/`),
   outside every repo; the service key's only home is `bb2dash_mcp_service_key` there. Never
   `docker compose up` or recreate `sync` while a sync is open, and never touch the `bb-profile` volume (it is
@@ -165,8 +169,15 @@ Supabase project: `goultdzqcavefcgnifdy` (us-east-1, Postgres 17). Full access v
   before the merge, they run only as a test compose project from a phase worktree (`bb2dash-wt24` in Phase
   24a), built under test tags through a second compose file so that no live tag moves, the service named in
   every command, and only inside a window Stack has agreed to: one runner answers the queue at a time.
-  `workspace`: the runner reaches the database only as the login role `workspace_runner`, through eleven
-  SECURITY DEFINER functions (142, 143, 196, 199), and mounts three secrets from `SECRETS_DIR` as files:
+  **Egress (Phase 25a, from its cut-over):** `workspace`, `apply` and `workspace-ingest` reach the internet only
+  through the `egress` service (`docker/egress/`, Squid 6.13 peek-and-splice, nothing decrypted): one port and one
+  allow-list per network (3128 workspace and 3129 apply: `api.anthropic.com` and the project host; 3130 ingest: the
+  project host only), and a tunnel opens only when both the CONNECT host and the TLS server name are on the list.
+  Their firewalls allow only egress's port and the session pooler on 5432; DNS is closed, both names pinned in
+  `/etc/hosts` at start. A refusal shows in Squid's log as `TCP_DENIED/200`. `sync`, `bb2dash-mcp` and
+  `harness-jobs` stay open (brief 119, question 2). Never restart `egress` during a turn, an apply run or an upload.
+  `workspace`: the runner reaches the database only as the login role `workspace_runner`, through twelve
+  SECURITY DEFINER functions (142, 143, 196, 199, 207), and mounts three secrets from `SECRETS_DIR` as files:
   `workspace_runner_db_url`, `claude_oauth_token`, `bb2dash_mcp_service_key` (the one credential there that
   could write; read only by the materials package, DECISIONS 2026-10-05). Its CLI config folder is a tmpfs.
   `workspace-ingest` reads his uploads: no model, no Claude token, no service key; its own network

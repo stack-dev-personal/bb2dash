@@ -304,8 +304,14 @@ node ingest/embed_corpus.mjs --check
 Without `--fetch` the script takes each row's bytes from `<scratch>/downloads/<id>_*` (a row
 with nothing there reports `no download`). It checks size and magic bytes, mirrors to
 `course context/<relpath>`, POSTs to Storage `bb-files/<key>` with the publishable key in
-`SB_ANON_KEY` (never the service key, no `x-upsert`), extracts the text into `bb_file_text`, and
-writes one `update bb_files …` per file to `--out`. Having posted new text it finishes by running
+`SB_ANON_KEY` (never the service key, no `x-upsert`), extracts the text and stores it through
+`sync_file_text_put` (migration 200) as `sync_runner`, with the login the sync container uses
+(`sync_runner_db_url` in `SECRETS_DIR`, `C:/Users/stack/.bb2dash-secrets/` by default; the `pg`
+client comes from `npm --prefix scripts ci`; the pooler is verified against the Workspace's pinned
+CA, `certs/prod-ca.crt` in the harness checkout, `HARNESS_DIR`), and writes one `update bb_files …`
+per file to `--out`. A missing login or CA stops the run before any byte moves. A file whose text is
+too large for the function is stored with `text_status = 'failed'` and its JSON line says why
+(`extractError`). Having posted new text it finishes by running
 the embed loop itself, so what it stored is searchable when it returns; that needs the legacy anon
 JWT in `SB_ANON_JWT`, and without it the run says so and leaves `ingest/embed_corpus.mjs` to you.
 The key is `bb_file_relpath(id)`, which since migration 052 carries an `attempt-<digits>/` segment

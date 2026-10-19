@@ -83,6 +83,10 @@ class FakeDb {
   bbRaw: { run_id: string; kind: string; bb_course_id: string | null }[] = [];
   files = [{ id: 901, stored: false }];
   stored: unknown[][] = [];
+  /** What sync_file_text_put (200) was handed: the file id and the units, as their two parameters. */
+  textPuts: unknown[][] = [];
+  /** Every URL the runner fetched (Storage, the CDN): a REST insert into bb_file_text must not be one. */
+  fetched: string[] = [];
   /** Rows in the Inbox's answered queue (v_inbox_queue), and what 180's function was asked and filed. */
   answered = 2;
   applyAsked: string[] = [];
@@ -147,6 +151,11 @@ class FakeDb {
       case 'sync_file_worklist':
         this.events.push('files');
         return { rows: this.files.filter((f) => !f.stored).map((f) => ({ id: String(f.id), file_name: 'Lecture 1.pdf', relpath: 'IST.323/lecture_slides/week-01/Lecture 1.pdf', mime: 'application/pdf', source_url: 'https://blackboard.syracuse.edu/bbcswebdav/xid-901_1', bucket: 'lecture_slides', attempt_id: null })) };
+      case 'sync_file_text_put': {
+        this.textPuts.push([...params]);
+        const sent = JSON.parse(String(params[1])) as unknown[];
+        return one({ inserted: sent.length, present: 0 });
+      }
       case 'sync_file_stored': {
         this.stored.push([...params]);
         const f = this.files.find((x) => String(x.id) === String(params[0]));
@@ -230,7 +239,10 @@ function deps(db: FakeDb, state: Map<string, string>, tmp: string): RunnerDeps {
     config,
     query,
     openBrowser: async () => fakeBrowser(db),
-    fetchImpl: (async (u: string) => (u === CDN ? new Response(PDF) : new Response('{}', { status: 201 }))) as unknown as typeof fetch,
+    fetchImpl: (async (u: string) => {
+      db.fetched.push(u);
+      return u === CDN ? new Response(PDF) : new Response('{}', { status: 201 });
+    }) as unknown as typeof fetch,
     extract: async () => [{ unit_kind: 'page', unit_no: 1, text: 'hello' }],
     embed: async () => {
       db.events.push('embed');
@@ -277,6 +289,10 @@ describe('the runner end to end, on fakes', () => {
       expect(db.bbRaw.filter((b) => b.run_id === runA)).toHaveLength(9);
       expect(db.runs.get(runA)!.summary.changes).toEqual(['fold line', 'Files: 1 pulled']);
       expect(db.requests.find((r) => r.id === first)!.result).toMatchObject({ lines: ['Files: 1 pulled'], error: null, files: { pulled: 1, not_pulled: [] }, claim_attempts: 1 });
+      // Phase 25a: the file's text went through sync_file_text_put, before sync_file_stored, never over REST.
+      expect(db.textPuts).toEqual([['901', JSON.stringify([{ unit_kind: 'page', unit_no: 1, text: 'hello' }])]]);
+      expect(db.fns.indexOf('sync_file_text_put')).toBeLessThan(db.fns.indexOf('sync_file_stored'));
+      expect(db.fetched.filter((u) => u.includes('/rest/v1/'))).toEqual([]);
 
       // The next pass finds the request done: it reads the queue and calls nothing after sync_next().
       const eventsBefore = db.events.length;

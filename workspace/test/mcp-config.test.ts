@@ -66,7 +66,7 @@ describe('the in-image layout (the seam with the image)', () => {
     expect(tsconfig.compilerOptions.rootDir).toBe('src');
     expect(tsconfig.compilerOptions.outDir).toBe('dist');
     expect(tsconfig.include).toEqual(['src/**/*.ts']);
-    for (const source of ['runner.ts', 'healthcheck.ts', path.join('hooks', 'tool-gate.ts')]) {
+    for (const source of ['runner.ts', 'healthcheck.ts', 'search-probe.ts', path.join('hooks', 'tool-gate.ts')]) {
       expect(fs.existsSync(path.resolve(HERE, '..', 'src', source)), source).toBe(true);
     }
   });
@@ -74,7 +74,7 @@ describe('the in-image layout (the seam with the image)', () => {
 
 describe('the answering turn MCP config', () => {
   const limits = turnLimits(true, ['BIO.110', 'BIO.110.lab']);
-  const config = buildMcpConfig(limits);
+  const config = buildMcpConfig(limits, {});
 
   it('holds exactly one server, bb2dash: the notes server is gone', () => {
     expect(Object.keys(config)).toEqual(['mcpServers']);
@@ -170,5 +170,32 @@ describe('a request config file', () => {
       { what: 'write', file: '/run/workspace/mcp-9.json', mode: 0o600 },
       { what: 'chmod', file: '/run/workspace/mcp-9.json', mode: 0o600 },
     ]);
+  });
+});
+
+describe("the materials server's proxy settings (Phase 25a)", () => {
+  it("carries the runner's HTTPS_PROXY, NO_PROXY and NODE_USE_ENV_PROXY, and nothing else of its env", () => {
+    const env = buildMcpConfig(turnLimits(false, null), {
+      HTTPS_PROXY: 'http://egress:3128',
+      NO_PROXY: 'localhost,127.0.0.1',
+      NODE_USE_ENV_PROXY: '1',
+      CLAUDE_CODE_OAUTH_TOKEN: 'never-passed',
+      PATH: '/usr/bin',
+    }).mcpServers.bb2dash?.env;
+    expect(env).toEqual({
+      SUPABASE_URL: 'https://goultdzqcavefcgnifdy.supabase.co',
+      SUPABASE_SERVICE_ROLE_FILE: '/run/secrets/bb2dash_mcp_service_key',
+      HTTPS_PROXY: 'http://egress:3128',
+      NO_PROXY: 'localhost,127.0.0.1',
+      NODE_USE_ENV_PROXY: '1',
+      BB2DASH_MAX_SEARCHES: '4',
+      BB2DASH_MAX_READS: '10',
+    });
+  });
+
+  it('leaves an empty setting out', () => {
+    const env = buildMcpConfig(turnLimits(false, null), { HTTPS_PROXY: '', NODE_USE_ENV_PROXY: '1' }).mcpServers.bb2dash?.env ?? {};
+    expect('HTTPS_PROXY' in env).toBe(false);
+    expect(env.NODE_USE_ENV_PROXY).toBe('1');
   });
 });
