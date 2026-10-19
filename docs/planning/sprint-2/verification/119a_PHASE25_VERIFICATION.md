@@ -47,3 +47,16 @@ PR #119) merged in as d7c2c55.
 | the egress README's cut-over table leaves 207 out | docs | `docker/egress/README.md` | W-100 |
 
 Checked and sound by both: 200's conflict target, grants and `search_path`; 207 returns numbers only, no table grant for either runner (prod catalog); the three firewalls; the proxy settings reaching every child process with no token added; egress runs as `proxy`, read-only, no capability, no secret.
+
+### Round 1 fixed (2026-10-19), Stack: "fix the high and the mediums"
+
+| finding | fix | proof |
+|---|---|---|
+| HIGH, DNS through Squid | W-100 b243aa15: `deny CONNECT ip_literal`, then each port's `deny !names_<port>`, all ahead of `deny private_dst`, the first rule that resolves | e2e with a logging CoreDNS as egress's only upstream: no query for a refused canary name, no reverse lookups; a control lookup from egress does appear |
+| HIGH, reverse-DNS bypass | b243aa15: `-n` on all five `dstdomain` ACLs; IPv4 and IPv6 literals refused before any allow | e2e: `CONNECT 160.79.104.10:443` and `[2607:6bc0::10]:443` refused from all three clients (`TCP_DENIED … server=-`) |
+| LOW, no SNI spliced | b243aa15: `--client-requested` alone still spliced on the CONNECT host, so a small external ACL (`egress-sni-present`) terminates a ClientHello without SNI at step 2 | e2e: `sni=- bump=terminate` |
+| MEDIUM, shared pooler | 5824f137: named under "still open, by decision" in `docker/egress/README.md`; 207 added to its cut-over table (log watch now step 8) | docs |
+| LOWs, text put | W-101 882d574e (200 raises 54000 for "too large"), 2f1cc626 (the sync stores such a file as `failed`), 3c7dd540 (one client per file, verify-full against the workspace CA, timeouts), 27317576 (docs) | sync 189, ingest 177, PGlite dry run of 200/201 |
+| LOWs, doctor row | W-102 67b733c2 (probe: `over_budget` line, one 20 s deadline), bb2dash-stack e660b60 (exact not-deployed match, stderr only, 57014 reads `move`) | workspace 1027, bb2dash-stack 400 |
+
+e2e: 92 of 92 checks in the throwaway project `bb2dash-p25egress`; project, images (CoreDNS and Debian too), networks and volumes removed; live containers untouched. Merged into the phase branch: e66fe18f (W-101), 75a71add (W-102), 917be52f (W-100).
