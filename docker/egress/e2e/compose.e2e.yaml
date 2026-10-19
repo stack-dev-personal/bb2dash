@@ -12,6 +12,12 @@
 services:
   egress:
     image: bb2dash-egress:p25-egress
+    dns: [10.250.30.53]
+    networks:
+      - dnslog-net
+    depends_on:
+      dnslog:
+        condition: service_started
   workspace:
     image: bb2dash-workspace:p25-egress
     command: ["sleep", "infinity"]
@@ -30,3 +36,22 @@ services:
     restart: "no"
     healthcheck:
       disable: true
+
+  # Review fix HIGH A (25a): a resolver that logs every query, as egress's only upstream. egress's
+  # Docker resolver forwards every name it does not know itself to 10.250.30.53, so a lookup Squid
+  # makes for a refused name would show in `docker compose logs dnslog`. E2e only: the live egress
+  # uses Docker's resolver as compose.yaml leaves it.
+  dnslog:
+    image: coredns/coredns:1.11.3
+    command: ["-conf", "/etc/coredns/Corefile"]
+    volumes:
+      - ./docker/egress/e2e/Corefile:/etc/coredns/Corefile:ro
+    networks:
+      dnslog-net:
+        ipv4_address: 10.250.30.53
+
+networks:
+  dnslog-net:
+    ipam:
+      config:
+        - subnet: 10.250.30.0/24

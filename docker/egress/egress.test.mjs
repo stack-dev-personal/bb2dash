@@ -89,21 +89,26 @@ const directives = squid
   .map((line) => line.trim())
   .filter((line) => line && !line.startsWith('#'));
 
-/** acl name -> { type, values } (every line of an acl joined). */
+/** acl name -> { type, flags, values } (every line of an acl joined; flags are the words that start with -). */
 const acls = (() => {
   const map = new Map();
   for (const line of directives.filter((each) => each.startsWith('acl '))) {
-    const [, name, type, ...values] = line.split(/\s+/);
+    const [, name, type, ...words] = line.split(/\s+/);
+    const flags = words.filter((word) => word.startsWith('-'));
+    const values = words.filter((word) => !word.startsWith('-'));
     const known = map.get(name);
     if (known) {
       assert.equal(known.type, type, `acl ${name} is one type`);
+      known.flags.push(...flags);
       known.values.push(...values);
     } else {
-      map.set(name, { type, values });
+      map.set(name, { type, flags, values });
     }
   }
   return map;
 })();
+/** Every acl line of a type, whole. */
+const aclLines = (type) => directives.filter((line) => line.startsWith('acl ') && line.split(/\s+/)[2] === type);
 const aclValues = (name, type) => {
   const acl = acls.get(name);
   assert.ok(acl, `squid.conf defines acl ${name}`);
@@ -139,7 +144,9 @@ test('squid.conf: one port per client, each named, peek-and-splice only (no port
   const bump = lines('ssl_bump').map((words) => words.join(' '));
   assert.equal(bump[0], 'peek step1');
   assert.equal(bump.at(-1), 'terminate all');
-  for (const rule of bump) assert.match(rule, /^(peek step1|splice \S+ \S+|terminate all)$/, `no stare, bump, client-first or server-first: ${rule}`);
+  for (const rule of bump) {
+    assert.match(rule, /^(peek step1|terminate step2 !sni_present|splice \S+ \S+|terminate all)$/, `no stare, bump, client-first or server-first: ${rule}`);
+  }
   assert.deepEqual(aclValues('step1', 'at_step'), ['SslBump1']);
 });
 
@@ -164,6 +171,9 @@ test('squid.conf: each port reaches its own names and nothing else; every other 
   assert.deepEqual(access, [
     'deny !CONNECT',
     'deny CONNECT !SSL_ports',
+    'deny CONNECT ip_literal',
+    // A name off the port's own list is refused before private_dst, the first acl that resolves.
+    ...CLIENTS.map((client) => `deny CONNECT port_${client.portName} !names_${client.portName}`),
     'deny private_dst',
     ...CLIENTS.map((client) => `allow CONNECT port_${client.portName} names_${client.portName}`),
     'deny refused_by_default',
@@ -245,4 +255,71 @@ test('each firewall: nothing on tcp/443, DNS refused, and only its own proxy por
     assert.ok(rejectAt !== -1 && rejectAt < live.indexOf('iptables -A OUTPUT -o lo -j ACCEPT'), `${client.firewall}: DNS refused before loopback`);
     assert.match(source, /^readonly EGRESS_HOST=egress$/m);
   }
+});
+
+test('review fix HIGH A: nothing a refused name meets before its refusal resolves it', () => {
+  const access = lines('http_access').map((words) => words.join(' '));
+  const firstResolving = access.indexOf('deny private_dst');
+  assert.ok(firstResolving > 0);
+  // Every acl named before private_dst is one that reads the request as written.
+  const nonResolvingTypes = new Set(['method', 'port', 'myportname', 'dstdomain', 'dstdom_regex']);
+  for (const rule of access.slice(0, firstResolving)) {
+    for (const word of rule.split(' ').slice(1)) {
+      const name = word.replace(/^!/, '');
+      const acl = acls.get(name);
+      assert.ok(acl, `${rule}: ${name} is defined`);
+      assert.ok(nonResolvingTypes.has(acl.type), `${rule}: ${name} is a ${acl.type} acl, which may resolve`);
+      if (acl.type === 'dstdomain' || acl.type === 'dstdom_regex') assert.ok(acl.flags.includes('-n'), `${name} carries -n`);
+    }
+  }
+  // Each port refuses what is off its list before private_dst is ever asked.
+  for (const client of CLIENTS) {
+    const at = access.indexOf(`deny CONNECT port_${client.portName} !names_${client.portName}`);
+    assert.ok(at !== -1 && at < firstResolving, `port ${client.portName}: its names are checked first`);
+  }
+  // dst, dst_as, srcdomain and the like appear nowhere else; the log and deny_info name nothing that resolves.
+  for (const line of directives.filter((each) => each.startsWith('acl '))) {
+    assert.doesNotMatch(line.split(/\s+/)[2], /^(dst_as|srcdomain|srcdom_regex|dstdomain_regex)$/, line);
+  }
+  const logformat = directives.find((line) => line.startsWith('logformat egress '));
+  assert.ok(logformat);
+  assert.doesNotMatch(logformat, /%<A|%>A|%\{[^}]*\}<A/, 'no FQDN (reverse lookup) field in the log');
+  for (const [page] of lines('deny_info')) assert.equal(page, 'TCP_RESET', 'every denial is a reset, no page that could name a host');
+});
+
+test('review fix HIGH B: -n on every dstdomain acl, and an address literal is refused before any allow', () => {
+  const domainLines = [...aclLines('dstdomain'), ...aclLines('dstdom_regex')];
+  assert.ok(domainLines.length >= 6);
+  for (const line of domainLines) assert.equal(line.split(/\s+/)[3], '-n', `-n right after the type: ${line}`);
+  const literal = acls.get('ip_literal');
+  assert.equal(literal.type, 'dstdom_regex');
+  assert.deepEqual(literal.flags, ['-n']);
+  const patterns = literal.values.map((value) => new RegExp(value));
+  const isLiteral = (host) => patterns.some((pattern) => pattern.test(host));
+  for (const host of ['160.79.104.10', '1.1.1.1', '2130706433', '[2607:6bc0::10]', '2607:6bc0::10', '::1']) assert.ok(isLiteral(host), `${host} is an address literal`);
+  for (const host of ['api.anthropic.com', 'goultdzqcavefcgnifdy.supabase.co', 'example.com', '1password.com']) assert.ok(!isLiteral(host), `${host} is a name`);
+  const access = lines('http_access').map((words) => words.join(' '));
+  const deny = access.indexOf('deny CONNECT ip_literal');
+  assert.ok(deny !== -1 && deny < access.findIndex((rule) => rule.startsWith('allow ')), 'ip_literal is refused before the first allow');
+  assert.ok(lines('deny_info').some(([page, name]) => page === 'TCP_RESET' && name === 'ip_literal'));
+});
+
+test('review fix LOW: the SNI acls read what the client asked for, and a hello with no SNI is terminated', () => {
+  for (const name of ['sni_anthropic', 'sni_project']) {
+    assert.equal(acls.get(name).type, 'ssl::server_name');
+    assert.deepEqual(acls.get(name).flags, ['--client-requested'], name);
+  }
+  // --client-requested falls back to the CONNECT host when there is no SNI, so the absence is caught
+  // by a helper that reads the SNI field itself, at step 2, before any splice line.
+  assert.deepEqual(aclValues('step2', 'at_step'), ['SslBump2']);
+  assert.equal(acls.get('sni_present').type, 'external');
+  assert.match(squid, /^external_acl_type sni_check ttl=0 negative_ttl=0 \S+ \S+ %ssl::>sni \/usr\/local\/bin\/egress-sni-present$/m);
+  const bump = lines('ssl_bump').map((words) => words.join(' '));
+  assert.ok(bump.indexOf('terminate step2 !sni_present') < bump.findIndex((rule) => rule.startsWith('splice ')));
+  const helper = read('docker/egress/sni-present.sh');
+  assert.match(helper, /"" \| "-"\) echo ERR ;;/);
+  assert.match(helper, /\*\) echo OK ;;/);
+  assert.match(helper, /read -r sni _rest/, 'only the first field is the SNI; Squid appends the acl arguments');
+  assert.match(dockerfile, /^COPY sni-present\.sh \/usr\/local\/bin\/egress-sni-present$/m);
+  assert.ok(read('docker/egress/Dockerfile.dockerignore').split('\n').includes('!sni-present.sh'));
 });

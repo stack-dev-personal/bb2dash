@@ -4,3 +4,4 @@
 !squid.conf
 !entrypoint.sh
 !healthcheck.sh
+!sni-present.sh

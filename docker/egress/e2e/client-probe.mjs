@@ -9,6 +9,8 @@
 //   PROBE_ALLOWED       names this client's list holds, comma-separated (must answer through egress)
 //   PROBE_REFUSED       names its list does not hold, comma-separated (must be refused by egress)
 //   PROBE_POOLER        the pooler host pinned from the fake DSN (tcp/5432 stays direct)
+//   PROBE_CONNECTS      CONNECT hosts egress must refuse, comma-separated: address literals (IPv4,
+//                       bracketed IPv6) and an unlisted canary name (Phase 25a review fixes)
 //
 // One JSON line per check on stdout: {check, target, ok, detail}. `ok` is what the check wanted.
 import dns from 'node:dns/promises';
@@ -28,6 +30,7 @@ const otherPorts = list('PROBE_OTHER_PORTS').map(Number);
 const allowed = list('PROBE_ALLOWED');
 const refused = list('PROBE_REFUSED');
 const pooler = process.env.PROBE_POOLER ?? '';
+const refusedConnects = list('PROBE_CONNECTS');
 
 const emit = (check, target, ok, detail) => console.log(JSON.stringify({ check, target, ok, detail: String(detail) }));
 const errorCode = (error) => error?.cause?.code ?? error?.code ?? error?.cause?.message ?? error?.message ?? String(error);
@@ -46,7 +49,7 @@ function tcpTry(host, tcpPort) {
   });
 }
 
-/** CONNECT <host>:443 through this client's port, then a TLS handshake naming <sni>: 'established' or why not. */
+/** CONNECT <host>:443 through this client's port, then a TLS handshake naming <sni> (null: no SNI at all): 'established' or why not. */
 function tunnelTls(host, sni) {
   return new Promise((resolve) => {
     const request = http.request({ host: PROXY_HOST, port, method: 'CONNECT', path: `${host}:443`, timeout: TIMEOUT_MS });
@@ -61,7 +64,8 @@ function tunnelTls(host, sni) {
         resolve(`connect-status:${response.statusCode}`);
         return;
       }
-      const secure = tls.connect({ socket, servername: sni, timeout: TIMEOUT_MS });
+      // With no servername and an address as host, Node sends a ClientHello with no SNI extension.
+      const secure = tls.connect(sni === null ? { socket, host: '127.0.0.1', rejectUnauthorized: false, timeout: TIMEOUT_MS } : { socket, servername: sni, timeout: TIMEOUT_MS });
       secure.once('secureConnect', () => {
         const name = secure.getPeerCertificate()?.subject?.CN ?? '?';
         secure.destroy();
@@ -107,6 +111,14 @@ const bySni = await tunnelTls(tunnelHost, DENIED_SNI);
 emit('tunnel-refused-by-sni', `${tunnelHost} sni=${DENIED_SNI}`, !bySni.startsWith('established'), bySni);
 const sameName = await tunnelTls(tunnelHost, tunnelHost);
 emit('tunnel-same-sni', `${tunnelHost} sni=${tunnelHost}`, sameName.startsWith('established'), sameName);
+// A ClientHello with no SNI at all is terminated, even behind a listed CONNECT host.
+const noSni = await tunnelTls(tunnelHost, null);
+emit('tunnel-no-sni-refused', `${tunnelHost} sni=(none)`, !noSni.startsWith('established'), noSni);
+// Address literals and an unlisted name are refused as CONNECT hosts, whatever the SNI says.
+for (const host of refusedConnects) {
+  const result = await tunnelTls(host, tunnelHost);
+  emit('connect-refused', host, !result.startsWith('established'), result);
+}
 // 5. The firewall: no direct tcp/443 to a public address, no other client's proxy port.
 for (const address of DIRECT_ADDRESSES) {
   const result = await tcpTry(address, 443);
