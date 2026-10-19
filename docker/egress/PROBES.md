@@ -9,6 +9,9 @@ and the TLS SNI are on the list. **Answer: yes. Every probe passed.**
 
 ## How it ran
 
+The probe kit (`compose.probe.yaml`, `Dockerfile.client`, `probe/run-probes.sh`, `probe/fetch-probe.mjs` and the
+single-port `squid.conf` and `Dockerfile` named below) is in commit `8d56aa8`. The build replaced it; see `README.md`.
+
 * Compose project `bb2dash-p25probe` (`compose.probe.yaml`), with two networks of its own:
   `probe-inside` (internal, no route out) and `probe-outside`. The proxy sits on both and the
   client on `probe-inside` only. Images `bb2dash-egress:p25-probe` and
@@ -101,3 +104,12 @@ Item A can be built as the brief says, with four adjustments:
 4. Watch the proxy's log for `TCP_DENIED` from `workspace` during the first real, logged-in turn
    at the cut-over. That turn closes the brief's full P-1 ("answers a turn"); this run showed the
    routing only.
+
+**Outcome (2026-10-19):** the PM accepted all four adjustments, and item A is built on this branch (`README.md`):
+
+* the environment route is used for P-2;
+* each client has its own proxy port and list;
+* checks read Squid's log;
+* the log watch is cut-over step 7.
+
+The end-to-end run (`e2e/run-e2e.sh`) passed 64 of 64 checks with the real images.
