@@ -8,7 +8,11 @@
 -- through announcement_review_record, which validates the whole decision and then writes it in one
 -- transaction. The reader never writes assignment_progress or reading_progress, and never a number
 -- it cannot quote: every date, time or point value must come with a quote that appears in the post,
--- and the database checks the quote.
+-- and the database checks the quote. HONESTLY: the check proves the quote is in the post (compared
+-- after lowercasing and removing all whitespace, at least 8 characters, and for an add or a change
+-- holding a digit or a weekday or month name). It does NOT prove the value written agrees with the
+-- quote; a model could quote one sentence and write another date. The value is a tentative row or a
+-- question Stack answers, never a confirmed fact, and the quote is on the Inbox item for him to read.
 --
 -- WHAT
 --   1. select on announcements for the role, with a select policy (the one table grant)
@@ -38,8 +42,8 @@
 --      request, and nothing is lost. Add them if Stack wants the noise.
 --   d. announcement_review_close files its follow-up only when this request reviewed at least one
 --      announcement (the 181 rule: a run that gets nowhere never loops).
---   e. announcement_review_prepare's runs_today counts the worker's started runs of BOTH kinds,
---      since the day's cap is shared (brief, apply worker).
+--   e. announcement_review_prepare's runs_today counts started announcement_review runs only: the
+--      announcement reader has its own daily cap, apart from the Inbox apply's (round 2, item 6).
 --   f. announcement_review_skip returns boolean: true when it marked the announcement refused,
 --      false (a no-op) when it was already reviewed, so the worker may call it for every leftover.
 --   g. A raise that returns false (a settled "keep" conflict) leaves attention_item_id null in the
@@ -89,16 +93,73 @@ comment on function public.announcement_review_is_own_claim(bigint) is
   'Helper (211): true when the request is an announcement_review request the apply worker holds '
   'claimed. Granted to nobody; the reader''s functions call it as their owner.';
 
--- Lowercase, whitespace collapsed to single spaces, trimmed: how a quote is compared with a post.
+-- Lowercase with ALL whitespace removed: how a quote is compared with a post. Removing it (not
+-- collapsing it to one space) makes the check immune to a line break, a non-breaking space or a
+-- doubled space that a model's copy changed.
 create or replace function public.announcement_review_norm(p_text text)
   returns text
   immutable
   language sql set search_path = public, pg_temp as $$
-  select btrim(regexp_replace(lower(coalesce(p_text, '')), '\s+', ' ', 'g'));
+  select regexp_replace(lower(coalesce(p_text, '')), '\s+', '', 'g');
 $$;
 
 comment on function public.announcement_review_norm(text) is
-  'Helper (211): lowercase, whitespace collapsed, trimmed. A quote is checked against a post after this.';
+  'Helper (211): lowercase with every whitespace character removed. A quote is checked against a post '
+  'after this.';
+
+-- A time as the reader must give it: ISO-8601 with an explicit offset (Z or +-hh:mm).
+create or replace function public.announcement_review_is_iso_time(p_text text)
+  returns boolean
+  immutable
+  language sql set search_path = public, pg_temp as $$
+  select p_text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}(:[0-9]{2}(\.[0-9]+)?)?(Z|[+-][0-9]{2}:[0-9]{2})$';
+$$;
+
+comment on function public.announcement_review_is_iso_time(text) is
+  'Helper (211): true for an ISO-8601 date and time with an explicit Z or +-hh:mm offset.';
+
+-- A quote that can carry a date, a time or a number: a digit, or an English weekday or month name.
+create or replace function public.announcement_review_quote_has_value(p_quote text)
+  returns boolean
+  immutable
+  language sql set search_path = public, pg_temp as $$
+  select p_quote ~ '[0-9]'
+      or lower(p_quote) ~ '\m(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun|january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\M';
+$$;
+
+comment on function public.announcement_review_quote_has_value(text) is
+  'Helper (211): true when a quote holds a digit or an English weekday or month name.';
+
+-- The quote of one decision entry: present, at most 500 characters, at least 8 once whitespace is
+-- gone, holding a digit or a weekday or month name when it backs a value (add, change), and found in
+-- the post's title or body. This proves the quote is in the post, not that the value agrees with it.
+create or replace function public.announcement_review_check_quote(
+  p_entry jsonb, p_title_n text, p_body_n text, p_for text, p_needs_value boolean)
+  returns void
+  immutable
+  language plpgsql set search_path = public, pg_temp as $$
+declare
+  q text := announcement_review_text(p_entry, 'quote', 500, true);
+  n text := announcement_review_norm(q);
+begin
+  if length(n) < 8 then
+    raise exception 'announcement_review_record: the quote for % is shorter than 8 characters', p_for
+      using errcode = '22023';
+  end if;
+  if p_needs_value and not announcement_review_quote_has_value(q) then
+    raise exception 'announcement_review_record: the quote for % holds no digit, weekday or month', p_for
+      using errcode = '22023';
+  end if;
+  if position(n in p_title_n) = 0 and position(n in p_body_n) = 0 then
+    raise exception 'announcement_review_record: the quote for % does not appear in the announcement', p_for
+      using errcode = '22023';
+  end if;
+end $$;
+
+comment on function public.announcement_review_check_quote(jsonb, text, text, text, boolean) is
+  'Helper (211): refuses (22023) a decision entry whose quote is missing, past 500 characters, shorter '
+  'than 8 once whitespace is removed, without a digit or weekday or month name where it backs a value, '
+  'or not found in the post after lowercasing and removing all whitespace.';
 
 -- A text field of a decision entry: required or optional, a length cap, never a non-string.
 create or replace function public.announcement_review_text(
@@ -192,6 +253,8 @@ create or replace function public.announcement_review_prepare(p_request bigint)
   language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   c_batch constant integer := 6;
+  v_ids   bigint[];
+  v_list  jsonb;
 begin
   if not announcement_review_is_own_claim(p_request) then
     raise exception 'announcement_review_prepare: request % is not the apply worker''s claim',
@@ -199,20 +262,30 @@ begin
   end if;
 
   -- Ids only: the text is read by the skill through its query tool.
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'id', u.id, 'course_id', u.course_id, 'title', u.title, 'posted_at', u.posted_at,
+           'modified_at', u.modified_at, 'bb_item_id', u.bb_item_id)
+           order by u.sort_at, u.id), '[]'::jsonb),
+         coalesce(array_agg(u.id), '{}')
+    into v_list, v_ids
+    from (select v.id, v.course_id, v.title, v.posted_at, v.modified_at, v.bb_item_id,
+                 coalesce(v.posted_at, v.captured_at) as sort_at
+            from v_announcements_unreviewed v
+           order by coalesce(v.posted_at, v.captured_at), v.id
+           limit c_batch) u;
+
+  -- One attempt per announcement handed out (a second prepare of the same request counts once):
+  -- announcement_review_close refuses a post two timed-out runs could not finish.
+  insert into announcement_review_attempts (announcement_id, request_id)
+  select i, p_request from unnest(v_ids) i
+  on conflict (announcement_id, request_id) do nothing;
+
   return jsonb_build_object(
-    'announcements', (
-      select coalesce(jsonb_agg(jsonb_build_object(
-               'id', u.id, 'course_id', u.course_id, 'title', u.title, 'posted_at', u.posted_at,
-               'modified_at', u.modified_at, 'bb_item_id', u.bb_item_id)
-               order by u.sort_at, u.id), '[]'::jsonb)
-        from (select v.id, v.course_id, v.title, v.posted_at, v.modified_at, v.bb_item_id,
-                     coalesce(v.posted_at, v.captured_at) as sort_at
-                from v_announcements_unreviewed v
-               order by coalesce(v.posted_at, v.captured_at), v.id
-               limit c_batch) u),
+    'announcements', v_list,
+    -- The announcement reader has its own daily cap: only its own started runs count.
     'runs_today', (
       select count(*) from agent_requests a
-       where a.kind in ('inbox_feedback', 'announcement_review') and a.id <> p_request
+       where a.kind = 'announcement_review' and a.id <> p_request
          and a.claimed_by = 'inbox-apply-runner'
          and a.result->'claude'->>'started' = 'true'
          and (a.claimed_at at time zone 'America/New_York')::date
@@ -222,8 +295,9 @@ end $$;
 comment on function public.announcement_review_prepare(bigint) is
   'Which announcements the run reads (211): {announcements: [{id, course_id, title, posted_at, '
   'modified_at, bb_item_id}] for the at most 6 oldest unreviewed (ids and headers only), runs_today: '
-  'how many of the worker''s requests of either kind started Claude on this New York day}. Refuses a '
-  'request that is not the worker''s own claim. inbox_apply_runner only.';
+  'how many announcement_review requests started Claude on this New York day (its own cap, apart from '
+  'the Inbox apply''s)}. Records one announcement_review_attempts row per announcement returned. '
+  'Refuses a request that is not the worker''s own claim. inbox_apply_runner only.';
 
 -- =============================================================================================
 -- 3c. announcement_review_record: the reader's only write path
@@ -252,6 +326,7 @@ declare
   v_id       text;
   v_key      text;
   v_keys     text[] := '{}';
+  v_fb       text[] := '{}';
   v_cur      assignments%rowtype;
   v_ts       timestamptz;
   v_dt       date;
@@ -323,12 +398,7 @@ begin
       if jsonb_typeof(e) <> 'object' then
         raise exception 'announcement_review_record: each add entry must be an object' using errcode = '22023';
       end if;
-      v_quote := announcement_review_text(e, 'quote', c_max_quote, true);
-      if position(announcement_review_norm(v_quote) in v_title_n) = 0
-         and position(announcement_review_norm(v_quote) in v_body_n) = 0 then
-        raise exception 'announcement_review_record: the quote for an add does not appear in the announcement'
-          using errcode = '22023';
-      end if;
+      perform announcement_review_check_quote(e, v_title_n, v_body_n, 'an add', true);
       perform announcement_review_text(e, 'question', c_max_ask, true);
       perform announcement_review_text(e, 'title', 200, true);
       v_slug := announcement_review_text(e, 'slug', 60, true);
@@ -356,6 +426,20 @@ begin
         raise exception 'announcement_review_record: an add needs one of due_at, due_date or event_start'
           using errcode = '22023';
       end if;
+      if announcement_review_text(e, 'due_at', 64, false) is not null
+         and not announcement_review_is_iso_time(e->>'due_at') then
+        raise exception 'announcement_review_record: due_at must be ISO-8601 with a Z or +-hh:mm offset'
+          using errcode = '22023';
+      end if;
+      if announcement_review_text(e, 'event_start', 64, false) is not null
+         and not announcement_review_is_iso_time(e->>'event_start') then
+        raise exception 'announcement_review_record: event_start must be ISO-8601 with a Z or +-hh:mm offset'
+          using errcode = '22023';
+      end if;
+      if announcement_review_text(e, 'due_date', 32, false) is not null
+         and (e->>'due_date') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' then
+        raise exception 'announcement_review_record: due_date must be YYYY-MM-DD' using errcode = '22023';
+      end if;
       v_ts := announcement_review_text(e, 'due_at', 64, false)::timestamptz;
       v_ts := announcement_review_text(e, 'event_start', 64, false)::timestamptz;
       v_dt := announcement_review_text(e, 'due_date', 32, false)::date;
@@ -382,16 +466,12 @@ begin
 
     -- change
     v_keys := '{}';
+    v_fb := '{}';
     for e in select x from jsonb_array_elements(v_change) x loop
       if jsonb_typeof(e) <> 'object' then
         raise exception 'announcement_review_record: each change entry must be an object' using errcode = '22023';
       end if;
-      v_quote := announcement_review_text(e, 'quote', c_max_quote, true);
-      if position(announcement_review_norm(v_quote) in v_title_n) = 0
-         and position(announcement_review_norm(v_quote) in v_body_n) = 0 then
-        raise exception 'announcement_review_record: the quote for a change does not appear in the announcement'
-          using errcode = '22023';
-      end if;
+      perform announcement_review_check_quote(e, v_title_n, v_body_n, 'a change', true);
       perform announcement_review_text(e, 'question', c_max_ask, true);
       v_id := announcement_review_text(e, 'assignment_id', 200, true);
       select * into v_cur from assignments x where x.id = v_id and x.course_id = v_a.course_id;
@@ -419,13 +499,36 @@ begin
       elsif jsonb_typeof(e->'to_value') is distinct from 'string' then
         raise exception 'announcement_review_record: to_value for % must be text', v_field using errcode = '22023';
       elsif v_field = 'due_at' then
+        if not announcement_review_is_iso_time(e->>'to_value') then
+          raise exception 'announcement_review_record: to_value for due_at must be ISO-8601 with a Z or +-hh:mm offset'
+            using errcode = '22023';
+        end if;
         if v_cur.due_at is not distinct from (e->>'to_value')::timestamptz then
           raise exception 'announcement_review_record: % already has this due_at', v_id using errcode = '22023';
         end if;
       else
+        if (e->>'to_value') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' then
+          raise exception 'announcement_review_record: to_value for due_date must be YYYY-MM-DD' using errcode = '22023';
+        end if;
+        if v_cur.due_at is not null then
+          raise exception 'announcement_review_record: % has a due_at; change due_at, not due_date', v_id
+            using errcode = '22023';
+        end if;
         if v_cur.due_date is not distinct from (e->>'to_value')::date then
           raise exception 'announcement_review_record: % already has this due_date', v_id using errcode = '22023';
         end if;
+      end if;
+      -- An open conflict somebody else raised on this field (the transform's, say) is not ours to
+      -- overwrite: the change is asked instead, and two such asks about one assignment would collide.
+      if exists (select 1 from attention_items i
+                  where i.state = 'open' and i.kind = 'conflict' and i.course_id = v_a.course_id
+                    and i.ref = v_id and i.field = v_field
+                    and coalesce(i.suggested->>'source', '') <> 'announcement') then
+        if v_id = any (v_fb) then
+          raise exception 'announcement_review_record: two changes to % would both have to be asked', v_id
+            using errcode = '22023';
+        end if;
+        v_fb := v_fb || v_id;
       end if;
     end loop;
 
@@ -435,12 +538,7 @@ begin
       if jsonb_typeof(e) <> 'object' then
         raise exception 'announcement_review_record: each ask entry must be an object' using errcode = '22023';
       end if;
-      v_quote := announcement_review_text(e, 'quote', c_max_quote, true);
-      if position(announcement_review_norm(v_quote) in v_title_n) = 0
-         and position(announcement_review_norm(v_quote) in v_body_n) = 0 then
-        raise exception 'announcement_review_record: the quote for an ask does not appear in the announcement'
-          using errcode = '22023';
-      end if;
+      perform announcement_review_check_quote(e, v_title_n, v_body_n, 'an ask', false);
       perform announcement_review_text(e, 'question', c_max_ask, true);
       v_id := announcement_review_text(e, 'assignment_id', 200, false);
       if v_id is not null then
@@ -448,7 +546,7 @@ begin
           raise exception 'announcement_review_record: assignment % is not in the announcement''s course %',
             v_id, v_a.course_id using errcode = '22023';
         end if;
-        if v_id = any (v_keys) then
+        if v_id = any (v_keys) or v_id = any (v_fb) then
           raise exception 'announcement_review_record: two asks about %', v_id using errcode = '22023';
         end if;
         v_keys := v_keys || v_id;
@@ -479,7 +577,7 @@ begin
             nullif(e->>'due_at', '')::timestamptz, nullif(e->>'due_date', '')::date,
             nullif(e->>'event_start', '')::timestamptz, (e->>'points_possible')::numeric,
             coalesce((e->>'submission')::submission_channel, 'unknown'), nullif(e->>'description', ''),
-            v_a.bb_item_id, 'blackboard',
+            null, 'blackboard',
             format('announcement %s (%s)', v_a.bb_item_id, v_a.posted_at::date), 'tentative');
     select coalesce(to_jsonb(a.due_at), to_jsonb(a.due_date::text), to_jsonb(a.event_start)) into v_due
       from assignments a where a.id = v_id;
@@ -511,13 +609,30 @@ begin
       v_from := to_jsonb(v_cur.due_date::text);
       v_to   := to_jsonb(((e->>'to_value')::date)::text);
     end if;
-    perform raise_attention(null, 'conflict', v_a.course_id, 'assignment', v_id, v_field,
-                            v_from, v_to, e->>'question', v_sugg);
-    select i.id into v_item from attention_items i
-     where i.state = 'open' and i.kind = 'conflict' and i.course_id = v_a.course_id
-       and i.ref = v_id and i.field = v_field order by i.id desc limit 1;
-    insert into announcement_review_writes (request_id, announcement_id, action, assignment_id, attention_item_id)
-    values (p_request, v_a.id, 'change', v_id, v_item);
+    if exists (select 1 from attention_items i
+                where i.state = 'open' and i.kind = 'conflict' and i.course_id = v_a.course_id
+                  and i.ref = v_id and i.field = v_field
+                  and coalesce(i.suggested->>'source', '') <> 'announcement') then
+      -- Somebody else's open conflict stands on this field: ask, naming the announced value.
+      perform raise_attention(null, 'stack_must_confirm', v_a.course_id, 'assignment', v_id, 'announcement',
+                              null, v_to,
+                              left(format('The announcement gives %s = %s for %s. %s',
+                                          v_field, v_to #>> '{}', v_id, e->>'question'), 600),
+                              v_sugg);
+      select i.id into v_item from attention_items i
+       where i.state = 'open' and i.kind = 'stack_must_confirm' and i.course_id = v_a.course_id
+         and i.ref = v_id and i.field = 'announcement' order by i.id desc limit 1;
+      insert into announcement_review_writes (request_id, announcement_id, action, assignment_id, attention_item_id)
+      values (p_request, v_a.id, 'ask', v_id, v_item);
+    else
+      perform raise_attention(null, 'conflict', v_a.course_id, 'assignment', v_id, v_field,
+                              v_from, v_to, e->>'question', v_sugg);
+      select i.id into v_item from attention_items i
+       where i.state = 'open' and i.kind = 'conflict' and i.course_id = v_a.course_id
+         and i.ref = v_id and i.field = v_field order by i.id desc limit 1;
+      insert into announcement_review_writes (request_id, announcement_id, action, assignment_id, attention_item_id)
+      values (p_request, v_a.id, 'change', v_id, v_item);
+    end if;
     if v_item is not null then v_raised := v_raised || to_jsonb(v_item); end if;
   end loop;
 
@@ -645,6 +760,26 @@ begin
      set state = p_state, finished_at = now(), result = p_result
    where a.id = p_request;
 
+  -- A post two runs of ours timed out on, or ran out of budget on, is refused so it cannot burn a
+  -- third. An outage (sign_in_expired, usage_limit, cli_error, interrupted, daily_cap) is not the
+  -- post's fault and never refuses anything.
+  if p_state = 'failed' and p_result->>'error' in ('timed_out', 'budget_exceeded') then
+    insert into announcement_reviews (announcement_id, modified_seen, request_id, reviewed_at, outcome, summary, detail)
+    select u.id, coalesce(u.modified_at, u.posted_at), p_request, now(), 'refused',
+           'two runs ended without a decision',
+           jsonb_build_object('why', 'two runs ended without a decision', 'attempts', t.n, 'error', p_result->>'error')
+      from v_announcements_unreviewed u
+      join (select x.announcement_id, count(*) as n from announcement_review_attempts x
+             group by x.announcement_id) t on t.announcement_id = u.id
+     where t.n >= 2
+       and exists (select 1 from announcement_review_attempts y
+                    where y.announcement_id = u.id and y.request_id = p_request)
+    on conflict (announcement_id) do update
+       set modified_seen = excluded.modified_seen, request_id = excluded.request_id,
+           reviewed_at = excluded.reviewed_at, outcome = excluded.outcome,
+           summary = excluded.summary, detail = excluded.detail;
+  end if;
+
   -- One follow-up for the rest, only after a run that reviewed something (a run that gets nowhere
   -- never loops).
   if p_state = 'done'
@@ -675,6 +810,9 @@ comment on function public.announcement_review_close(bigint, text, jsonb) is
 revoke all on function
   public.announcement_review_is_own_claim(bigint),
   public.announcement_review_norm(text),
+  public.announcement_review_is_iso_time(text),
+  public.announcement_review_quote_has_value(text),
+  public.announcement_review_check_quote(jsonb, text, text, text, boolean),
   public.announcement_review_text(jsonb, text, integer, boolean),
   public.announcement_review_claim(),
   public.announcement_review_prepare(bigint),
@@ -727,7 +865,7 @@ begin
     from pg_class c
     cross join (values ('select'), ('insert'), ('update'), ('delete'), ('truncate')) p(priv)
    where c.relnamespace = 'public'::regnamespace
-     and c.relname in ('announcement_reviews', 'announcement_review_writes', 'announcements',
+     and c.relname in ('announcement_reviews', 'announcement_review_writes', 'announcement_review_attempts', 'announcements',
                        'v_announcements_unreviewed')
      and has_table_privilege('inbox_apply_runner', c.oid, p.priv);
   if v_got is distinct from 'announcements:select' then

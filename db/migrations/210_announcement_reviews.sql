@@ -15,7 +15,7 @@
 --   1. agent_requests_kind_check gains 'announcement_review' (drop + re-add; the live check is
 --      ('sync', 'transform', 'inbox_feedback'))
 --   2. the partial unique index agent_requests_one_open_announcement_review (183's pattern)
---   3. table announcement_reviews (RLS on, owner select, no anon) and the write log
+--   3. table announcement_reviews (RLS on, owner select, no anon), the write log and the attempts table
 --      announcement_review_writes (written only by 211's functions)
 --   4. the 14-day floor: one 'before_floor' review row for every announcement posted before
 --      now() - 14 days at apply time (Stack's answer 2: the first run reads the last 14 days).
@@ -143,10 +143,29 @@ begin
   end if;
 end $$;
 
+-- One row per announcement handed to a run (written by announcement_review_prepare, 211). Two
+-- timed-out or over-budget runs on one post refuse it (announcement_review_close), so a poison post
+-- cannot burn a third run. No policy and no grant to the apply login: only the functions write it.
+create table if not exists public.announcement_review_attempts (
+  announcement_id bigint not null references public.announcements (id) on delete cascade,
+  request_id      bigint not null references public.agent_requests (id) on delete cascade,
+  at              timestamptz not null default now(),
+  primary key (announcement_id, request_id)
+);
+
+comment on table public.announcement_review_attempts is
+  'One row per (announcement, announcement_review request) the request was handed (210, written by '
+  'announcement_review_prepare in 211). Read by announcement_review_close to refuse a post that two runs '
+  'ended without a decision on.';
+
+alter table public.announcement_review_attempts enable row level security;
+revoke all on public.announcement_review_attempts from public, anon, authenticated, service_role;
+
 -- The suite writes these tables, and the announcements they hang on, inside its rolled-back
 -- transactions (as 133 and 137 did for their tables). Nothing runs as this role outside the suite.
 grant insert, update, delete on
-  public.announcement_reviews, public.announcement_review_writes, public.announcements
+  public.announcement_reviews, public.announcement_review_writes, public.announcement_review_attempts,
+  public.announcements
 to db_test_runner;
 
 -- =============================================================================================

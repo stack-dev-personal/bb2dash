@@ -72,7 +72,7 @@ begin
 
   -- (5)
   v_out := sync_change_lines('{
-    "courses":{"courses_updated":1,"staff_inserted":2,"staff_conflicts":3,"courses_unresolved":4},
+    "courses":{"courses_updated":1,"staff_inserted":2,"staff_conflicts":5,"staff_conflicts_new":3,"courses_unresolved":4},
     "content":{"inserted":98,"missing":99},
     "history":{"appeared":5,"changed":6,"vanished":7,
                "sample":[{"change":"appeared","entity":"file","title":"new.pdf"},

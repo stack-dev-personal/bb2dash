@@ -20,9 +20,11 @@
 --      <> 'confirmed'; and one of
 --        (a) the lowercased, whitespace-collapsed title, with any trailing (...) removed, equals the
 --            same of the column's name; or
---        (b) the column name parses as <word> <n> ("Quiz 5", "Lab #2"), the row's sequence_no = n
---            and the row's series_key ends with '/' || the word's stem (case-folded, a trailing s
---            dropped from both sides).
+--        (b) the column name parses as <words> <n> ("Quiz 5", "Lab #2", "Problem Set 3"; the pattern is
+--            ^(.+?)\s*#?\s*(\d+)$), the row's sequence_no = n and the row's series tail (after the last
+--            '/') equals the words as a lowercase hyphen slug, both singularised (ies to y, zzes to z,
+--            sses to ss, xes/ches/shes drop es, zes to z, then a trailing s; so 'quizzes' meets "Quiz"
+--            and 'problem-sets' meets "Problem Set").
 --      It sets bb_column_id and nothing else, and returns counts.
 --   2. run_transform is replaced: 135's body (the latest), unchanged except one step,
 --      bind_announcement_rows, run just before stage_assignments and recorded in sync_stage_runs
@@ -45,6 +47,38 @@ begin
     raise exception '212: run_transform is not 135''s body; apply 135 first (prod order must equal name order)';
   end if;
 end $$;
+
+-- =============================================================================================
+-- 0. Name helpers (the owner's alone)
+-- =============================================================================================
+create or replace function public.announcement_slug(p_text text)
+  returns text
+  immutable
+  language sql set search_path = public, pg_temp as $$
+  select btrim(regexp_replace(lower(coalesce(p_text, '')), '[^a-z0-9]+', '-', 'g'), '-');
+$$;
+
+comment on function public.announcement_slug(text) is
+  'Helper (212): lowercase, every run of other characters becomes one hyphen, hyphens trimmed.';
+
+create or replace function public.announcement_singular(p_text text)
+  returns text
+  immutable
+  language sql set search_path = public, pg_temp as $$
+  select case
+    when p_text ~ 'zzes$'          then regexp_replace(p_text, 'zzes$', 'z')
+    when p_text ~ 'ies$'           then regexp_replace(p_text, 'ies$', 'y')
+    when p_text ~ 'sses$'          then regexp_replace(p_text, 'sses$', 'ss')
+    when p_text ~ '(x|ch|sh)es$'   then regexp_replace(p_text, 'es$', '')
+    when p_text ~ 'zes$'           then regexp_replace(p_text, 'zes$', 'z')
+    when p_text ~ '[^s]s$'         then regexp_replace(p_text, 's$', '')
+    else p_text
+  end;
+$$;
+
+comment on function public.announcement_singular(text) is
+  'Helper (212): the singular of a series tail or a column word: zzes to z, ies to y, sses to ss, '
+  'xes/ches/shes lose es, zes to z, then one trailing s (not ss) is dropped.';
 
 -- =============================================================================================
 -- 1. bind_announcement_rows
@@ -93,7 +127,7 @@ begin
       from _bb_bind_cols c
       join assignments a on a.course_id = c.course_id
       cross join lateral (
-        select regexp_match(c.name, '^\s*([A-Za-z]+)\s*#?\s*([0-9]{1,4})\s*$') as m) p
+        select regexp_match(c.name, '^\s*(.+?)\s*#?\s*([0-9]{1,4})\s*$') as m) p
      where a.bb_column_id is null
        and a.source_ref like 'announcement %'
        and a.confidence <> 'confirmed'
@@ -103,8 +137,8 @@ begin
          or (p.m is not null
              and a.sequence_no = p.m[2]::int
              and a.series_key is not null
-             and regexp_replace(lower(split_part(a.series_key, '/', -1)), 's$', '')
-                 = regexp_replace(lower(p.m[1]), 's$', ''))
+             and announcement_singular(announcement_slug(split_part(a.series_key, '/', -1)))
+                 = announcement_singular(announcement_slug(p.m[1])))
        );
 
   select count(distinct (course_id, column_id)) into v_candidates from _bb_bind_pairs;
@@ -142,6 +176,8 @@ comment on function public.bind_announcement_rows(uuid) is
   'fires. Returns counts {columns_seen, columns_skipped, already_carried, with_candidates, bound, '
   'left_ambiguous}. Called by run_transform; nobody else.';
 
+revoke all on function public.announcement_slug(text), public.announcement_singular(text)
+  from public, anon, authenticated, service_role;
 revoke all on function public.bind_announcement_rows(uuid) from public, anon, authenticated, service_role;
 grant execute on function public.bind_announcement_rows(uuid) to db_test_runner;
 

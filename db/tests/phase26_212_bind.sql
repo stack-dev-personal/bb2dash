@@ -9,6 +9,8 @@
 --        bound: "Lab #2" -> "Lab 2 (in class)" (word and number), "Policy memo" -> "Policy Memo (due
 --               Friday)" (title with the trailing bracket removed), "Quiz 9" -> "Quiz 9"; and the
 --               real ECN.304/quiz-5 with the real "Quiz 5" column, while that row is still unbound
+--        plural series tails: 'IST.323/quizzes' meets "Quiz 5" and 'IST.323/problem-sets' meets
+--               "Problem Set 3" (multi-word names, singularised tails)
 --        not bound: two candidate rows ("Essay 9"), a confirmed row, a row that is not from an
 --               announcement, one row claimed by two columns ("Quiz 8" and "Quiz #8"), a column an
 --               assignment already carries, a computed column ("Total"), another course's column
@@ -62,7 +64,9 @@ values
   ('ECN.304/t26-essay-b', 'ECN.304', 'Essay 9 B',                'paper', 'ECN.304/essay',  9,    '2026-11-14', 'blackboard', 'announcement _t26_eb (2026-10-19)', 'tentative'),
   ('ECN.304/t26-exam-z',  'ECN.304', 'Exam Z',                   'exam',  null,             null, '2026-11-15', 'blackboard', 'announcement _t26_ez (2026-10-19)', 'confirmed'),
   ('ECN.304/t26-syl',     'ECN.304', 'Syllabus Project',         'project', null,           null, '2026-11-16', 'syllabus',   'syllabus p. 3',                     'tentative'),
-  ('ECN.304/t26-quiz-8',  'ECN.304', 'Quiz 8',                   'quiz',  'ECN.304/quiz',   8,    '2026-11-17', 'blackboard', 'announcement _t26_q8 (2026-10-19)', 'tentative');
+  ('ECN.304/t26-quiz-8',  'ECN.304', 'Quiz 8',                   'quiz',  'ECN.304/quiz',   8,    '2026-11-17', 'blackboard', 'announcement _t26_q8 (2026-10-19)', 'tentative'),
+  ('IST.323/t26-iq5',     'IST.323', 'Weekly check (announced)', 'quiz',  'IST.323/quizzes', 5,   '2026-11-18', 'blackboard', 'announcement _t26_iq (2026-10-19)', 'tentative'),
+  ('IST.323/t26-ps3',     'IST.323', 'Set three',                'homework', 'IST.323/problem-sets', 3, '2026-11-19', 'blackboard', 'announcement _t26_ps (2026-10-19)', 'tentative');
 
 -- =============================================================================================
 -- 1. run_transform on a fixture crawl
@@ -115,7 +119,7 @@ declare
   v_run uuid := gen_random_uuid();
   v_real boolean;
   v_got jsonb;
-  v_expect int := 3;
+  v_expect int := 5;
   v_carried text;
 begin
   -- The real case, while it is still the case: ECN.304/quiz-5, unbound, with Quiz 1 to 4 carried.
@@ -124,7 +128,7 @@ begin
                       and series_key = 'ECN.304/quiz' and sequence_no = 5)
             and not exists (select 1 from assignments where course_id = 'ECN.304'
                               and (id <> 'ECN.304/quiz-5') and lower(title) like 'quiz 5%');
-  if v_real then v_expect := 4; end if;
+  if v_real then v_expect := 6; end if;
   select bb_column_id into v_carried from assignments where id = 'ECN.304/quiz-01';
 
   insert into bb_raw (run_id, bb_course_id, kind, payload)
@@ -143,7 +147,9 @@ begin
   -- Another course's "Lab #2": it must not reach a row of ECN.304.
   insert into bb_raw (run_id, bb_course_id, kind, payload)
   values (v_run, '_571529_1', 'course', jsonb_build_object('gradebook', jsonb_build_array(
-    jsonb_build_object('columnId', '_t26_c_other', 'name', 'Lab #2', 'isCalc', false))));
+    jsonb_build_object('columnId', '_t26_c_other', 'name', 'Lab #2', 'isCalc', false),
+    jsonb_build_object('columnId', '_t26_c_iq5',   'name', 'Quiz 5', 'isCalc', false),
+    jsonb_build_object('columnId', '_t26_c_ps3',   'name', 'Problem Set 3', 'isCalc', false))));
 
   v_got := bind_announcement_rows(v_run);
   if (v_got->>'bound')::int <> v_expect then
@@ -160,6 +166,13 @@ begin
       (select bb_column_id from assignments where id = 'ECN.304/t26-lab-2'),
       (select bb_column_id from assignments where id = 'ECN.304/t26-memo'),
       (select bb_column_id from assignments where id = 'ECN.304/t26-quiz-9');
+  end if;
+  -- Plural series tails: 'quizzes' meets "Quiz 5", 'problem-sets' meets "Problem Set 3".
+  if (select bb_column_id from assignments where id = 'IST.323/t26-iq5') is distinct from '_t26_c_iq5'
+     or (select bb_column_id from assignments where id = 'IST.323/t26-ps3') is distinct from '_t26_c_ps3' then
+    raise exception 'FAIL 2: a plural series tail did not meet its column: quizzes %, problem-sets %',
+      (select bb_column_id from assignments where id = 'IST.323/t26-iq5'),
+      (select bb_column_id from assignments where id = 'IST.323/t26-ps3');
   end if;
   if v_real and (select bb_column_id from assignments where id = 'ECN.304/quiz-5') is distinct from '_t26_c_q5' then
     raise exception 'FAIL 2: the real ECN.304/quiz-5 was not bound to the "Quiz 5" column';
@@ -192,6 +205,15 @@ begin
   v_got := bind_announcement_rows(v_run);
   if (v_got->>'bound')::int <> 0 then
     raise exception 'FAIL 3: a second call bound % more columns', v_got->>'bound';
+  end if;
+  if announcement_singular('quizzes') <> 'quiz' or announcement_singular('problem-sets') <> 'problem-set'
+     or announcement_singular('categories') <> 'category' or announcement_singular('classes') <> 'class'
+     or announcement_singular('boxes') <> 'box' or announcement_singular('essays') <> 'essay'
+     or announcement_singular('lab') <> 'lab' or announcement_singular('class') <> 'class'
+     or announcement_slug('Problem  Set') <> 'problem-set' then
+    raise exception 'FAIL 3: a name helper gave an unexpected form: % % % % % %', announcement_singular('quizzes'),
+      announcement_singular('categories'), announcement_singular('classes'), announcement_singular('boxes'),
+      announcement_singular('essays'), announcement_slug('Problem  Set');
   end if;
 end $$;
 
