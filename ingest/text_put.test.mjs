@@ -111,10 +111,12 @@ test('the DSN: a file that cannot be read, or is empty, is named; its contents n
 
 test('the DSN must be the session pooler or direct, with an encrypted sslmode; refusals never print it', () => {
   assert.equal(tp.assertSessionDsn(DSN), DSN);
+  assert.equal(tp.assertSessionDsn(DSN.replace('sslmode=require', 'sslmode=verify-full')), DSN.replace('sslmode=require', 'sslmode=verify-full'));
   const cases = [
     [DSN.replace(':5432/', ':6543/'), /6543, the transaction pooler/],
     [DSN.replace('?uselibpqcompat=true&sslmode=require', ''), /no sslmode/],
     [DSN.replace('sslmode=require', 'sslmode=disable'), /sslmode=disable/],
+    [DSN.replace('sslmode=require', 'sslmode=no-verify'), /sslmode=no-verify, which asks for less/],
     ['not a url s3cret-pass', /not a postgresql:\/\/ URL/],
     [DSN.replace('postgresql:', 'https:'), /not a postgresql:\/\/ URL/],
   ];
@@ -136,49 +138,136 @@ test('redactDsn takes out the DSN, its password and its host', () => {
   assert.equal(tp.redactDsn('plain', null), 'plain');
 });
 
-function fakePg({ failConnect = false, failQuery = null } = {}) {
+const CA = '-----BEGIN CERTIFICATE-----\nMIIBfake\n-----END CERTIFICATE-----\n';
+
+test('the pinned CA: SYNC_RUNNER_DB_CA_FILE, else <HARNESS_DIR>/certs/prod-ca.crt, else the harness checkout', () => {
+  const seen = [];
+  const readFile = (file) => { seen.push(file.replace(/\\/g, '/')); return `\uFEFF${CA}`; };
+  assert.equal(tp.readPinnedCa({ SYNC_RUNNER_DB_CA_FILE: 'D:/ca.pem' }, readFile), CA, 'a BOM is stripped');
+  assert.equal(tp.readPinnedCa({ HARNESS_DIR: 'E:/harness' }, readFile), CA);
+  assert.equal(tp.readPinnedCa({}, readFile), CA);
+  assert.deepEqual(seen, ['D:/ca.pem', 'E:/harness/certs/prod-ca.crt', 'C:/Users/stack/agentic-harness/certs/prod-ca.crt']);
+});
+
+test('the pinned CA: missing or not a certificate stops the run with how to get it, before anything connects', () => {
+  const missing = () => { throw Object.assign(new Error('nope'), { code: 'ENOENT' }); };
+  assert.throws(() => tp.readPinnedCa({ HARNESS_DIR: 'E:/h' }, missing),
+    /prod-ca\.crt cannot be read \(ENOENT\): the database connection is not made without it\. The Workspace takes this CA from the harness checkout's certs\/prod-ca\.crt; set HARNESS_DIR/);
+  assert.throws(() => tp.readPinnedCa({}, () => 'not a pem'), /holds no PEM certificate/);
+  assert.throws(() => tp.readPinnedCa({}, () => ''), /holds no PEM certificate/);
+});
+
+test('the connection: built from the DSN\'s parts, verify-full against the pinned CA, with both timeouts', () => {
+  const o = tp.pgClientOptions(DSN, CA);
+  assert.deepEqual(o, {
+    host: 'aws-0-us-east-1.pooler.supabase.com', port: 5432, user: 'sync_runner.goultdzqcavefcgnifdy', password: 's3cret-pass', database: 'postgres',
+    ssl: { ca: CA, rejectUnauthorized: true, servername: 'aws-0-us-east-1.pooler.supabase.com' },
+    application_name: 'bb2dash-pull-files', connectionTimeoutMillis: 10_000, query_timeout: 60_000, keepAlive: true,
+  });
+  assert.equal('connectionString' in o, false, 'the DSN\'s sslmode=require never reaches the driver');
+  assert.equal(tp.DB_CONNECT_TIMEOUT_MS, 10_000);
+  assert.equal(tp.DB_QUERY_TIMEOUT_MS, 60_000);
+  assert.throws(() => tp.pgClientOptions('postgresql://u@h:5432/postgres?sslmode=require', CA), /names no password/);
+});
+
+/**
+ * A fake pg: each Client records its queries. `script(client, sql)` may return a result, throw, or
+ * call `client.fireError()` (the socket dropping, as pg's 'error' event).
+ */
+function fakePg({ failConnect = false, script = null } = {}) {
   const made = [];
   class Client {
-    constructor(opts) { this.opts = opts; this.ended = false; this.queries = []; made.push(this); }
-    on() { return this; }
+    constructor(opts) { this.opts = opts; this.ended = false; this.queries = []; this.handlers = []; made.push(this); }
+    on(event, fn) { if (event === 'error') this.handlers.push(fn); return this; }
+    fireError() { for (const fn of this.handlers) fn(new Error('Connection terminated unexpectedly')); }
     async connect() { if (failConnect) throw new Error(`connect ECONNREFUSED ${DSN}`); }
     async query(sql, params) {
-      this.queries.push({ sql, params });
-      if (failQuery) throw Object.assign(new Error(`${failQuery} s3cret-pass`), { code: '22023' });
-      return { rows: [{ inserted: params ? JSON.parse(params[1]).length : 0, present: 0 }] };
+      if (this.ended) throw new Error('Client was closed and is not queryable');
+      this.queries.push(sql);
+      const scripted = script ? await script(this, sql, made.indexOf(this)) : undefined;
+      if (scripted !== undefined) return scripted;
+      return { rows: sql === tp.TEXT_PUT_SQL ? [{ inserted: JSON.parse(params[1]).length, present: 0 }] : [] };
     }
     async end() { this.ended = true; }
   }
   return { pg: { Client }, made };
 }
 
-test('openTextPut connects once, lazily, with its application name; end closes it', async () => {
+test('openTextPut connects once, lazily, with the pinned options; end closes it', async () => {
   const { pg, made } = fakePg();
-  const store = tp.openTextPut({ dsn: DSN, pg });
+  const store = tp.openTextPut({ dsn: DSN, ca: CA, pg });
   assert.equal(made.length, 0, 'nothing connects before the first put');
   assert.deepEqual(await store.put(1, UNITS), { inserted: 2, present: 0 });
   await store.put(2, UNITS);
   assert.equal(made.length, 1);
-  assert.deepEqual(made[0].opts, { connectionString: DSN, application_name: 'bb2dash-pull-files' });
+  assert.deepEqual(made[0].opts, tp.pgClientOptions(DSN, CA));
   await store.end();
   assert.equal(made[0].ended, true);
-  await tp.openTextPut({ dsn: DSN, pg }).end();
+  await tp.openTextPut({ dsn: DSN, ca: CA, pg }).end();
 });
 
 test('openTextPut: a connect or query failure is rethrown with the DSN and password taken out', async () => {
   const a = fakePg({ failConnect: true });
-  await assert.rejects(tp.openTextPut({ dsn: DSN, pg: a.pg }).put(1, UNITS), (e) => {
+  await assert.rejects(tp.openTextPut({ dsn: DSN, ca: CA, pg: a.pg }).put(1, UNITS), (e) => {
     assert.match(e.message, /ECONNREFUSED/);
     assert.equal(e.message.includes('s3cret'), false);
     return true;
   });
-  const b = fakePg({ failQuery: 'sync_file_text_put: file 9 is not in bb_files' });
-  await assert.rejects(tp.openTextPut({ dsn: DSN, pg: b.pg }).put(9, UNITS), (e) => {
+  const b = fakePg({ script: () => { throw Object.assign(new Error('sync_file_text_put: file 9 is not in bb_files s3cret-pass'), { code: '22023' }); } });
+  await assert.rejects(tp.openTextPut({ dsn: DSN, ca: CA, pg: b.pg }).put(9, UNITS), (e) => {
     assert.match(e.message, /file 9 is not in bb_files/);
     assert.equal(e.message.includes('s3cret'), false);
     assert.equal(e.code, '22023');
     return true;
   });
+});
+
+test('all or nothing, pinned: a socket lost after begin aborts the file; nothing runs on a new client inside it', async () => {
+  const { pg, made } = fakePg({
+    script: (client, sql, index) => {
+      if (index === 0 && sql === tp.TEXT_PUT_SQL) {
+        client.fireError();
+        throw new Error('Connection terminated unexpectedly');
+      }
+      return undefined;
+    },
+  });
+  const store = tp.openTextPut({ dsn: DSN, ca: CA, pg });
+  await assert.rejects(store.putAllOrNothing(72, UNITS), /^Error: file 72 aborted, nothing stored: Connection terminated unexpectedly; the rollback failed too: the connection was lost inside the transaction$/);
+  assert.equal(made.length, 1, 'no client was opened inside the transaction');
+  assert.deepEqual(made[0].queries, ['begin', tp.TEXT_PUT_SQL], 'no commit, and no rollback sent to another connection');
+  assert.equal(made[0].ended, true, 'the connection the transaction failed on is closed');
+
+  // The next file starts on a fresh connection, with its own begin.
+  assert.deepEqual(await store.putAllOrNothing(73, UNITS), { inserted: 2, present: 0, committed: true });
+  assert.equal(made.length, 2);
+  assert.deepEqual(made[1].queries, ['begin', tp.TEXT_PUT_SQL, 'commit']);
+});
+
+test('all or nothing, pinned: a put that fails with no error event is rolled back on the same client, which is then closed', async () => {
+  const { pg, made } = fakePg({
+    script: (client, sql) => {
+      if (sql === tp.TEXT_PUT_SQL) throw Object.assign(new Error('canceling statement due to statement timeout'), { code: '57014' });
+      return undefined;
+    },
+  });
+  const store = tp.openTextPut({ dsn: DSN, ca: CA, pg });
+  await assert.rejects(store.putAllOrNothing(72, UNITS), (e) => {
+    assert.match(e.message, /^file 72 aborted, nothing stored: canceling statement/);
+    assert.equal(e.code, '57014');
+    return true;
+  });
+  assert.equal(made.length, 1);
+  assert.deepEqual(made[0].queries, ['begin', tp.TEXT_PUT_SQL, 'rollback']);
+  assert.equal(made[0].ended, true);
+});
+
+test('all or nothing, pinned: a lost connection before the transaction begins is a failed file too, never a half put', async () => {
+  const { pg, made } = fakePg({ script: (client, sql) => { if (sql === 'begin') { client.fireError(); throw new Error('Connection terminated'); } return undefined; } });
+  const store = tp.openTextPut({ dsn: DSN, ca: CA, pg });
+  await assert.rejects(store.putAllOrNothing(72, UNITS), /file 72 aborted, nothing stored: Connection terminated/);
+  assert.deepEqual(made[0].queries, ['begin']);
+  assert.equal(made.length, 1);
 });
 
 test('loadPg: a missing client names the install command', async () => {
@@ -241,4 +330,14 @@ test('putFileText: no unit with text means no call and no units (text_status fai
   const ctx = { put: async () => { throw new Error('must not be called'); } };
   assert.deepEqual(await tp.putFileText(ctx, 1, []), { unitsPosted: 0, textKept: false, unitCount: 0 });
   assert.deepEqual(await tp.putFileText(ctx, 1, [{ unit_kind: 'doc', unit_no: 1, text: '' }]), { unitsPosted: 0, textKept: false, unitCount: 0 });
+});
+
+test('putFileText: a file too large for 200 (54000) gets no text and says why; the owner SQL records it failed', async () => {
+  const store = { put: async () => { throw Object.assign(new Error('sync_file_text_put: too large: a file puts at most 1000 units, not 1200'), { code: '54000' }); } };
+  assert.deepEqual(await tp.putFileText(store, 3713, [{ unit_kind: 'page', unit_no: 1, text: 'a' }]), {
+    unitsPosted: 0, textKept: false, unitCount: 0,
+    textRefused: 'too large for sync_file_text_put: sync_file_text_put: too large: a file puts at most 1000 units, not 1200',
+  });
+  assert.equal(tp.TEXT_TOO_LARGE_SQLSTATE, '54000');
+  assert.equal(tp.isTextTooLarge({ code: '22023' }), false);
 });

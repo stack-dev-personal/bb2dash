@@ -403,6 +403,19 @@ describe('the files step', () => {
     expect(p.embed).toHaveBeenCalledTimes(1);
   });
 
+  it('a file whose text 200 refuses as too large (54000) is stored with text_status failed and logged, so it is not pulled again', async () => {
+    const lines: string[] = [];
+    const { p, stored } = ports([row('3713')], { log: (l) => lines.push(l) });
+    p.rpc.fileTextPut = vi.fn(async () => {
+      throw Object.assign(new Error('sync_file_text_put: too large: a file puts at most 1000 units, not 1200'), { code: '54000' });
+    });
+    const r = await runFilesStep(p);
+    expect(r.files).toEqual({ pulled: 1, not_pulled: [] });
+    expect(r.unitsPosted).toBe(0);
+    expect(stored.map((s) => [s.id, s.textStatus])).toEqual([['3713', 'failed']]);
+    expect(lines).toContain('files: 3713 text not stored, too large for sync_file_text_put (sync_file_text_put: too large: a file puts at most 1000 units, not 1200); stored with text_status failed');
+  });
+
   it('a unit with blank text is not sent (200 refuses it); a file with only blank units is stored with text_status failed', async () => {
     const mixed = ports([row('49')], { extract: vi.fn(async () => [{ unit_kind: 'doc', unit_no: 1, text: '  ' }, { unit_kind: 'page', unit_no: 2, text: 'kept' }]) });
     await runFilesStep(mixed.p);

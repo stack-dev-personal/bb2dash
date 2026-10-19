@@ -95,6 +95,14 @@ export interface FilesPorts {
   log(line: string): void;
 }
 
+/** 200's SQLSTATE for a file over its size caps (program_limit_exceeded); its other refusals are 22023. */
+export const TEXT_TOO_LARGE_SQLSTATE = '54000';
+
+/** True when sync_file_text_put refused a file because its text is too large to store. */
+export function isTextTooLarge(error: unknown): boolean {
+  return (error as { code?: unknown } | null | undefined)?.code === TEXT_TOO_LARGE_SQLSTATE;
+}
+
 function message(error: unknown): string {
   return (error instanceof Error ? error.message : String(error)).split('\n')[0] ?? '';
 }
@@ -232,17 +240,21 @@ async function pullOne(row: WorklistRow, p: FilesPorts): Promise<RowResult> {
 
     const put = textUnits(units);
     let unitsPosted = 0;
+    let textStored = put.length > 0;
     if (put.length > 0) {
-      let answer;
       try {
-        answer = await p.rpc.fileTextPut(row.id, put);
+        const answer = await p.rpc.fileTextPut(row.id, put);
+        unitsPosted = answer.inserted;
+        // A file whose text an agent extracted before its bytes reached Storage (file 163): those units
+        // are kept, and the bytes still land.
+        if (answer.present > 0) p.log(`files: ${row.id} already had ${answer.present} of ${put.length} text unit(s); kept`);
       } catch (error) {
-        return { pulled: false, reason: `sync_file_text_put refused: ${message(error).slice(0, 200)}` };
+        // Too large to store (200's caps): recorded as a failed extraction is, text_status failed, so
+        // the next sync does not download the file again. Any other refusal leaves the row unstored.
+        if (!isTextTooLarge(error)) return { pulled: false, reason: `sync_file_text_put refused: ${message(error).slice(0, 200)}` };
+        p.log(`files: ${row.id} text not stored, too large for sync_file_text_put (${message(error).slice(0, 200)}); stored with text_status failed`);
+        textStored = false;
       }
-      unitsPosted = answer.inserted;
-      // A file whose text an agent extracted before its bytes reached Storage (file 163): those units
-      // are kept, and the bytes still land.
-      if (answer.present > 0) p.log(`files: ${row.id} already had ${answer.present} of ${put.length} text unit(s); kept`);
     }
 
     const args: FileStoredArgs = {
@@ -252,7 +264,7 @@ async function pullOne(row: WorklistRow, p: FilesPorts): Promise<RowResult> {
       sha256,
       bytes: bytes.length,
       mime,
-      textStatus: put.length > 0 ? 'extracted' : 'failed',
+      textStatus: textStored ? 'extracted' : 'failed',
     };
     let stored = false;
     try {

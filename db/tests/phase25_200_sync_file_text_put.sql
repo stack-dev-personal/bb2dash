@@ -12,6 +12,8 @@
 --   f. bad input is refused with 22023 and writes nothing: a null file, a file not in bb_files, units
 --      that are not an array, an empty array, an unknown kind, unit_no 0, a fractional unit_no, blank
 --      text, a non-object unit, one (kind, number) twice
+--   f2. a file too large to store is refused with 54000 and writes nothing: 1001 units, or more than
+--      1.5 million characters (the sync then stores the file with text_status 'failed')
 --   g. anon and authenticated calling it get 42501
 --   h. nothing outside the probe's file moved
 --
@@ -158,6 +160,33 @@ begin
   end loop;
   if (select count(*) from bb_file_text) <> v_n then
     raise exception 'FAIL 200 (f): a refused put wrote a unit';
+  end if;
+
+  -- f2. Too large: 54000, its own SQLSTATE, and nothing written.
+  for v_case in
+    select c from jsonb_array_elements(jsonb_build_array(
+      jsonb_build_object('label', '1001 units',
+                         'units', (select jsonb_agg(jsonb_build_object('unit_kind', 'page', 'unit_no', v_no + 100 + g, 'text', 'x'))
+                                     from generate_series(1, 1001) g)),
+      jsonb_build_object('label', '1,500,001 characters',
+                         'units', jsonb_build_array(jsonb_build_object('unit_kind', 'page', 'unit_no', v_no + 20,
+                                                                       'text', repeat('x', 1500001))))
+    )) c
+  loop
+    set local role sync_runner;
+    begin
+      perform public.sync_file_text_put(v_file, v_case->'units');
+      v_state := 'no error';
+    exception when others then
+      v_state := sqlstate;
+    end;
+    reset role;
+    if v_state is distinct from '54000' then
+      raise exception 'FAIL 200 (f2): % ended with [%], expected 54000', v_case->>'label', v_state;
+    end if;
+  end loop;
+  if (select count(*) from bb_file_text) <> v_n then
+    raise exception 'FAIL 200 (f2): a refused put wrote a unit';
   end if;
 
   -- g. Not anon's, not authenticated's.

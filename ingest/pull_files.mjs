@@ -442,13 +442,15 @@ function firstLine(error) {
 /**
  * The text store for this run: `ingest/text_put.mjs`, loaded here and not at the top, because the
  * sync image copies this file for its pure helpers but not that one. It reads the sync_runner login
- * from SECRETS_DIR and connects on the first put.
+ * from SECRETS_DIR and the pinned CA from the harness checkout (verify-full, as the Workspace), and
+ * connects on the first put.
  */
 async function openTextStore(env, ingestDir) {
   const tp = await import('./text_put.mjs');
   const dsn = tp.readSyncRunnerDsn(env);
+  const ca = tp.readPinnedCa(env);
   const pg = await tp.loadPg(path.join(ingestDir, '..'));
-  const store = tp.openTextPut({ dsn, pg });
+  const store = tp.openTextPut({ dsn, ca, pg });
   return {
     putFile: (fileId, units) => tp.putFileText(store, fileId, units),
     postStaged: (staged, id) => tp.restalePostOne(staged, id, store),
@@ -571,6 +573,8 @@ async function pullOne(row, ctx) {
   const text = await ctx.putFile(row.id, units);
   if (text.error) return { id: row.id, error: text.error };
   const { unitsPosted, textKept } = text;
+  // Too large for 200: recorded as a failed extraction is (text_status failed), so it is not pulled again.
+  if (text.textRefused) extractError = text.textRefused;
 
   const textStatus = text.unitCount ? 'extracted' : 'failed';
   const sql = bbFilesUpdateSql({ id: row.id, key: storageKey, relpath: row.relpath, sha256, size: bytes.length, mime, textStatus, pulledOn, submission, textKept });

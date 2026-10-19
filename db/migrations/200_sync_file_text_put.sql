@@ -13,10 +13,14 @@
 --   1. sync_file_text_put(p_file_id bigint, p_units jsonb) returns table(inserted int, present int):
 --      SECURITY DEFINER, search_path pinned. p_units is [{unit_kind, unit_no, text}], what
 --      extract_text.py prints for one file. It refuses (22023, nothing written) a file id that is not
---      a bb_files row; p_units that is not a non-empty array of at most 1000 units; a unit that is not
---      an object with a unit_kind of doc, page, sheet or slide (the four extract_text.py writes), a
---      unit_no of 1 or more and non-blank text; one (unit_kind, unit_no) twice; more than 1.5 million
---      characters in all (the largest file on prod had 130,346 on 2026-10-19). It inserts with
+--      a bb_files row; p_units that is not a non-empty array; a unit that is not an object with a
+--      unit_kind of doc, page, sheet or slide (the four extract_text.py writes), a unit_no of 1 or
+--      more and non-blank text; one (unit_kind, unit_no) twice. A file too large to store, more than
+--      1000 units or more than 1.5 million characters in all (the largest file on prod had 130,346 on
+--      2026-10-19), is refused with its own SQLSTATE, 54000 (program_limit_exceeded), so a caller can
+--      tell "this file's text is too large" from "this call is wrong": the sync then records the file
+--      with text_status 'failed' through sync_file_stored, as it does for a failed extraction, and
+--      the file is not downloaded again on the next sync (review of 25a). It inserts with
 --      `on conflict (file_id, unit_kind, unit_no) do nothing`, on the table's unique key
 --      (005_file_corpus.sql:40, `bb_file_text_file_id_unit_kind_unit_no_key`), and answers how many
 --      units it inserted and how many were already present. A unit already there is never changed:
@@ -57,9 +61,12 @@ begin
     raise exception 'sync_file_text_put: p_units must be a json array' using errcode = '22023';
   end if;
   v_n := jsonb_array_length(p_units);
-  if v_n < 1 or v_n > c_max_units then
-    raise exception 'sync_file_text_put: a file puts 1 to % units, not %', c_max_units, v_n
-      using errcode = '22023';
+  if v_n < 1 then
+    raise exception 'sync_file_text_put: a file puts at least one unit' using errcode = '22023';
+  end if;
+  if v_n > c_max_units then
+    raise exception 'sync_file_text_put: too large: a file puts at most % units, not %', c_max_units, v_n
+      using errcode = '54000';
   end if;
 
   -- Every unit is an object with one of extract_text.py's kinds, a positive number and some text.
@@ -83,8 +90,8 @@ begin
   end if;
   select coalesce(sum(char_length(e->>'text')), 0) into v_chars from jsonb_array_elements(p_units) e;
   if v_chars > c_max_chars then
-    raise exception 'sync_file_text_put: a file puts at most % characters, not %', c_max_chars, v_chars
-      using errcode = '22023';
+    raise exception 'sync_file_text_put: too large: a file puts at most % characters, not %', c_max_chars, v_chars
+      using errcode = '54000';
   end if;
 
   -- The unique key is (file_id, unit_kind, unit_no); a unit already there is left as it is.
@@ -103,7 +110,8 @@ comment on function public.sync_file_text_put(bigint, jsonb) is
   '1000 units of kind doc, page, sheet or slide, unit_no 1 or more, non-blank text, no (kind, number) '
   'twice, at most 1.5 million characters. Inserts with on conflict (file_id, unit_kind, unit_no) do '
   'nothing and answers (inserted, present); a unit already there is never changed. 22023 for a file '
-  'not in bb_files or a bad p_units. The 165 triggers fire as for any insert. sync_runner only.';
+  'not in bb_files or a bad p_units; 54000 for a file over either size cap. The 165 triggers fire as '
+  'for any insert. sync_runner only.';
 
 -- =============================================================================================
 -- 2. Privileges
