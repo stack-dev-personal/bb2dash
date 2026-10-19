@@ -107,6 +107,15 @@ function message(error: unknown): string {
   return (error instanceof Error ? error.message : String(error)).split('\n')[0] ?? '';
 }
 
+/**
+ * A not-pulled reason as it is stored and reported: its first line only. Playwright's errors carry a
+ * call log after the first line that holds the request's cookies (sync 6020 stored a JSESSIONID), and
+ * that changes every session, so a whole message would also read as a new failure on every sync.
+ */
+function firstLine(text: string): string {
+  return text.split('\n')[0]!.trim();
+}
+
 /** `base/relpath`, or null when the relpath is empty, absolute or climbs out of base. */
 export function safeJoin(base: string, relpath: string): string | null {
   if (!relpath || path.isAbsolute(relpath) || path.win32.isAbsolute(relpath)) return null;
@@ -305,7 +314,7 @@ export async function runFilesStep(p: FilesPorts): Promise<FilesStepResult> {
       linked += 1;
       continue;
     }
-    notPulled.push({ id: row.id, reason: result.reason });
+    notPulled.push({ id: row.id, reason: firstLine(result.reason) });
     if (result.stop) {
       stopped = 'session_expired';
       p.log(`files: the Blackboard session expired at file ${row.id}; ${rows.length - pulled - linked - notPulled.length} left for the next sync`);

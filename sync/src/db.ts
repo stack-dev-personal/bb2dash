@@ -251,7 +251,15 @@ export function createRpc(query: QueryFn): SyncRpc {
       return optionalId(id, 'sync_request_inbox_apply');
     },
     async filePullOutcomes(failed) {
-      const result = await scalar('select public.sync_file_pull_outcomes($1::jsonb) as fresh', [JSON.stringify(failed)]);
+      // 213 takes each id as a JSON number; the worklist hands them over as text (sync 6020).
+      const payload = failed.map((f) => {
+        const id = Number(f.id);
+        if (!/^[0-9]{1,15}$/.test(f.id) || !Number.isSafeInteger(id) || id <= 0) {
+          throw new Error(`sync_file_pull_outcomes: file id ${JSON.stringify(f.id)} is not a positive whole number`);
+        }
+        return { id, reason: f.reason };
+      });
+      const result = await scalar('select public.sync_file_pull_outcomes($1::jsonb) as fresh', [JSON.stringify(payload)]);
       const parsed = typeof result === 'string' ? (JSON.parse(result) as unknown) : result;
       if (!Array.isArray(parsed)) throw new Error('sync_file_pull_outcomes: the answer is not a list');
       return parsed.map((row) => {
