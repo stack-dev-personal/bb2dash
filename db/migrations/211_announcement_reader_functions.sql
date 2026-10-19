@@ -361,6 +361,13 @@ begin
     raise exception 'announcement_review_record: announcement % is already reviewed', p_announcement
       using errcode = '22023';
   end if;
+  -- Security review (2026-10-19): only an announcement prepare handed to THIS request, so a post that
+  -- steers the model cannot close another post's review.
+  if not exists (select 1 from announcement_review_attempts t
+                  where t.announcement_id = p_announcement and t.request_id = p_request) then
+    raise exception 'announcement_review_record: announcement % was not handed to request %', p_announcement, p_request
+      using errcode = '22023';
+  end if;
 
   v_title_n := announcement_review_norm(v_a.title);
   v_body_n  := announcement_review_norm(v_a.body);
@@ -708,6 +715,12 @@ begin
   -- Already reviewed (or recorded by this very run): nothing to mark.
   if not exists (select 1 from v_announcements_unreviewed u where u.id = p_announcement) then
     return false;
+  end if;
+  -- Security review (2026-10-19): the same rule as record, only an announcement handed to this request.
+  if not exists (select 1 from announcement_review_attempts t
+                  where t.announcement_id = p_announcement and t.request_id = p_request) then
+    raise exception 'announcement_review_skip: announcement % was not handed to request %', p_announcement, p_request
+      using errcode = '22023';
   end if;
 
   insert into announcement_reviews (announcement_id, modified_seen, request_id, reviewed_at, outcome, summary, detail)
