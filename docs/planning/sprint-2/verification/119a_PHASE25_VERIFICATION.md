@@ -179,3 +179,24 @@ a replay that cannot happen; prod's order (207, 210–214, then 202–206) is th
 Gates on the phase branch at d47fcd43: web 3991, typecheck, build; workspace 1090, typecheck; mcp-server 143; sync
 207; apply 177; workspace-ingest 120; scripts 378; acceptance 64; docker 110 (after `npm run build` in `apply` and
 `workspace`: the gate tests run the built hooks).
+
+## Stack's look at the cards (2026-10-20, review page)
+
+The walk-25b shots went to Stack as a review page (https://claude.ai/artifact/CeJCGXyFRbiEkyyc2w1rUx; his answers in its
+`verdicts` store, read back by the PM at 15:53Z): **yes** on 01 to 05, 07 and 08; **no** on 06, the Inbox's open card,
+with a request for all the open cards: "an option available on-hover ... a grey "edit" text that functions as a
+button. On hover of the text the grey should turn to white. When clicking it should make the text box editable.
+Clicking off of the box should reset it to its initial state (or submitting)." He also made the review page the default
+for manual reviews (his global instructions and the PM's memory).
+
+**PM rulings on the edit (E-1 to E-5; he may overturn any):**
+
+| # | ruling | why |
+|---|---|---|
+| E-1 | Only the Proposed box of an open card is editable, in the Workspace and the Inbox; "Planner has" stays read-only | it is the planner's live value; editing it would be a write without a proposal |
+| E-2 | Enter (Ctrl+Enter for a note) or Save keeps the edit as a draft on the card, marked "edited by you", with Reset; Escape or clicking off without submitting puts the box back | his "clicking off ... resets it ... (or submitting)"; nothing is written until Approve |
+| E-3 | Approve sends the draft as `p_value`; 206 validates it as 204 does (shared helper `workspace_proposal_value_check`), writes it, and keeps it in a new column `approved_value`; `new_value` stays what the assistant proposed | the audit keeps both what was asked and what he approved |
+| E-4 | "edit" turns grey to the strongest text token on hover: white in dark, near-black in light; always shown where there is no hover (phones) | white text cannot show on the light theme's boxes; a phone has no hover |
+| E-5 | 203, 204, 205 (the view) and 206 are amended in place, no new number | none of 202–206 is on prod; the apply at the cut-over stays byte-identical to the files as merged |
+
+Built by W-106 (Opus) on `feat/phase25b-edit-proposed`; its result, the reviews and the walk of the new shots follow.

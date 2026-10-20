@@ -34,6 +34,7 @@ sync's `inbox_feedback` filing). Each must leave `assistant_proposal` out.
 | `reason` | text not null | ≤ 500 chars |
 | `state` | text not null default `proposed` | `proposed`, `approved`, `rejected`, `stale`, `applied`, `expired` (v1 writes `applied` on an approval that wrote; `approved` stays in the check, unused) |
 | `decided_at` | timestamptz | |
+| `approved_value` | jsonb | the value an approval wrote: `new_value`, or Stack's edit (E-3, 119a "Stack's look at the cards") |
 
 RLS on; owner select and owner update (as the other planner tables); no insert or delete policy. No grant
 to `workspace_runner`, `anon` or `inbox_apply_runner`. Index on `(conversation_id)`, `(request_id)`,
@@ -70,7 +71,9 @@ request_id, reason}`, `workspace_proposal_id = id`. Returns the row the tool sho
 
 ## 206 `workspace_proposal_decide`
 
-`workspace_proposal_decide(p_id bigint, p_decision text) returns table(state text, applied boolean)`
+`workspace_proposal_decide(p_id bigint, p_decision text, p_value jsonb default null) returns table(state text, applied boolean)`
+
+Amended 2026-10-20 (E-1 to E-5, 119a): with `p_value` an approval writes Stack's edited value instead of `new_value`, checked by `workspace_proposal_value_check` (the rules 204 applies) and refused when it equals the planner's value; `p_value` on a reject is refused; `approved_value` keeps what was written and the Inbox resolution carries `edited`.
 
 SECURITY INVOKER (runs as Stack under the RLS he has); execute to `authenticated` only. `p_decision` is
 `approve` or `reject` (22023 otherwise). In one transaction: lock the proposal (`for update`); not `proposed`
@@ -101,6 +104,7 @@ apply run). The calendar push picks up the change as it does any planner edit (i
 * `effective_state = proposed`: a line ("Mark *ECN 304 Problem Set 4* as submitted"; "Set the planned start
   of … to Oct 21"; "Replace the note on …"), the value read and the value proposed side by side (for a note the
   old and new text), the reason, and Approve / Reject.
+* Open (amended 2026-10-20, E-1 to E-4): the Proposed box has an "edit" button on hover (always shown without hover); edit mode is a select, a date input or a textarea; Enter or Save keeps a draft marked "edited by you" with Reset; Escape or clicking off discards; Approve sends the draft as `p_value`.
 * Decided: only the outcome, no old or new value drawn: "Approved: marked submitted" (`applied`),
   "Rejected", "Stale: the row changed", "Expired".
 * The Inbox renders kind `assistant_proposal` the same way (open: values + Approve / Reject; decided: the
