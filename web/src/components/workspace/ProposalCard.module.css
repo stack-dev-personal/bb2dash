@@ -1,0 +1,128 @@
+/* A proposed planner change (Phase 25b, E): under an answer, and as an Inbox item. Tokens only. */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+.card:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 var(--size-focus) var(--color-accent);
+}
+
+/* In the Inbox the card stands on the page, as the other items do. */
+.inbox {
+  padding: var(--space-4);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* The line, or once decided the item's name: what the card is about. */
+.line {
+  margin: 0;
+  font-size: var(--text-base);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+.line em {
+  font-style: italic;
+}
+
+/* The value read and the value proposed, side by side; stacked when there is no room. */
+.panes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--size-180), 1fr));
+  gap: var(--space-2);
+}
+.pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+/* A note keeps its line breaks, wraps a long word, and scrolls inside its pane past a few lines. */
+.value {
+  /* Positioned because it scrolls, so it contains what it scrolls (Workspace.layout.test.tsx). */
+  position: relative;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: var(--size-180);
+  overflow-y: auto;
+}
+
+.reason {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* The outcome: the one thing a decided card says about the change. */
+.outcome {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+}
+.outcome:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 var(--size-focus) var(--color-accent);
+  border-radius: var(--radius-xs);
+}
+
+.link {
+  align-self: flex-start;
+  font-size: var(--text-sm);
+}
+
+.problem {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-danger);
+}
+
+/* The list of cards under one answer. */
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* A phone's press area: 44 px. */
+@media (max-width: 720px) {
+  .actions button {
+    min-height: var(--size-44);
+  }
+}
