@@ -11,7 +11,9 @@
 --   2. approve, a progress row: the planned start written and nothing else; updated_at moves (the
 --      planner's own trigger, as every planner edit); a note on a reading inserted and written
 --   3. stale: the row changed after the proposal (as the owner, the way the planner writes it), or the
---      assignment is gone: (stale, false), nothing written, the item resolved as stale
+--      assignment is gone: (stale, false), nothing written, the item resolved as stale; but no progress
+--      row and a row at not_started are the same status (R2-4): a status proposed on a row-less item
+--      that Stack then gives a note still applies, for an assignment and a reading
 --   4. reject in one place reads rejected in both: the view's state and effective_state, its
 --      attention_state, the Inbox item's resolution; a later approve is refused with 55000
 --   5. expired: a proposal past expires_at returns (expired, false) whatever was asked and writes
@@ -146,7 +148,8 @@ begin
   values ('ECN.304/w104-d1', 'ECN.304', 'W104 Decide 1', 'homework', '2026-11-01 14:00+00'),
          ('ECN.304/w104-d2', 'ECN.304', 'W104 Decide 2', 'homework', '2026-11-02 14:00+00'),
          ('ECN.304/w104-d3', 'ECN.304', 'W104 Decide 3', 'homework', '2026-11-03 14:00+00'),
-         ('ECN.304/w104-d4', 'ECN.304', 'W104 Decide 4', 'homework', '2026-11-04 14:00+00');
+         ('ECN.304/w104-d4', 'ECN.304', 'W104 Decide 4', 'homework', '2026-11-04 14:00+00'),
+         ('ECN.304/w104-d5', 'ECN.304', 'W104 Decide 5', 'homework', '2026-11-05 14:00+00');
   -- d2 has a progress row last touched a day ago.
   insert into assignment_progress (assignment_id, status, notes, planned_start, updated_at)
   values ('ECN.304/w104-d2', 'in_progress', 'old note', date '2026-10-20', now() - interval '1 day');
@@ -154,6 +157,11 @@ begin
   values ('ECN.304', 'W104 Decide Reading', date '2026-10-22', true, true, 'manual', 'tentative')
   returning id into v_reading;
   insert into _w104 values ('reading', v_reading::text);
+  with r2 as (
+    insert into readings (course_id, citation, for_date, required, on_blackboard, source, confidence)
+    values ('ECN.304', 'W104 Decide Reading Two', date '2026-10-23', true, true, 'manual', 'tentative')
+    returning id)
+  insert into _w104 select 'reading2', r2.id::text from r2;
 
   v_req := pg_temp.w104_req('w104 206 a');
   insert into _w104 values
@@ -167,6 +175,11 @@ begin
     ('rejected', pg_temp.w104_propose(v_req, 'reading_progress', v_reading::text, 'status', '"in_progress"')::text),
     ('expired',  pg_temp.w104_propose(v_req, 'assignment_progress', 'ECN.304/w104-d4', 'status', '"missed"')::text),
     ('logs',     (select count(*) from inbox_apply_writes)::text);
+  -- R2-4: a status proposed on items with no progress row, which Stack then gives a note.
+  v_req := pg_temp.w104_req('w104 206 c');
+  insert into _w104 values
+    ('nsa', pg_temp.w104_propose(v_req, 'assignment_progress', 'ECN.304/w104-d5', 'status', '"submitted"')::text),
+    ('nsr', pg_temp.w104_propose(v_req, 'reading_progress', (select v from _w104 where k = 'reading2'), 'status', '"in_progress"')::text);
   update workspace_proposals set created_at = now() - interval '8 days', expires_at = now() - interval '1 second'
    where id = (select v::bigint from _w104 where k = 'expired');
 end $$;
@@ -278,6 +291,27 @@ begin
   end if;
   v_got := pg_temp.w104_decide(p_expired, 'reject');
   if v_got not like '55000 %already expired%' then v_fail := v_fail || format('5 decide after expiry: %s', v_got); end if;
+
+  -- 3b (R2-4). No progress row and not_started are the same status: Stack adds a note to each item
+  --     (the row is inserted, its status not_started), and the status proposals still apply.
+  v_got := pg_temp.w104_try('authenticated', v_owner,
+    'insert into public.assignment_progress (assignment_id, notes) values (''ECN.304/w104-d5'', ''a note of his'')');
+  if v_got <> 'ok:1' then v_fail := v_fail || format('3b the owner''s note on d5: %s', v_got); end if;
+  v_got := pg_temp.w104_try('authenticated', v_owner, format(
+    'insert into public.reading_progress (reading_id, notes) values (%s, ''a note of his'')', (select v from _w104 where k = 'reading2')));
+  if v_got <> 'ok:1' then v_fail := v_fail || format('3b the owner''s note on the reading: %s', v_got); end if;
+  v_got := pg_temp.w104_decide((select v::bigint from _w104 where k = 'nsa'), 'approve');
+  if v_got is distinct from 'applied|true'
+     or (select p.status::text || '|' || p.notes from assignment_progress p where p.assignment_id = 'ECN.304/w104-d5')
+        is distinct from 'submitted|a note of his' then
+    v_fail := v_fail || format('3b assignment: %s', v_got);
+  end if;
+  v_got := pg_temp.w104_decide((select v::bigint from _w104 where k = 'nsr'), 'approve');
+  if v_got is distinct from 'applied|true'
+     or (select p.status::text || '|' || p.notes from reading_progress p where p.reading_id = (select v::bigint from _w104 where k = 'reading2'))
+        is distinct from 'in_progress|a note of his' then
+    v_fail := v_fail || format('3b reading: %s', v_got);
+  end if;
 
   -- 6. Not one of these writes is an apply run's.
   if (select count(*) from inbox_apply_writes) <> (select v::bigint from _w104 where k = 'logs') then
