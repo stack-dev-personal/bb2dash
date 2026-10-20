@@ -248,9 +248,16 @@ export async function allowPlannerWrite(context: BrowserContext): Promise<string
   return allowed;
 }
 
-/** The Notes field of the assignment page's plan block. */
+/**
+ * The Notes field of the assignment page's plan block: the text area inside the label whose text
+ * starts with the field's name. Found by its label element rather than its accessible name, which
+ * an engine may build with the field's own text in it.
+ */
 export function notesField(page: Page, label: string): Locator {
-  return page.getByRole('textbox', { name: label, exact: true });
+  return page
+    .locator('label:has(textarea)')
+    .filter({ hasText: new RegExp(`^\\s*${label}`) })
+    .locator('textarea');
 }
 
 /** What the planner's field shows now: whether it is empty, and how many characters it holds (never its text). */
