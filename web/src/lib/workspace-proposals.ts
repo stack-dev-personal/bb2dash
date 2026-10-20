@@ -22,6 +22,7 @@
  */
 
 import { asRecord } from './json-record';
+import type { ProgressTarget } from './progress-cache';
 import { statusLabel, STATUS_LABEL, type ProgressStatus } from './progress-status';
 import { parseConversationId, toRequestId } from './queries.workspace';
 
@@ -175,6 +176,14 @@ export function normalizeProposals(data: unknown): WorkspaceProposal[] {
   return (Array.isArray(data) ? data : []).flatMap((row: unknown) => normalizeProposal(row) ?? []);
 }
 
+/** The planner row an approval writes, as the planner's caches name it (`progress-cache.ts`). */
+export function progressTargetOf(proposal: Pick<WorkspaceProposal, 'target' | 'row_id'>): ProgressTarget {
+  return {
+    item_kind: proposal.target === 'assignment_progress' ? 'assignment' : 'reading',
+    item_id: proposal.row_id,
+  };
+}
+
 /** The rows by request id, each request's cards in id order. */
 export function proposalsByRequest(rows: readonly WorkspaceProposal[]): ReadonlyMap<number, WorkspaceProposal[]> {
   const grouped = new Map<number, WorkspaceProposal[]>();
@@ -309,9 +318,12 @@ export function proposalsProblemLine(error: unknown): string {
  * The Inbox item (205): `suggested = {source: 'workspace', proposal_id, conversation_id, request_id, reason}`
  * ------------------------------------------------------------------------ */
 
-/** The proposal an `assistant_proposal` Inbox item stands for, from `suggested.proposal_id`. */
-export function proposalIdOfItem(item: { suggested: unknown }): number | null {
-  return toRequestId(asRecord(item.suggested)?.proposal_id);
+/**
+ * The proposal an `assistant_proposal` Inbox item stands for: the checked column 205 adds
+ * (`attention_items.workspace_proposal_id`), never `suggested`, which is the model's free jsonb (R2-8).
+ */
+export function proposalIdOfItem(item: { workspace_proposal_id?: unknown }): number | null {
+  return toRequestId(item.workspace_proposal_id);
 }
 
 /** The conversation the proposal was made in, from `suggested.conversation_id`. */
@@ -323,6 +335,25 @@ export function conversationOfItem(item: { suggested: unknown }): string | null 
 export function itemOutcomeState(item: { state: string; resolution: unknown }): ProposalState | null {
   if (item.state === 'open') return null;
   return oneOf(PROPOSAL_STATES, asRecord(item.resolution)?.outcome);
+}
+
+/**
+ * R2-7: an open `assistant_proposal` item whose proposal is no longer `proposed` (expired by the
+ * view, not yet swept; or decided and the item not yet read again) is filed as what it is: a copy
+ * reading `resolved` with the proposal's outcome, so the Inbox's tabs and counts never hold it as
+ * waiting. Every other item is returned as it is; nothing is written.
+ */
+export function settleProposalItems<T extends { kind: string; state: string; resolution: unknown; workspace_proposal_id?: unknown }>(
+  items: readonly T[],
+  proposalsById: ReadonlyMap<number, Pick<WorkspaceProposal, 'id' | 'effective_state'>>,
+): T[] {
+  return items.map((item) => {
+    if (item.kind !== 'assistant_proposal' || item.state !== 'open') return item;
+    const id = proposalIdOfItem(item);
+    const proposal = id === null ? undefined : proposalsById.get(id);
+    if (proposal === undefined || isOpenProposal(proposal)) return item;
+    return { ...item, state: 'resolved', resolution: { outcome: proposal.effective_state, proposal_id: proposal.id } };
+  });
 }
 
 /** The outcome in words from the Inbox item alone (its field and `to_value` are the proposal's); null while open. */

@@ -48,7 +48,7 @@ import {
 import { latestWrite } from '@/components/inbox/inbox-row';
 import { InboxProposalCard, InboxProposalSummary } from '@/components/inbox/InboxProposal';
 import { useProposalsByIds } from '@/lib/queries.workspace-proposals';
-import { proposalIdOfItem, type WorkspaceProposal } from '@/lib/workspace-proposals';
+import { proposalIdOfItem, settleProposalItems, type WorkspaceProposal } from '@/lib/workspace-proposals';
 import { UNDO_BLOCKED, useReopenAttentionItem } from '@/lib/queries.inboxReopen';
 import shell from '../Shell.module.css';
 import styles from './Inbox.module.css';
@@ -86,10 +86,10 @@ export default function Inbox() {
   const choose = useResolveChoice();
   const reopen = useReopenAttentionItem();
   const applying = useOpenInboxApplyRequest();
-  const items = useMemo(() => itemsQuery.data ?? [], [itemsQuery.data]);
+  const read = useMemo(() => itemsQuery.data ?? [], [itemsQuery.data]);
+  const { items, renderProposal } = useProposalItems(read);
   const labelIds = useMemo(() => candidateIds(items), [items]);
   const labelsQuery = useSessionLabels(labelIds);
-  const renderProposal = useProposalRenderer(items);
 
   // A resolve, a choice and an undo are three mutations over the same four
   // columns, and each hook's pending or failed state persists until it runs
@@ -143,16 +143,21 @@ export default function Inbox() {
  * each such item is drawn as. A decision on it reads the Inbox and the proposals again
  * (`useDecideProposal`), so the Workspace's card shows it too.
  */
-function useProposalRenderer(items: readonly AttentionItem[]): (item: AttentionItem) => ReactNode {
+function useProposalItems(read: readonly AttentionItem[]): {
+  items: AttentionItem[];
+  renderProposal: (item: AttentionItem) => ReactNode;
+} {
   const ids = useMemo(
-    () => items.flatMap((item) => (item.kind === 'assistant_proposal' ? (proposalIdOfItem(item) ?? []) : [])),
-    [items],
+    () => read.flatMap((item) => (item.kind === 'assistant_proposal' ? (proposalIdOfItem(item) ?? []) : [])),
+    [read],
   );
   const proposals = useProposalsByIds(ids);
   const byId = useMemo(
     () => new Map<number, WorkspaceProposal>((proposals.data ?? []).map((row) => [row.id, row])),
     [proposals.data],
   );
+  // R2-7: an open item whose proposal is no longer proposed is filed as decided, not as waiting.
+  const items = useMemo(() => settleProposalItems(read, byId), [read, byId]);
   function renderProposal(item: AttentionItem): ReactNode {
     const id = proposalIdOfItem(item);
     return (
@@ -164,7 +169,7 @@ function useProposalRenderer(items: readonly AttentionItem[]): (item: AttentionI
       />
     );
   }
-  return renderProposal;
+  return { items, renderProposal };
 }
 
 /* ---------------------------------------------------------------------------

@@ -102,6 +102,7 @@ function itemOf(row: Row): Row {
     to_value: row.new_value,
     question: `${LABEL}: change its ${String(row.field).replace('_', ' ')}?`,
     suggested: { source: 'workspace', proposal_id: row.id, conversation_id: CONVERSATION, request_id: REQUEST_ID, reason: row.reason },
+    workspace_proposal_id: row.id,
     state: 'open',
     resolved_at: null,
     resolution: null,

@@ -12,7 +12,7 @@
 
 import { useState } from 'react';
 import { useDecideProposal } from '@/lib/queries.workspace-proposals';
-import { decideProblemLine, isAlreadyDecided, type WorkspaceProposal } from '@/lib/workspace-proposals';
+import { decideProblemLine, isAlreadyDecided, progressTargetOf, type WorkspaceProposal } from '@/lib/workspace-proposals';
 import { ProposalCard } from './ProposalCard';
 import styles from './ProposalCard.module.css';
 
@@ -37,7 +37,7 @@ export function DecidableProposal({ proposal, answerHref = null, inbox = false }
       inbox={inbox}
       onDecide={(decision) =>
         decide.mutate(
-          { id: proposal.id, decision },
+          { id: proposal.id, decision, progress: progressTargetOf(proposal) },
           {
             onSuccess: () => setDecidedHere(true),
             onError: (error) => setDecidedHere(isAlreadyDecided(error)),

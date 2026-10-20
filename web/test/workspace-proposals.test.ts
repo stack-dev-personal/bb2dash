@@ -202,10 +202,12 @@ describe('grouping and the Inbox item', () => {
     expect(grouped.get(42)?.map((p) => p.id)).toEqual([5]);
   });
 
-  it('reads the proposal id an Inbox item carries in suggested', () => {
-    expect(proposalIdOfItem({ suggested: { source: 'workspace', proposal_id: 7 } })).toBe(7);
-    expect(proposalIdOfItem({ suggested: { source: 'workspace', proposal_id: '7' } })).toBe(7);
-    expect(proposalIdOfItem({ suggested: null })).toBeNull();
-    expect(proposalIdOfItem({ suggested: { proposal_id: -1 } })).toBeNull();
+  it('finds an Inbox item’s proposal through the checked column 205 adds, never through suggested (R2-8)', () => {
+    const item = (fields: { workspace_proposal_id?: unknown; suggested?: unknown }) => proposalIdOfItem(fields);
+    expect(item({ workspace_proposal_id: 7 })).toBe(7);
+    expect(item({ workspace_proposal_id: 7, suggested: { proposal_id: 9 } })).toBe(7);
+    expect(item({ workspace_proposal_id: null, suggested: { proposal_id: 9 } })).toBeNull();
+    expect(item({ suggested: { proposal_id: 9 } })).toBeNull();
+    expect(item({ workspace_proposal_id: -1 })).toBeNull();
   });
 });
