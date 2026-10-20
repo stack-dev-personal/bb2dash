@@ -7,14 +7,14 @@
 --      where set and set exactly on the kind; v_workspace_proposals has the page's eighteen columns,
 --      is security_invoker and readable by authenticated and service_role alone; v_inbox_queue is
 --      security_invoker with 090's columns; the sweep is a pinned SECURITY DEFINER no client role
---      executes (its hourly job, bb2dash-proposals-expire, is checked by 205's own guard: this login
+--      executes (its five-minute job, bb2dash-proposals-expire, is checked by 205's own guard: this login
 --      reads nothing in the cron schema, 100's rule)
 --   1. no assistant_proposal item reaches the apply side, open or decided: v_inbox_queue; what
 --      inbox_apply_runner can select; inbox_apply_begin_item (false) and a write naming the item
 --      (42501); inbox_apply_archive (false) and archive_attention_item (P0002), the item not archived;
 --      inbox_decisions_unfiled / _unlogged, even for a proposal forced into the archived shape;
 --      sync_request_inbox_apply files no inbox_feedback request when only proposals are answered, and
---      files one once a real answer is there; run_transform's counts leave the kind out
+--      files one once a real answer is there (run_transform is left as is, 119a R2-1)
 --   2. the view: effective_state expired for a proposed row past expires_at, the Inbox item's id and
 --      state joined; the owner reads it, a stranger reads nothing
 --   3. the sweep: every proposed row past expires_at expired with decided_at, its Inbox item resolved
@@ -328,12 +328,6 @@ begin
   update agent_requests set state = 'cancelled' where id = v_req;
   v_got := pg_temp.w104_value('sync_runner', null, format('select public.sync_request_inbox_apply(%s)::text', v_sync));
   if v_got is null then v_fail := v_fail || 'sync_request_inbox_apply files nothing for a real answer'::text; end if;
-
-  -- 1f. run_transform's two counts leave the kind out.
-  select count(*)::text into v_got
-    from regexp_matches((select p.prosrc from pg_proc p where p.oid = 'public.run_transform(uuid, text)'::regprocedure),
-                        'select count\(\*\) into v_(before|after) from attention_items where kind <> ''assistant_proposal''', 'g');
-  if v_got <> '2' then v_fail := v_fail || format('run_transform leaves the kind out of %s counts, not 2', v_got); end if;
 
   if cardinality(v_fail) > 0 then
     raise exception 'FAIL phase25b_205 (1): %', array_to_string(v_fail, '; ');
