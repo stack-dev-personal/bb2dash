@@ -324,3 +324,11 @@ export function itemOutcomeState(item: { state: string; resolution: unknown }): 
   if (item.state === 'open') return null;
   return oneOf(PROPOSAL_STATES, asRecord(item.resolution)?.outcome);
 }
+
+/** The outcome in words from the Inbox item alone (its field and `to_value` are the proposal's); null while open. */
+export function itemOutcomeLine(item: { state: string; resolution: unknown; field: string | null; to_value: unknown }): string | null {
+  const state = itemOutcomeState(item);
+  const field = oneOf(PROPOSAL_FIELDS, item.field);
+  if (state === null || field === null) return null;
+  return outcomeWords(state, field, item.to_value);
+}
