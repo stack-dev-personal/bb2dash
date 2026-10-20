@@ -32,7 +32,14 @@
 -- arms it, so a planned date approved here reaches the calendar exactly as the same date typed in the
 -- planner does.
 --
--- Additive: one function. No password, key or DSN is in this file.
+-- THE RUNNER'S PROOF VIEW (PM round 2). Pack 25's proof `runner-grants` reads no pg_* relation, so
+-- `v_workspace_runner_proof` hands the catalog's answers out as four plain columns, as 199's
+-- v_workspace_store_proof does for pack 24 (same options and grants): definer_functions (the SECURITY
+-- DEFINER functions of public workspace_runner can execute: 14 since 204), executes_propose,
+-- relations_granted (public tables, views, materialized views, foreign tables and sequences on which it
+-- holds any privilege, on the relation or a column: 0) and relations_checked (how many were asked about).
+--
+-- Additive: one function and one view. No password, key or DSN is in this file.
 
 do $$
 begin
@@ -44,6 +51,9 @@ begin
   end if;
   if to_regprocedure('public.workspace_proposal_decide(bigint, text)') is not null then
     raise exception '206: workspace_proposal_decide already exists';
+  end if;
+  if to_regclass('public.v_workspace_runner_proof') is not null then
+    raise exception '206: v_workspace_runner_proof already exists';
   end if;
 end $$;
 
@@ -155,6 +165,45 @@ comment on function public.workspace_proposal_decide(bigint, text) is
   'resolves the Inbox item with {outcome, proposal_id}. Returns (state, applied). authenticated only.';
 
 -- =============================================================================================
+-- v_workspace_runner_proof: pack 25's runner-grants proof as one row of plain columns
+-- =============================================================================================
+-- The has_*_privilege expressions are 204's guard's, so the view and the guard can never disagree.
+create view public.v_workspace_runner_proof
+  with (security_invoker = true) as
+select f.definer_functions,
+       f.executes_propose,
+       r.relations_granted,
+       r.relations_checked
+  from (select (select count(*) from pg_proc p
+                 where p.pronamespace = 'public'::regnamespace and p.prosecdef
+                   and has_function_privilege('workspace_runner', p.oid, 'execute'))::integer as definer_functions,
+               coalesce(has_function_privilege('workspace_runner',
+                 to_regprocedure('public.workspace_propose(bigint, text, text, text, text, jsonb, text)'), 'execute'),
+                 false) as executes_propose) f
+ cross join (select count(*) filter (
+                      where case when c.relkind = 'S'
+                                 then has_sequence_privilege('workspace_runner', c.oid, 'usage,select,update')
+                                 else has_table_privilege('workspace_runner', c.oid,
+                                                          'select,insert,update,delete,truncate,references,trigger')
+                                      or has_any_column_privilege('workspace_runner', c.oid,
+                                                                  'select,insert,update,references')
+                            end)::integer as relations_granted,
+                    count(*)::integer as relations_checked
+               from pg_class c
+              where c.relnamespace = 'public'::regnamespace and c.relkind in ('r', 'v', 'm', 'p', 'f', 'S')) r;
+
+comment on view public.v_workspace_runner_proof is
+  'One row (migration 206): the catalog answers of pack 25''s runner-grants proof as plain columns, for '
+  'the acceptance run, which cannot read pg_* relations. definer_functions (SECURITY DEFINER functions '
+  'of public that workspace_runner can execute; 14 since 204), executes_propose, relations_granted '
+  '(public tables, views, materialized views, foreign tables and sequences on which workspace_runner '
+  'holds any privilege, on the relation or a column; 0) and relations_checked. No row of any table. '
+  'security_invoker with anon revoked, as 036 requires.';
+
+revoke all on public.v_workspace_runner_proof from public, anon, authenticated;
+grant select on public.v_workspace_runner_proof to service_role;
+
+-- =============================================================================================
 -- Privileges and the guard
 -- =============================================================================================
 revoke all on function public.workspace_proposal_decide(bigint, text) from public, anon, authenticated, service_role;
@@ -189,5 +238,21 @@ begin
                     and t.tgname = 'assignment_progress_inbox_apply_log'
                     and pg_get_triggerdef(t.oid) like '%WHEN ((CURRENT_USER = ''inbox_apply_runner''::name))%') then
     raise exception 'FAIL 206: assignment_progress_inbox_apply_log no longer fires for inbox_apply_runner alone';
+  end if;
+  -- The proof view: its answer now, its options and its grants (199's for v_workspace_store_proof).
+  if (select v.definer_functions <> 14 or not v.executes_propose or v.relations_granted <> 0 or v.relations_checked < 1
+        from public.v_workspace_runner_proof v) then
+    raise exception 'FAIL 206: v_workspace_runner_proof reads %',
+      (select to_jsonb(v) from public.v_workspace_runner_proof v);
+  end if;
+  if coalesce((select lower(split_part(o, '=', 2)) in ('true', 'on', '1', 'yes', 't', 'y')
+                 from pg_class c, unnest(c.reloptions) o
+                where c.oid = 'public.v_workspace_runner_proof'::regclass
+                  and split_part(o, '=', 1) = 'security_invoker'), false) is false
+     or has_table_privilege('anon', 'public.v_workspace_runner_proof', 'select')
+     or has_table_privilege('authenticated', 'public.v_workspace_runner_proof', 'select')
+     or has_table_privilege('workspace_runner', 'public.v_workspace_runner_proof', 'select')
+     or not has_table_privilege('service_role', 'public.v_workspace_runner_proof', 'select') then
+    raise exception 'FAIL 206: v_workspace_runner_proof is not security_invoker and readable by service_role alone among the clients';
   end if;
 end $$;
