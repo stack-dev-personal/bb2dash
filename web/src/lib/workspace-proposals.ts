@@ -337,6 +337,25 @@ export function itemOutcomeState(item: { state: string; resolution: unknown }): 
   return oneOf(PROPOSAL_STATES, asRecord(item.resolution)?.outcome);
 }
 
+/**
+ * R2-7: an open `assistant_proposal` item whose proposal is no longer `proposed` (expired by the
+ * view, not yet swept; or decided and the item not yet read again) is filed as what it is: a copy
+ * reading `resolved` with the proposal's outcome, so the Inbox's tabs and counts never hold it as
+ * waiting. Every other item is returned as it is; nothing is written.
+ */
+export function settleProposalItems<T extends { kind: string; state: string; resolution: unknown; workspace_proposal_id?: unknown }>(
+  items: readonly T[],
+  proposalsById: ReadonlyMap<number, Pick<WorkspaceProposal, 'id' | 'effective_state'>>,
+): T[] {
+  return items.map((item) => {
+    if (item.kind !== 'assistant_proposal' || item.state !== 'open') return item;
+    const id = proposalIdOfItem(item);
+    const proposal = id === null ? undefined : proposalsById.get(id);
+    if (proposal === undefined || isOpenProposal(proposal)) return item;
+    return { ...item, state: 'resolved', resolution: { outcome: proposal.effective_state, proposal_id: proposal.id } };
+  });
+}
+
 /** The outcome in words from the Inbox item alone (its field and `to_value` are the proposal's); null while open. */
 export function itemOutcomeLine(item: { state: string; resolution: unknown; field: string | null; to_value: unknown }): string | null {
   const state = itemOutcomeState(item);

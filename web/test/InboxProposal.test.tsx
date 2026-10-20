@@ -54,7 +54,9 @@ vi.mock('@/components/inbox/InboxApplyButton', () => ({ InboxApplyButton: () => 
 const { default: Inbox, InboxView } = await import('@/app/(app)/inbox/Inbox');
 const { InboxProposalCard } = await import('@/components/inbox/InboxProposal');
 const { tabCounts, tabOf } = await import('@/components/inbox/inbox-tabs');
-const { PROPOSAL_LOADING_LINE, PROPOSAL_MISSING_LINE, normalizeProposal } = await import('@/lib/workspace-proposals');
+const { PROPOSAL_LOADING_LINE, PROPOSAL_MISSING_LINE, normalizeProposal, settleProposalItems } = await import(
+  '@/lib/workspace-proposals'
+);
 
 function proposalItem(over: Parameters<typeof makeAttentionItem>[0] = {}) {
   return makeAttentionItem({
@@ -191,6 +193,31 @@ describe('InboxProposalCard', () => {
     expect(screen.getByText(PROPOSAL_MISSING_LINE)).toBeTruthy();
     expect(screen.getByText('Approved: marked submitted')).toBeTruthy();
     expect(screen.getByRole('link', { name: /Open the answer/ })).toBeTruthy();
+  });
+});
+
+describe('an open item whose proposal is no longer proposed (R2-7)', () => {
+  it('is filed as decided: under Archived, not counted as waiting, its card saying Expired', async () => {
+    tables.attention_items = [proposalItem()];
+    tables.v_workspace_proposals = [proposalRow({ state: 'proposed', effective_state: 'expired' })];
+    const { container } = withClient(<Inbox />);
+    await waitFor(() => expect(screen.getByRole('tab', { name: /Needs you/ }).textContent).toMatch(/0$/));
+    expect(screen.getByText('0 open items')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /Archived/ }).textContent).toMatch(/1$/);
+    expect(container.querySelector('[data-proposal]')).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: /Archived/ }));
+    expect((await screen.findByText('Expired')).hasAttribute('data-proposal-outcome')).toBe(true);
+    expect(screen.queryAllByRole('button', { name: /^Approve/ })).toHaveLength(0);
+  });
+
+  it('as a pure rule: only a read proposal that is no longer proposed moves an open item', () => {
+    const expired = proposal({ effective_state: 'expired' });
+    const settled = settleProposalItems([proposalItem(), makeAttentionItem({ id: 2 })], new Map([[7, expired]]));
+    expect(settled[0]).toMatchObject({ state: 'resolved', resolution: { outcome: 'expired', proposal_id: 7 } });
+    expect(settled[1].state).toBe('open');
+    const open = settleProposalItems([proposalItem()], new Map([[7, proposal()]]));
+    expect(open[0].state).toBe('open');
+    expect(settleProposalItems([proposalItem()], new Map())[0].state).toBe('open');
   });
 });
 
