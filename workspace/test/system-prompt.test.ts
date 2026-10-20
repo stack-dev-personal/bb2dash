@@ -55,7 +55,7 @@ describe('prompts/system.md, one sentence per rule', () => {
   });
 
   it('takes a weekday from the planner block or the line with today, and never works one out', () => {
-    expect(sentenceWith(/Take a weekday only from the planner block or the line that gives today's date/, /never work one out yourself/)).toBeDefined();
+    expect(sentenceWith(/write every date with its weekday: take a weekday only from them/, /never work one out yourself/)).toBeDefined();
     expect(sentenceWith(/When neither gives the weekday, write the date alone\./)).toBeDefined();
   });
 
