@@ -15,8 +15,8 @@
 --   2. The readers of answered Inbox items that a proposal could reach leave it out (the audit below).
 --   3. v_workspace_proposals (security_invoker): every column of 203, effective_state, and the Inbox
 --      item's id and state.
---   4. workspace_proposals_expire() and the hourly pg_cron job `bb2dash-proposals-expire` (119a, PM
---      rulings 25b): the Inbox count and Home read attention_items, so an expired proposal must stop
+--   4. workspace_proposals_expire() and its pg_cron job `bb2dash-proposals-expire`, every five minutes (119a,
+--      PM rulings 25b and R2-7): the Inbox count and Home read attention_items, so an expired proposal must stop
 --      being an open item, not only read as expired through the view.
 --   5. a guard block over what this file states.
 --
@@ -46,9 +46,10 @@
 --   inbox_decisions_unfiled (182)  YES*      archived rows with an inbox-decision/1 record; a proposal is
 --   inbox_decisions_unlogged (182) YES*      never archived now, but the owner's own row security can
 --                                            still write any row: REDEFINED, kind left out (*belt)
---   run_transform (035 ... 212)    YES       counts every row before and after a fold, so a proposal
---                                            filed during a fold was counted in `attention_raised`:
---                                            REDEFINED (212's live body), both counts leave the kind out
+--   run_transform (035 ... 212)    count     LEFT AS IS: it counts the fold's new items; a proposal filed
+--                                            during a fold adds one to that fold's `attention_raised`
+--                                            (accepted, 119a R2-1: 212 defines it and sorts after 205, so
+--                                            a restatement here would be lost on a replay by name order)
 --   inbox_decision_filed/_logged/  no        act by id on what unfiled/unlogged list, and only on an
 --     _skipped (182, 187)                    archived row with an inbox-decision/1 record: never a proposal
 --   inbox_apply_run_facts (186)    no        archived_by = the request (archive refuses a proposal),
@@ -82,8 +83,11 @@
 -- replace` keeps a function's ACL); each body is the live one with the lines marked 205 added. The
 -- redefined view keeps 090's columns and its grants; its options are written out (143's note).
 --
--- Additive in the sense of the SOP: one column, one index, two checks, one policy and five functions
--- restated, one view, one function and one cron job new. No row is changed. No password, key or DSN.
+-- No object restated here is defined again by a later migration (207-214 read 2026-10-20; 211 names
+-- inbox_apply_log_write in a comment only), so a replay in name order keeps every filter of this file.
+--
+-- Additive in the sense of the SOP: one column, one index, two checks, one policy, one view and six
+-- functions restated, one view, one function and one cron job new. No row is changed. No password, key or DSN.
 
 do $$
 begin
@@ -367,183 +371,6 @@ as $function$
    limit greatest(1, least(coalesce(p_limit, 100), 500));
 $function$;
 
--- 2h. run_transform: a proposal filed while a fold runs is not one the fold raised. The live body
---     (212's, read with pg_get_functiondef on 2026-10-19) with the two counts marked 205 changed.
-CREATE OR REPLACE FUNCTION public.run_transform(p_run_id uuid, p_trigger text DEFAULT 'manual'::text)
- RETURNS bigint
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public', 'pg_temp'
-AS $function$
-declare
-  v_id bigint;
-  v_prev record;
-  v_stages  jsonb := '{}'::jsonb;   -- {stage: counts}
-  v_errors  jsonb := '[]'::jsonb;
-  v_r       jsonb;
-  v_cc      jsonb;
-  v_hist    jsonb;
-  v_started timestamptz;
-  v_before  bigint;
-  v_after   bigint;
-  v_failed  int := 0;
-  v_status  text;
-  v_trigger text := case when p_trigger in ('manual','scheduled','app_request')
-                         then p_trigger else 'manual' end;
-begin
-  -- Idempotent. A run that already has a FINISHED real sync_runs row is never folded twice: that
-  -- row is returned as-is. A row still marked running is the one the claim opened (migration 135's
-  -- trigger), and it is adopted below. The row is locked, so a second caller waits here and then
-  -- reads the row the first one finished. A quarantine row is not a fold, so it is skipped here.
-  select id, status into v_prev
-    from sync_runs
-   where run_id = p_run_id and scope is distinct from 'unregistered'
-   order by id desc limit 1
-     for update;
-  if found and v_prev.status <> 'running' then
-    return v_prev.id;
-  end if;
-
-  -- The guard. bb_raw accepts anon inserts, so "this run exists in bb_raw" proves nothing.
-  if not exists (select 1 from agent_requests a
-                  where a.kind = 'sync' and a.run_id = p_run_id) then
-    raise exception
-      'run % is not registered by an owner-authenticated sync request; refusing to fold it', p_run_id
-      using hint = 'Insert or update an agent_requests row (kind = sync) with this run_id from an authenticated session first.';
-  end if;
-
-  if v_prev.id is not null then
-    -- Adopt the row opened at claim. started_at stays the claim's; the trigger is this fold's.
-    v_id := v_prev.id;
-    update sync_runs set trigger = v_trigger where id = v_id;
-  else
-    insert into sync_runs (run_id, status, started_at, trigger, source, scope)
-    values (p_run_id, 'running', now(), v_trigger, 'blackboard', 'all')
-    returning id into v_id;
-  end if;
-
-  begin
-    select count(*) into v_before from attention_items where kind <> 'assistant_proposal';   -- 205
-
-    v_r := stage_courses(p_run_id, v_id);
-    v_stages := v_stages || jsonb_build_object('courses', v_r->'counts');
-    if v_r->>'error' is not null then v_errors := v_errors || to_jsonb(v_r->>'error'); end if;
-
-    -- stage_content belongs to Phase 8. Call it if it is installed; record an honest skipped
-    -- row if it is not, rather than failing a whole sync over a function someone else owns.
-    v_started := clock_timestamp();
-    if to_regprocedure('public.stage_content(uuid)') is null then
-      insert into sync_stage_runs (sync_run_id, stage, status, counts, started_at, finished_at, error)
-      values (v_id, 'content', 'skipped', '{}'::jsonb, v_started, clock_timestamp(),
-              'stage_content not installed');
-      v_stages := v_stages || jsonb_build_object('content', '{}'::jsonb);
-      v_errors := v_errors || to_jsonb('stage_content not installed'::text);
-    else
-      begin
-        execute 'select public.stage_content($1)' into v_cc using p_run_id;
-        v_cc := coalesce(v_cc, '{}'::jsonb);
-        insert into sync_stage_runs (sync_run_id, stage, status, counts, started_at, finished_at, error)
-        values (v_id, 'content', 'ok', v_cc, v_started, clock_timestamp(), null);
-        v_stages := v_stages || jsonb_build_object('content', v_cc);
-      exception when others then
-        insert into sync_stage_runs (sync_run_id, stage, status, counts, started_at, finished_at, error)
-        values (v_id, 'content', 'failed', '{}'::jsonb, v_started, clock_timestamp(),
-                left(sqlstate || ' ' || sqlerrm, 1000));
-        v_stages := v_stages || jsonb_build_object('content', '{}'::jsonb);
-        v_errors := v_errors || to_jsonb(left('stage_content: ' || sqlerrm, 1000));
-      end;
-    end if;
-
-    -- Phase 26 (212). A gradebook column that is really an announcement-sourced row is bound to it
-    -- BEFORE stage_assignments, which then matches the column by id and adds no second row. The
-    -- step records itself as the stage 'bind' and fails alone, like 'content' and 'history'.
-    v_started := clock_timestamp();
-    begin
-      v_cc := coalesce(bind_announcement_rows(p_run_id), '{}'::jsonb);
-      insert into sync_stage_runs (sync_run_id, stage, status, counts, started_at, finished_at, error)
-      values (v_id, 'bind', 'ok', v_cc, v_started, clock_timestamp(), null);
-      v_stages := v_stages || jsonb_build_object('bind', v_cc);
-    exception when others then
-      insert into sync_stage_runs (sync_run_id, stage, status, counts, started_at, finished_at, error)
-      values (v_id, 'bind', 'failed', '{}'::jsonb, v_started, clock_timestamp(),
-              left(sqlstate || ' ' || sqlerrm, 1000));
-      v_stages := v_stages || jsonb_build_object('bind', '{}'::jsonb);
-      v_errors := v_errors || to_jsonb(left('bind_announcement_rows: ' || sqlerrm, 1000));
-    end;
-
-    v_r := stage_assignments(p_run_id, v_id);
-    v_stages := v_stages || jsonb_build_object('assignments', v_r->'counts');
-    if v_r->>'error' is not null then v_errors := v_errors || to_jsonb(v_r->>'error'); end if;
-
-    -- Phase 10a. Gradebook AFTER assignments, because stage_assignments is what creates and
-    -- re-points assignments.bb_column_id, and attempts AFTER gradebook, because the file
-    -- catalogue reads that link to decide which assignment a submission file belongs to.
-    v_r := stage_gradebook(p_run_id, v_id);
-    v_stages := v_stages || jsonb_build_object('gradebook', v_r->'counts');
-    if v_r->>'error' is not null then v_errors := v_errors || to_jsonb(v_r->>'error'); end if;
-
-    v_r := stage_attempts(p_run_id, v_id);
-    v_stages := v_stages || jsonb_build_object('attempts', v_r->'counts');
-    if v_r->>'error' is not null then v_errors := v_errors || to_jsonb(v_r->>'error'); end if;
-
-    v_r := stage_announcements(p_run_id, v_id);
-    v_stages := v_stages || jsonb_build_object('announcements', v_r->'counts');
-    if v_r->>'error' is not null then v_errors := v_errors || to_jsonb(v_r->>'error'); end if;
-
-    v_r := stage_files(p_run_id, v_id);
-    v_stages := v_stages || jsonb_build_object('files', v_r->'counts');
-    if v_r->>'error' is not null then v_errors := v_errors || to_jsonb(v_r->>'error'); end if;
-
-    -- Phase 19. The per-crawl material history, AFTER stage_files: a file's history row carries
-    -- the bb_files id that stage has just catalogued. material_history_record (132) writes no
-    -- stage row of its own, so the row is written here, and the call sits in its own block so a
-    -- failure in it is this stage's failure and nobody else's: the run reads partial.
-    v_started := clock_timestamp();
-    begin
-      v_hist := coalesce(material_history_record(p_run_id), '{}'::jsonb);
-      insert into sync_stage_runs (sync_run_id, stage, status, counts, started_at, finished_at, error)
-      values (v_id, 'history', 'ok', v_hist, v_started, clock_timestamp(), null);
-      v_stages := v_stages || jsonb_build_object('history', v_hist);
-    exception when others then
-      insert into sync_stage_runs (sync_run_id, stage, status, counts, started_at, finished_at, error)
-      values (v_id, 'history', 'failed', '{}'::jsonb, v_started, clock_timestamp(),
-              left(sqlstate || ' ' || sqlerrm, 1000));
-      v_stages := v_stages || jsonb_build_object('history', '{}'::jsonb);
-      v_errors := v_errors || to_jsonb(left('material_history_record: ' || sqlerrm, 1000));
-    end;
-
-    v_r := stage_gaps(p_run_id, v_id);
-    v_stages := v_stages || jsonb_build_object('gaps', v_r->'counts');
-    if v_r->>'error' is not null then v_errors := v_errors || to_jsonb(v_r->>'error'); end if;
-
-    select count(*) into v_after from attention_items where kind <> 'assistant_proposal';    -- 205
-
-    select count(*) into v_failed from sync_stage_runs
-     where sync_run_id = v_id and status = 'failed';
-    v_status := case when v_failed > 0 then 'partial' else 'ok' end;
-
-    update sync_runs
-       set status      = v_status,
-           finished_at = clock_timestamp(),
-           summary     = jsonb_build_object(
-                           'stages',           v_stages,
-                           'changes',          sync_change_lines(v_stages),
-                           'attention_raised', greatest(v_after - v_before, 0),
-                           'errors',           v_errors)
-     where id = v_id;
-
-  exception when others then
-    -- Belt and braces: the stages catch their own errors, so reaching here means something
-    -- outside them broke. Record it on the run rather than leaving a row stuck at running.
-    update sync_runs
-       set status = 'failed', finished_at = clock_timestamp(),
-           notes  = btrim(coalesce(notes || ' | ', '') || left('driver: ' || sqlerrm, 500))
-     where id = v_id;
-  end;
-
-  return v_id;
-end $function$;
-
 -- =============================================================================================
 -- 3. v_workspace_proposals
 -- =============================================================================================
@@ -583,7 +410,7 @@ revoke all on public.v_workspace_proposals from public, anon, authenticated, ser
 grant select on public.v_workspace_proposals to authenticated, service_role;
 
 -- =============================================================================================
--- 4. The expiry sweep and its hourly job
+-- 4. The expiry sweep and its job, every five minutes
 -- =============================================================================================
 create function public.workspace_proposals_expire()
   returns integer
@@ -610,7 +437,7 @@ begin
 end $$;
 
 comment on function public.workspace_proposals_expire() is
-  'The hourly expiry of the assistant''s planner proposals (migration 205; pg_cron job '
+  'The expiry, every five minutes, of the assistant''s planner proposals (migration 205; pg_cron job '
   'bb2dash-proposals-expire): every proposed row past expires_at becomes expired with decided_at = now(), '
   'and its open Inbox item resolved with resolution = {outcome: expired, proposal_id}. Returns how many '
   'expired. No client role executes it (db_test_runner does, for its unit).';
@@ -619,7 +446,7 @@ revoke all on function public.workspace_proposals_expire() from public, anon, au
 grant execute on function public.workspace_proposals_expire() to db_test_runner;
 
 -- cron.schedule replaces a job of the same name, so applying this again is safe (035's note).
-select cron.schedule('bb2dash-proposals-expire', '7 * * * *',
+select cron.schedule('bb2dash-proposals-expire', '*/5 * * * *',
                      $cron$select public.workspace_proposals_expire()$cron$);
 
 -- =============================================================================================
@@ -684,9 +511,9 @@ begin
     raise exception 'FAIL 205: workspace_proposals_expire is executable by %', v_bad;
   end if;
   if not exists (select 1 from cron.job j
-                  where j.jobname = 'bb2dash-proposals-expire' and j.schedule = '7 * * * *'
+                  where j.jobname = 'bb2dash-proposals-expire' and j.schedule = '*/5 * * * *'
                     and j.command = 'select public.workspace_proposals_expire()') then
-    raise exception 'FAIL 205: the cron job bb2dash-proposals-expire is not scheduled hourly';
+    raise exception 'FAIL 205: the cron job bb2dash-proposals-expire is not scheduled every five minutes';
   end if;
 
   -- (d) Every redefined reader names the kind; the view and the policy leave it out.
@@ -697,8 +524,7 @@ begin
                    'public.inbox_apply_archive(bigint, bigint, jsonb)'::regprocedure,
                    'public.archive_attention_item(bigint, jsonb, text)'::regprocedure,
                    'public.inbox_decisions_unfiled(integer)'::regprocedure,
-                   'public.inbox_decisions_unlogged(integer)'::regprocedure,
-                   'public.run_transform(uuid, text)'::regprocedure)
+                   'public.inbox_decisions_unlogged(integer)'::regprocedure)
      and p.prosrc not like '%assistant_proposal%';
   if v_bad is not null then
     raise exception 'FAIL 205: these readers do not leave assistant_proposal out: %', v_bad;

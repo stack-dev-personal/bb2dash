@@ -22,15 +22,20 @@ export const PROPOSE_SOCKET_ENV = 'WORKSPACE_PROPOSE_SOCKET';
 export const PROPOSE_LIMIT_ENV = 'WORKSPACE_PROPOSE_LIMIT';
 /** Proposals a turn may make: 204 refuses a sixth of a request (54000), the tool server a sixth call. */
 export const PROPOSALS_PER_TURN = 5;
+/** Calls of the tool a turn may make in all, refused and malformed ones included (119a R2-5). */
+export const PROPOSE_CALLS_PER_TURN = 10;
 
 export const PROPOSE_TARGETS = ['assignment_progress', 'reading_progress'] as const;
 export type ProposeTarget = (typeof PROPOSE_TARGETS)[number];
 export const PROPOSE_FIELDS = ['status', 'notes', 'planned_start', 'planned_finish'] as const;
 export type ProposeField = (typeof PROPOSE_FIELDS)[number];
-/** The labels of `progress_status`, read on prod 2026-10-19 (119b). */
-export const PLANNER_STATUSES = [
-  'not_started', 'planned', 'in_progress', 'submitted', 'graded', 'missed', 'excused', 'not_applicable', 'waived',
-] as const;
+/**
+ * The statuses the tool offers the model: the web's OFFERED_STATUSES (web/src/lib/progress-status.ts), in
+ * menu order, which every status menu of the app reads. The three retired labels of `progress_status`
+ * (planned, waived, not_applicable) are not offered; 204 still checks the value against the enum.
+ * test/propose.test.ts holds this list to the web's file (119a R2-9).
+ */
+export const OFFERED_PLANNER_STATUSES = ['not_started', 'in_progress', 'submitted', 'graded', 'excused', 'missed'] as const;
 
 export const ROW_ID_MAX_CHARS = 200;
 export const VALUE_MAX_CHARS = 2000;
@@ -65,7 +70,7 @@ export const PROPOSE_INPUT_SCHEMA = Object.freeze({
     target: { type: 'string', enum: [...PROPOSE_TARGETS], description: 'assignment_progress for an assignment (kind A in the planner block), reading_progress for a reading (kind R).' },
     row_id: { type: 'string', minLength: 1, maxLength: ROW_ID_MAX_CHARS, description: 'The row\'s id exactly as the planner block\'s id column shows it.' },
     field: { type: 'string', enum: [...PROPOSE_FIELDS], description: 'status or notes; planned_start or planned_finish on an assignment only.' },
-    value: { type: 'string', minLength: 1, maxLength: VALUE_MAX_CHARS, description: `For status one of ${PLANNER_STATUSES.join(', ')}; for a planned date YYYY-MM-DD; for notes the whole new note, which replaces the old one.` },
+    value: { type: 'string', minLength: 1, maxLength: VALUE_MAX_CHARS, description: `For status one of ${OFFERED_PLANNER_STATUSES.join(', ')}; for a planned date YYYY-MM-DD; for notes the whole new note, which replaces the old one.` },
     reason: { type: 'string', minLength: 1, maxLength: REASON_MAX_CHARS, description: 'One sentence for Stack: why, in his own words where he gave them.' },
   },
 });

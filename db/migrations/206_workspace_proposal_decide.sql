@@ -17,6 +17,8 @@
 --   planner value (for update) the way 204 read it: when it differs from old_value, or the assignment or
 --   reading no longer exists, the proposal is `stale` and nothing is written; when it is equal the one
 --   field is written (the progress row inserted first when there is none) and the proposal is `applied`.
+--   For a status, no progress row and a row at not_started are the same value, on both tables, as 204
+--   reads them (119a R2-4): a row Stack created since (a note, say) does not make a status proposal stale.
 --   Then decided_at = now(), and the Inbox item is resolved: state resolved, resolved_at = now(),
 --   resolution = {outcome: <state>, proposal_id}.
 --
@@ -69,6 +71,7 @@ declare
   v_state   text;
   v_applied boolean := false;
   v_text    text;
+  v_was     jsonb;   -- the value 204 read, a status with no row read as not_started (R2-4)
 begin
   if p_decision is null or p_decision not in ('approve', 'reject') then
     raise exception 'workspace_proposal_decide: the decision must be approve or reject' using errcode = '22023';
@@ -84,6 +87,8 @@ begin
   end if;
 
   v_text := v.new_value #>> '{}';
+  v_was := coalesce(v.old_value, 'null'::jsonb);
+  if v.field = 'status' and v_was = 'null'::jsonb then v_was := to_jsonb('not_started'::text); end if;
   if now() >= v.expires_at then
     v_state := 'expired';
   elsif p_decision = 'reject' then
@@ -99,8 +104,10 @@ begin
       into v_found, v_now
       from assignment_progress p where p.assignment_id = v.row_id
        for update;
+    -- R2-4: no progress row and a row at not_started are the same status, as 204 reads it.
     v_now := coalesce(v_now, 'null'::jsonb);
-    if not v_fact or v_now is distinct from coalesce(v.old_value, 'null'::jsonb) then
+    if v.field = 'status' and v_now = 'null'::jsonb then v_now := to_jsonb('not_started'::text); end if;
+    if not v_fact or v_now is distinct from v_was then
       v_state := 'stale';
     else
       if not coalesce(v_found, false) then
@@ -128,8 +135,10 @@ begin
       into v_found, v_now
       from reading_progress p where p.reading_id = v.row_id::bigint
        for update;
+    -- R2-4: no progress row and a row at not_started are the same status, as 204 reads it.
     v_now := coalesce(v_now, 'null'::jsonb);
-    if not v_fact or v_now is distinct from coalesce(v.old_value, 'null'::jsonb) then
+    if v.field = 'status' and v_now = 'null'::jsonb then v_now := to_jsonb('not_started'::text); end if;
+    if not v_fact or v_now is distinct from v_was then
       v_state := 'stale';
     else
       if not coalesce(v_found, false) then

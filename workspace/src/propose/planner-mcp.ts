@@ -3,12 +3,14 @@
  * the CLI speaks to a stdio server. Four methods are answered (`initialize`, `ping`, `tools/list`,
  * `tools/call`); notifications get no answer; anything else is "method not found". One tool,
  * `propose_planner_change`. A call whose input has the wrong shape is answered here and not
- * forwarded; a call past the turn's limit is refused here; every other call goes to the runner
+ * forwarded; a call past the turn's limits (five proposals filed, ten calls in all: 119a R2-5) is
+ * refused here; every other call goes to the runner
  * (`send`), whose reply is the tool's result. The server holds no credential and makes no write.
  */
 
 import {
   PLANNER_SERVER,
+  PROPOSE_CALLS_PER_TURN,
   PROPOSE_INPUT_SCHEMA,
   PROPOSE_TOOL,
   PROPOSE_TOOL_DESCRIPTION,
@@ -30,8 +32,10 @@ type Json = Record<string, unknown>;
 type Id = string | number | null;
 
 export interface PlannerHandlerDeps {
-  /** Calls the runner may be sent this turn. */
+  /** Proposals the runner may file this turn; a refused call does not count. */
   readonly limit: number;
+  /** Calls of the tool in all this turn; PROPOSE_CALLS_PER_TURN when not given. */
+  readonly callLimit?: number;
   readonly send: (input: ProposeInput) => Promise<ProposeReply>;
 }
 
@@ -59,16 +63,23 @@ export interface PlannerHandler {
 }
 
 export function createPlannerHandler(deps: PlannerHandlerDeps): PlannerHandler {
-  let sent = 0;
+  const callLimit = deps.callLimit ?? PROPOSE_CALLS_PER_TURN;
+  /** Proposals the runner filed: only these count toward the limit (119a R2-5). */
+  let filed = 0;
+  /** Calls of the tool in all, whatever became of them. */
+  let calls = 0;
 
   async function call(params: Json): Promise<ToolResult> {
     if (params.name !== PROPOSE_TOOL) return toolText(`unknown tool ${String(params.name).slice(0, 80)}`, true);
+    if (calls >= callLimit) return toolText(`Not proposed: this answer has used its ${callLimit} calls of this tool.`, true);
+    calls += 1;
     const read = readProposeInput(params.arguments);
     if (!read.ok) return toolText(`Not proposed: ${read.reason}.`, true);
-    if (sent >= deps.limit) return toolText(`Not proposed: this answer has used its ${deps.limit} proposals.`, true);
-    sent += 1;
+    if (filed >= deps.limit) return toolText(`Not proposed: this answer has filed its ${deps.limit} proposals.`, true);
     const reply = await deps.send(read.input);
-    return reply.ok ? toolText(proposedText(reply.proposal), false) : toolText(`Not proposed: ${reply.error}`, true);
+    if (!reply.ok) return toolText(`Not proposed: ${reply.error}`, true);
+    filed += 1;
+    return toolText(proposedText(reply.proposal), false);
   }
 
   return {
