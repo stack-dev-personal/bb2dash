@@ -22,6 +22,8 @@ export const PROPOSE_SOCKET_ENV = 'WORKSPACE_PROPOSE_SOCKET';
 export const PROPOSE_LIMIT_ENV = 'WORKSPACE_PROPOSE_LIMIT';
 /** Proposals a turn may make: 204 refuses a sixth of a request (54000), the tool server a sixth call. */
 export const PROPOSALS_PER_TURN = 5;
+/** Calls of the tool a turn may make in all, refused and malformed ones included (119a R2-5). */
+export const PROPOSE_CALLS_PER_TURN = 10;
 
 export const PROPOSE_TARGETS = ['assignment_progress', 'reading_progress'] as const;
 export type ProposeTarget = (typeof PROPOSE_TARGETS)[number];

@@ -17,6 +17,7 @@ import { createPlannerHandler, DEFAULT_PROTOCOL_VERSION } from '../src/propose/p
 import {
   PLANNER_SERVER,
   PROPOSALS_PER_TURN,
+  PROPOSE_CALLS_PER_TURN,
   PROPOSE_INPUT_SCHEMA,
   PROPOSE_TOOL,
   PROPOSE_TOOL_FULL,
@@ -141,13 +142,36 @@ describe('the tool server\'s MCP answers', () => {
     expect(sent).toHaveLength(1);
   });
 
-  it('forwards at most the limit, then refuses without asking the runner', async () => {
+  it('files at most the limit, then refuses without asking the runner', async () => {
     const { h, sent } = handler([], 5);
     for (let i = 0; i < 5; i += 1) expect(((await h.handle(call(20 + i, { ...VALID, row_id: `r${i}` })))?.result as { isError: boolean }).isError).toBe(false);
     const sixth = (await h.handle(call(30, { ...VALID, row_id: 'r6' })))?.result as { isError: boolean; content: Array<{ text: string }> };
     expect(sixth.isError).toBe(true);
-    expect(sixth.content[0]?.text).toMatch(/used its 5 proposals/);
+    expect(sixth.content[0]?.text).toMatch(/filed its 5 proposals/);
     expect(sent).toHaveLength(5);
+  });
+
+  it('counts only the proposals actually filed toward the five (R2-5)', async () => {
+    const refused: ProposeReply = { ok: false, error: 'workspace_propose: there is no assignment x' };
+    const { h, sent } = handler([refused, refused, refused], 5);
+    const results: boolean[] = [];
+    for (let i = 0; i < 8; i += 1) results.push(((await h.handle(call(40 + i, { ...VALID, row_id: `r${i}` })))?.result as { isError: boolean }).isError);
+    expect(results).toEqual([true, true, true, false, false, false, false, false]);
+    const ninth = (await h.handle(call(48, { ...VALID, row_id: 'r9' })))?.result as { isError: boolean; content: Array<{ text: string }> };
+    expect(ninth.content[0]?.text).toMatch(/filed its 5 proposals/);
+    expect(sent).toHaveLength(8);
+  });
+
+  it('takes at most ten calls in all in a turn, a call of the wrong shape included (R2-5)', async () => {
+    expect(PROPOSE_CALLS_PER_TURN).toBe(10);
+    const refused: ProposeReply = { ok: false, error: 'refused' };
+    const { h, sent } = handler(Array.from({ length: 20 }, () => refused), 5);
+    await h.handle(call(60, { ...VALID, field: 'score' }));
+    for (let i = 0; i < 9; i += 1) await h.handle(call(61 + i, { ...VALID, row_id: `r${i}` }));
+    const eleventh = (await h.handle(call(70, { ...VALID, row_id: 'last' })))?.result as { isError: boolean; content: Array<{ text: string }> };
+    expect(eleventh.isError).toBe(true);
+    expect(eleventh.content[0]?.text).toMatch(/used its 10 calls/);
+    expect(sent).toHaveLength(9);
   });
 });
 
