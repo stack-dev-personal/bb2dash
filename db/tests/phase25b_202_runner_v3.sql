@@ -4,8 +4,8 @@
 -- columns.
 --
 --   0. installed, shaped and fenced: claim_v3 SECURITY DEFINER of postgres with a pinned path, its
---      default cap 2, executable by workspace_runner alone; the role executes exactly thirteen and holds
---      no table, view, column or sequence privilege; workspace_runner_beats is row-secured, the owner
+--      default cap 2, executable by workspace_runner alone; the role executes exactly fourteen (204 adds
+--      workspace_propose) and holds no table, view, column or sequence privilege; workspace_runner_beats is row-secured, the owner
 --      reads it and nobody else can write it; the view is security_invoker with its seven columns
 --   1. claim_v3: two runners hold two claims at once, from two conversations; a third gets nothing at
 --      the cap and the request stays queued; a cap of 3 lets it through; a cap of 1 is v2's rule; the
@@ -151,7 +151,7 @@ begin
     v_fail := v_fail || 'workspace_runner cannot execute claim_v3'::text;
   end if;
 
-  -- The fence: the thirteen, and no relation privilege.
+  -- The fence: the fourteen (since 204), and no relation privilege.
   select string_agg(p.proname, ',' order by p.proname collate "C") into v_got
     from pg_proc p
    where p.pronamespace = 'public'::regnamespace and p.prosecdef
@@ -159,7 +159,7 @@ begin
   if v_got is distinct from
      'workspace_begin,workspace_claim,workspace_claim_v2,workspace_claim_v3,workspace_finish,'
      'workspace_heartbeat,workspace_job_claim,workspace_job_finish,workspace_planner_feed,'
-     'workspace_search_timing,workspace_stream,workspace_turn_context,workspace_turn_put' then
+     'workspace_propose,workspace_search_timing,workspace_stream,workspace_turn_context,workspace_turn_put' then
     v_fail := v_fail || format('workspace_runner executes the SECURITY DEFINER functions [%s]', v_got);
   end if;
   select string_agg(c.relname, ', ' order by c.relname collate "C") into v_got

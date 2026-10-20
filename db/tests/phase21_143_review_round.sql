@@ -154,8 +154,8 @@ begin
       v_fail := v_fail || format('the comment on %s does not name 143', f);
     end if;
   end loop;
-  -- Still 142's five, now among the thirteen (196 adds six, 207 one, 202 one), for workspace_runner and
-  -- for nobody else. RED against prod until 202 is applied (25b's cut-over).
+  -- Still 142's five, now among the fourteen (196 adds six, 207 one, 202 one, 204 one), for workspace_runner
+  -- and for nobody else. RED against prod until 202 and 204 are applied (25b's cut-over).
   select string_agg(p.proname, ',' order by p.proname collate "C") into v_got
     from pg_proc p
    where p.pronamespace = 'public'::regnamespace and p.prosecdef
@@ -163,7 +163,7 @@ begin
   if v_got is distinct from
      'workspace_begin,workspace_claim,workspace_claim_v2,workspace_claim_v3,workspace_finish,'
      'workspace_heartbeat,workspace_job_claim,workspace_job_finish,workspace_planner_feed,'
-     'workspace_search_timing,workspace_stream,workspace_turn_context,workspace_turn_put' then
+     'workspace_propose,workspace_search_timing,workspace_stream,workspace_turn_context,workspace_turn_put' then
     v_fail := v_fail || format('workspace_runner executes the SECURITY DEFINER functions [%s]', v_got);
   end if;
   select string_agg(w.who || ':' || g.fn, ', ' order by w.who collate "C", g.fn collate "C")
