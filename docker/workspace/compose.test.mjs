@@ -21,11 +21,21 @@ import { fileURLToPath } from 'node:url';
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const compose = fs.readFileSync(path.join(REPO, 'compose.yaml'), 'utf8').replace(/\r\n/g, '\n');
 
-const RUNNERS = Object.freeze({ workspace: 'workspace', 'workspace-2': 'workspace-2' });
+/** The live project (compose.yaml's `name:`, and bb2dash-stack's) and the runner names it gives. */
+const LIVE_PROJECT = 'bb2dash';
+const RUNNERS = Object.freeze({ workspace: 'bb2dash-workspace', 'workspace-2': 'bb2dash-workspace-2' });
+/** How compose.yaml spells each name: the project's name first (review R2-2). */
+const NAME_LINES = Object.freeze({
+  workspace: 'WORKSPACE_RUNNER_NAME: ${COMPOSE_PROJECT_NAME}-workspace',
+  'workspace-2': 'WORKSPACE_RUNNER_NAME: ${COMPOSE_PROJECT_NAME}-workspace-2',
+});
+/** A test project as Phase 24 and 25a ran them: its own name and a second file of test tags. */
+const TEST_PROJECT = 'bb2dash-p25b-test';
+const TEST_OVERRIDE = 'docker/egress/e2e/compose.e2e.yaml';
 /** The keys `workspace-2` sets itself; everything else comes from `workspace`. */
 const OWN_KEYS = Object.freeze(['build', 'pull_policy', 'environment.WORKSPACE_RUNNER_NAME']);
 /** workspace/src/config.ts, RUNNER_NAME_SHAPE. */
-const RUNNER_NAME_SHAPE = /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/;
+const RUNNER_NAME_SHAPE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 /** What `sync` holds that no Claude process may share: its login volume and its file volume. */
 const LOGIN_VOLUMES = Object.freeze(['bb-profile', 'course-files']);
 const CLAUDE_TOKEN = 'claude_oauth_token';
@@ -40,6 +50,16 @@ function service(name) {
 }
 const code = (block) => block.split('\n').filter((line) => line.trim() !== '' && !line.trim().startsWith('#')).join('\n');
 
+/** Every file under the repository with one of `extensions`, node_modules and .git left out. */
+function filesUnder(dir, extensions) {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    if (entry.name === 'node_modules' || entry.name === '.git') return [];
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) return filesUnder(full, extensions);
+    return extensions.some((ext) => entry.name.endsWith(ext)) ? [full] : [];
+  });
+}
+
 test('workspace-2 extends workspace and sets only its name, no build and pull_policy never', () => {
   assert.equal(
     code(service('workspace-2')),
@@ -50,19 +70,29 @@ test('workspace-2 extends workspace and sets only its name, no build and pull_po
       '    build: !reset null',
       '    pull_policy: never',
       '    environment:',
-      '      WORKSPACE_RUNNER_NAME: workspace-2',
+      `      ${NAME_LINES['workspace-2']}`,
     ].join('\n'),
   );
 });
 
-test('each runner has its own fixed name, in the shape the runner accepts', () => {
-  assert.match(code(service('workspace')), /\n {4}environment:\n(?: {6}.*\n)*? {6}WORKSPACE_RUNNER_NAME: workspace\n/);
+test('each runner name is the compose project\'s name and the service\'s, fixed, in the shape the runner accepts', () => {
+  assert.match(compose, new RegExp(`^name: ${LIVE_PROJECT}$`, 'm'));
+  assert.ok(code(service('workspace')).includes(`\n    environment:\n`));
+  assert.equal(code(service('workspace')).split('\n').filter((line) => line.includes('WORKSPACE_RUNNER_NAME')).map((l) => l.trim()).join(), NAME_LINES.workspace);
   for (const name of Object.values(RUNNERS)) assert.match(name, RUNNER_NAME_SHAPE);
   assert.equal(new Set(Object.values(RUNNERS)).size, Object.keys(RUNNERS).length, 'the names differ');
   // The name never comes from the container: no hostname or container_name pins one instead.
   for (const name of Object.keys(RUNNERS)) {
     assert.doesNotMatch(code(service(name)), /\n {4}(hostname|container_name):/, `${name} sets no hostname`);
   }
+});
+
+test('no compose file, script or env file but compose.yaml sets a runner name or the project name for it', () => {
+  const setters = filesUnder(REPO, ['.yaml', '.yml', '.sh', '.ps1', '.mjs', '.env', '.example'])
+    .filter((file) => path.relative(REPO, file) !== 'compose.yaml' && !file.endsWith('compose.test.mjs'))
+    .filter((file) => /WORKSPACE_RUNNER_NAME\s*[:=]|COMPOSE_PROJECT_NAME\s*[:=]/.test(fs.readFileSync(file, 'utf8')))
+    .map((file) => path.relative(REPO, file).replaceAll('\\', '/'));
+  assert.deepEqual(setters, [], 'a test override must not pin the live names');
 });
 
 test('nothing else extends the Workspace, and workspace-2 publishes nothing', () => {
@@ -73,7 +103,8 @@ test('nothing else extends the Workspace, and workspace-2 publishes nothing', ()
 
 // --- compose's own rendering ---------------------------------------------------------------------
 
-function render() {
+/** `docker compose config` of compose.yaml (and `extra` files) under `project` (null: compose.yaml's own name). */
+function render(project, extra = []) {
   const probe = spawnSync('docker', ['compose', 'version'], { encoding: 'utf8', windowsHide: true });
   if (probe.status !== 0) return { skip: 'no docker compose on PATH' };
   const secrets = fs.mkdtempSync(path.join(os.tmpdir(), 'w103-secrets-'));
@@ -81,10 +112,13 @@ function render() {
     for (const name of compose.slice(compose.indexOf('\nsecrets:\n')).matchAll(/\n {2}([a-z0-9_]+):\n {4}file: /g)) {
       fs.writeFileSync(path.join(secrets, name[1]), 'not-a-secret\n');
     }
+    const env = { ...process.env, SECRETS_DIR: secrets, COMPOSE_PROFILES: '' };
+    delete env.COMPOSE_PROJECT_NAME;
+    const files = ['compose.yaml', ...extra].flatMap((file) => ['-f', file]);
     const result = spawnSync(
       'docker',
-      ['compose', '-p', 'bb2dash-compose-test', '--profile', 'workspace', '--profile', 'apply', '-f', 'compose.yaml', 'config', '--format', 'json'],
-      { cwd: REPO, encoding: 'utf8', windowsHide: true, env: { ...process.env, SECRETS_DIR: secrets, COMPOSE_PROFILES: '' } },
+      ['compose', ...(project ? ['-p', project] : []), '--profile', 'workspace', '--profile', 'apply', ...files, 'config', '--format', 'json'],
+      { cwd: REPO, encoding: 'utf8', windowsHide: true, env },
     );
     assert.equal(result.status, 0, `docker compose config failed: ${result.stderr}`);
     return { services: JSON.parse(result.stdout).services };
@@ -92,7 +126,7 @@ function render() {
     fs.rmSync(secrets, { recursive: true, force: true });
   }
 }
-const rendered = render();
+const rendered = render(null);
 const skip = rendered.skip ?? false;
 
 /** A copy of a rendered service without the keys `workspace-2` sets itself. */
@@ -116,6 +150,18 @@ test('rendered: workspace-2 is workspace in every key but its name, its build an
   assert.equal(second.pull_policy, 'never');
   assert.equal(second.image, 'bb2dash-workspace:local');
 });
+
+test('rendered: a test project, with its second file of test tags, never claims under a live name (R2-2)', { skip }, () => {
+  const test = render(TEST_PROJECT, [TEST_OVERRIDE]).services;
+  const live = new Set(Object.values(RUNNERS));
+  for (const name of Object.keys(RUNNERS)) {
+    const runner = test[name].environment.WORKSPACE_RUNNER_NAME;
+    assert.equal(runner, `${TEST_PROJECT}-${name}`);
+    assert.ok(!live.has(runner), `${name} in ${TEST_PROJECT} claims as ${runner}`);
+    assert.match(runner, RUNNER_NAME_SHAPE);
+  }
+});
+
 
 test('rendered: workspace-2 is the same egress client as workspace, with the memory jobs on', { skip }, () => {
   const second = rendered.services['workspace-2'];

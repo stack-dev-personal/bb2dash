@@ -195,7 +195,8 @@ services:
   # Phase 25b: two runners answer at once (Stack's answer 5, cap 2): this service and `workspace-2`
   # below, which extends this one and changes only its name, its build and its pull policy. Each
   # claims through workspace_claim_v3 (migration 202) under its own fixed name, WORKSPACE_RUNNER_NAME,
-  # so a recreated container keeps it.
+  # so a recreated container keeps it, and the name starts with the compose project's: live
+  # (project bb2dash) the two are workspace@bb2dash-workspace and workspace@bb2dash-workspace-2.
   workspace:
     profiles: [workspace]
     build:
@@ -220,7 +221,12 @@ services:
     environment:
       # The name the runner claims and beats under, `workspace@<this>`: fixed per service, never the
       # container's hostname, which a recreate changes (Phase 25b; workspace/src/config.ts checks its shape).
-      WORKSPACE_RUNNER_NAME: workspace
+      # It starts with the compose project's name (review R2-2): 202 closes a request still claimed under
+      # the caller's own name as its dead turn, so a test project (-p bb2dash-wt..., with its second
+      # compose file of test tags) must never claim under the live name. Compose sets
+      # COMPOSE_PROJECT_NAME from -p or from `name:` above, so a test project cannot leave it live; no
+      # other compose file sets this variable (docker/workspace/compose.test.mjs).
+      WORKSPACE_RUNNER_NAME: ${COMPOSE_PROJECT_NAME}-workspace
       # The CLI's config lives on a tmpfs (freeze amendment F-4): no session persists.
       CLAUDE_CONFIG_DIR: /home/node/.claude
       # Off turns off the memory jobs only (the remembered items). The rolling summary of a long
@@ -294,7 +300,7 @@ services:
   #     same tag twice). After `docker compose up -d --build workspace`, `docker compose up -d
   #     workspace-2` takes the new image up alone;
   #   * pull_policy never: the image is local, so a missing one is an error, never a pull;
-  #   * WORKSPACE_RUNNER_NAME workspace-2.
+  #   * WORKSPACE_RUNNER_NAME <project>-workspace-2.
   # Started, restarted and recreated alone, by name, like `workspace`; never through a bare `up`
   # while a sync is open. docker/workspace/compose.test.mjs pins this block.
   workspace-2:
@@ -303,7 +309,7 @@ services:
     build: !reset null
     pull_policy: never
     environment:
-      WORKSPACE_RUNNER_NAME: workspace-2
+      WORKSPACE_RUNNER_NAME: ${COMPOSE_PROJECT_NAME}-workspace-2
 
   # The ingest worker (Phase 24a, brief 109, freeze amendment F-3): it claims uploads and remembered items
   # through the four workspace_ingest_runner functions, downloads a signed link, hands a parsed file to

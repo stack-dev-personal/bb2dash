@@ -491,7 +491,9 @@ first and then granted what the owner needs. Every policy names `app_owner()` in
   claimed across runners (v2: while none is); a cap outside 1 to 4 is refused (22023). Same lock, sweeps
   and four columns. `workspace_runner` executes thirteen (207's `workspace_search_timing` and this one
   added to the eleven) and still holds no table, view or sequence grant. The runner calls it with 2 under
-  its fixed name `workspace@<WORKSPACE_RUNNER_NAME>` (`workspace@workspace`, `workspace@workspace-2`).
+  its fixed name `workspace@<WORKSPACE_RUNNER_NAME>`, which compose sets to `<project>-<service>`
+  (`workspace@bb2dash-workspace`, `workspace@bb2dash-workspace-2` live; a test project's runner carries its own
+  project name, so it never closes a live runner's turn as its own).
 
 * **The review round (199)** — `create or replace` only. `workspace_job_claim`: a message is old for a
   rolling job when the messages newer than it already pass 14,000 bytes, and the newest finished

@@ -74,10 +74,11 @@ export const TURN_CONCURRENCY = 1;
  */
 export const MAX_OPEN_CLAIMS = 2;
 /**
- * Names the runner (Phase 25b): compose sets it per service (`workspace`, `workspace-2`), so the
- * name survives a recreated container, whose hostname is new. The database closes a request still
- * claimed under the caller's own name as its dead turn, so each runner's name must be its own and
- * stable. Unset or empty: the hostname, as before.
+ * Names the runner (Phase 25b): compose sets it per service as `<project>-<service>`
+ * (`bb2dash-workspace`, `bb2dash-workspace-2` live), so the name survives a recreated container,
+ * whose hostname is new, and a test project's runner never shares a live one (review R2-2). The
+ * database closes a request still claimed under the caller's own name as its dead turn, so each
+ * runner's name must be its own and stable. Unset or empty: the hostname, as before.
  */
 export const RUNNER_NAME_ENV = 'WORKSPACE_RUNNER_NAME';
 /** Answer text is sent to the page in flushes this far apart. */
@@ -173,8 +174,12 @@ const withoutMark = (text: string): string => (text.startsWith(BYTE_ORDER_MARK) 
 /** Dollars with at most two decimals: the flag is written with two, so a third would reach the CLI rounded. */
 const BUDGET_SHAPE = /^\d+(\.\d{1,2})?$/;
 const RUNNER_NAME_PREFIX = 'workspace@';
-/** A runner name: 1 to 32 lowercase letters, digits and hyphens, a letter or digit at each end (a DNS label's shape). */
-const RUNNER_NAME_SHAPE = /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/;
+/**
+ * A runner name: 1 to 63 lowercase letters, digits and hyphens, a letter or digit at each end (a DNS
+ * label's shape). Compose gives `<project>-<service>` (review R2-2): `bb2dash-workspace` live, the test
+ * project's own name first in a test project, so a test runner never claims under a live name.
+ */
+const RUNNER_NAME_SHAPE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const DSN_SECRET_NAME = 'workspace_runner_db_url';
 const TOKEN_SECRET_NAME = 'claude_oauth_token';
 
@@ -252,7 +257,7 @@ export function parseTurnBudget(raw: string | undefined): number {
 export function parseRunnerName(raw: string): string {
   const name = raw.trim();
   if (!RUNNER_NAME_SHAPE.test(name)) {
-    throw new ConfigError(`${RUNNER_NAME_ENV} must be 1 to 32 lowercase letters, digits and hyphens, with a letter or digit at each end`);
+    throw new ConfigError(`${RUNNER_NAME_ENV} must be 1 to 63 lowercase letters, digits and hyphens, with a letter or digit at each end`);
   }
   return name;
 }

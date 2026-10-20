@@ -355,7 +355,7 @@ describe('loadConfig', () => {
     expect(loadConfig({ env: { [RUNNER_NAME_ENV]: '' }, readFile: goodFiles, hostname: 'h2' }).runnerName).toBe('workspace@h2');
   });
 
-  it.each(['Workspace', 'workspace_2', '-workspace', 'workspace-', 'a b', 'w@x', 'x'.repeat(33), 'ws/2', 'é'])(
+  it.each(['Workspace', 'workspace_2', '-workspace', 'workspace-', 'a b', 'w@x', 'x'.repeat(64), 'ws/2', 'é'])(
     'refuses the runner name %j, naming the variable and not the value',
     (value) => {
       const load = (): unknown => loadConfig({ env: { [RUNNER_NAME_ENV]: value }, readFile: goodFiles, hostname: 'h' });
@@ -371,8 +371,10 @@ describe('loadConfig', () => {
     },
   );
 
-  it('accepts a name of 32 lowercase letters, digits and inner hyphens', () => {
-    const name = `w${'0'.repeat(30)}2`;
+  it('accepts a name of 63 lowercase letters, digits and inner hyphens, and the live and test-project names compose gives', () => {
+    const name = `w${'0'.repeat(61)}2`;
+    expect(parseRunnerName('bb2dash-workspace-2')).toBe('bb2dash-workspace-2');
+    expect(parseRunnerName('bb2dash-p25b-w103-workspace-2')).toBe('bb2dash-p25b-w103-workspace-2');
     expect(loadConfig({ env: { [RUNNER_NAME_ENV]: name }, readFile: goodFiles, hostname: 'h' }).runnerName).toBe(`workspace@${name}`);
     expect(parseRunnerName('workspace-2')).toBe('workspace-2');
   });

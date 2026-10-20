@@ -152,7 +152,7 @@ const proposeQuestion = (id, word) => `${constant('PROPOSE_HEAD')}${id}${constan
 
 const TARGET = 'IST.323/a1-old-lab';
 const OTHER = 'IST.323/a2-later-lab';
-const RUNNERS = ['workspace@workspace', 'workspace@workspace-2'];
+const RUNNERS = ['workspace@bb2dash-workspace', 'workspace@bb2dash-workspace-2'];
 
 /** Runs one proof of the working tree's Phase 25 pack against the in-process database. */
 async function prove(name, params = {}) {
@@ -350,10 +350,10 @@ test('target-before: no graded row without a note fails; the fingerprint has pla
 });
 
 test('runners-alive: one runner, or a third name, fails', async () => {
-  await db.query("insert into public.v_workspace_status values (1, '{workspace@workspace}', 4)");
+  await db.query("insert into public.v_workspace_status values (1, '{workspace@bb2dash-workspace}', 4)");
   await fails('runners-alive', {});
   await db.query('truncate public.v_workspace_status');
-  await db.query("insert into public.v_workspace_status values (2, '{workspace@workspace,workspace@test-1}', 4)");
+  await db.query("insert into public.v_workspace_status values (2, '{workspace@bb2dash-workspace,workspace@test-1}', 4)");
   await fails('runners-alive', {});
 });
 

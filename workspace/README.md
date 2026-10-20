@@ -5,7 +5,7 @@ The container process behind the `/workspace` page (Phase 21, brief
 
 It takes queued questions from the database one at a time per runner, two at most across runners since
 Phase 25b (`workspace_claim_v3` of migration 202 with a cap of 2; compose runs `workspace` and
-`workspace-2`, each under its own fixed name from `WORKSPACE_RUNNER_NAME`), through `workspace_begin`,
+`workspace-2`, each under its own fixed name from `WORKSPACE_RUNNER_NAME`, `<compose project>-<service>`: `bb2dash-workspace` and `bb2dash-workspace-2` live, a test project's own name otherwise), through `workspace_begin`,
 `workspace_stream`, `workspace_finish`, `workspace_heartbeat`, and the runner functions of migration 196:
 `workspace_turn_context`, `workspace_turn_put`, `workspace_planner_feed`, `workspace_job_claim`,
 `workspace_job_finish`). Every context is rebuilt from the database: nothing a turn needs is on the
