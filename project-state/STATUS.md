@@ -188,8 +188,20 @@ Branch `feat/phase26-announcement-reader`. Migrations 210–212 in block 210–2
     on Phase 25’s branch (`7425e99`).
   * `sync` and `apply` were rebuilt alone from `16f7b8a`. Both are healthy, and the apply worker’s idle passes are clean.
   * 27 posts older than 14 days are `before_floor`; 7 wait for the first review, which the next sync that closes done will file.
-* **Still open:** the first live review and its Inbox items, checked against the brief’s table; `phase26_211` run verbatim
-  through `node scripts/db-test.mjs`; the four Phase 26 worktrees, to be removed on his word.
+* **Follow-ups the same night (recorded 2026-10-20 by the Phase 25b PM):**
+  * First live review: requests 6040 and 6041. Quiz 5: nothing to add (already in the planner). IST.323's cancelled
+    class and IST.466's Synchrony team each became a question in the Inbox. Four posts: nothing.
+  * Sync 6020 sent not-pulled file ids as text, and 213 refused them all. Its reasons also held a Playwright call log
+    with a Blackboard session cookie, stored only in request 6020's result. **#124** (`8d1d202`, on his "merge") sends the
+    ids as numbers and keeps only a reason's first line; `sync` rebuilt alone. Request 6020's result was scrubbed on his
+    word: no cookie is left in `agent_requests`, `sync_runs`, `attention_items` or `bb_file_pull_failures`.
+  * **#125** (`32f7268`): migration 214 gives `db_test_runner` the reads Phase 26's units need. Applied byte-identical
+    (md5 `5e61d4b8`); all four `phase26_*` units pass through `node scripts/db-test.mjs`, `phase26_211` verbatim
+    included.
+  * `phase19_135_136_sync_driver.sql` failed on prod because 212 added a tenth fold stage, `bind`; the product is right.
+    The test fix is **#129** (test only, PASS on prod), waiting for his word.
+  * The four Phase 26 worktrees were removed on his word.
+* **Still open:** nothing of Phase 26's own.
 
 ## Course rail after the grouped side nav (2026-10-15)
 
