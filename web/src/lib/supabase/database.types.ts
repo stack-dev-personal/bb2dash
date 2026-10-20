@@ -2986,6 +2986,7 @@ export type Database = {
       // Phase 25b (migrations 203–206), by hand in the shape generate_typescript_types gives; regenerated after the cut-over.
       workspace_proposals: {
         Row: {
+          approved_value: Json | null
           conversation_id: string
           course_id: string | null
           created_at: string
@@ -3003,6 +3004,7 @@ export type Database = {
           target: string
         }
         Insert: {
+          approved_value?: Json | null
           conversation_id: string
           course_id?: string | null
           created_at?: string
@@ -3020,6 +3022,7 @@ export type Database = {
           target: string
         }
         Update: {
+          approved_value?: Json | null
           conversation_id?: string
           course_id?: string | null
           created_at?: string
@@ -4862,6 +4865,7 @@ export type Database = {
       // Phase 25b (migrations 203–206), by hand in the shape generate_typescript_types gives; regenerated after the cut-over.
       v_workspace_proposals: {
         Row: {
+          approved_value: Json | null
           attention_item_id: number | null
           attention_state: string | null
           conversation_id: string | null
@@ -5488,11 +5492,15 @@ export type Database = {
       workspace_prompt_max: { Args: never; Returns: number }
       // Phase 25b (migrations 203–206), by hand in the shape generate_typescript_types gives; regenerated after the cut-over.
       workspace_proposal_decide: {
-        Args: { p_decision: string; p_id: number }
+        Args: { p_decision: string; p_id: number; p_value?: Json }
         Returns: {
           applied: boolean
           state: string
         }[]
+      }
+      workspace_proposal_value_check: {
+        Args: { p_field: string; p_target: string; p_value: Json }
+        Returns: Json
       }
       workspace_proposals_expire: { Args: never; Returns: number }
       workspace_propose: {

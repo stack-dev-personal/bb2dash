@@ -47,6 +47,8 @@
   gap: var(--space-2);
 }
 .pane {
+  /* Positioned for the Proposed box's corner "edit" (W-106). */
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
@@ -67,6 +69,77 @@
   overflow-wrap: anywhere;
   max-height: var(--size-180);
   overflow-y: auto;
+}
+
+/* — Stack's edit of the proposed value (W-106) ————————————————————————
+   A grey text button: muted at rest, the strongest text colour on hover and focus (white in the
+   dark theme, near-black in the light one). "edit" sits in the Proposed box's top-right corner and
+   shows on hover and on keyboard focus within the box; on a device with no hover it always shows. */
+.paneHead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  /* Room for the corner "edit", so the heading never runs under it. */
+  padding-right: var(--space-8);
+}
+.textButton {
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: color var(--motion-state) var(--ease-out), opacity var(--motion-state) var(--ease-out);
+}
+.textButton:hover:not(:disabled),
+.textButton:focus-visible {
+  color: var(--color-text);
+}
+.textButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 var(--size-focus) var(--color-accent);
+  border-radius: var(--radius-xs);
+}
+.textButton:disabled {
+  cursor: not-allowed;
+}
+.editButton {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-3);
+  opacity: 0;
+}
+.editable:hover .editButton,
+.editable:focus-within .editButton {
+  opacity: 1;
+}
+@media (hover: none) {
+  .editButton {
+    opacity: 1;
+  }
+}
+.editing {
+  gap: var(--space-2);
+}
+.noteEditor {
+  resize: vertical;
+  line-height: 1.5;
+}
+.editFoot {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.count,
+.hint {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+.hint {
+  flex: 1 1 auto;
 }
 
 .reason {

@@ -3,7 +3,8 @@
  * the frozen contract `119b_PHASE25B_contract.md`).
  *
  *   `v_workspace_proposals`          205: every column of 203, `effective_state`, the Inbox item
- *   `workspace_proposal_decide()`    206: SECURITY INVOKER, Stack's own row security; approve or reject
+ *   `workspace_proposal_decide()`    206: SECURITY INVOKER, Stack's own row security; approve or reject,
+ *                                    an approval with Stack's edit as `p_value` (W-106)
  *
  * Both places that decide (the card under an answer and the Inbox item) call `decideProposal` and
  * nothing else, and on success or on a 55000 refusal both caches are read again, the proposals and
@@ -136,6 +137,8 @@ export function useProposalsByIds(ids: readonly number[]) {
 export interface DecideInput {
   id: number;
   decision: ProposalDecision;
+  /** W-106: Stack's edit of the proposed value, sent as `p_value` with an approval; none, no `p_value`. */
+  value?: string;
 }
 
 /** What 206 returns: the state the proposal now holds, and whether the planner was written. */
@@ -151,6 +154,9 @@ function assertDecideInput(input: DecideInput): DecideInput {
   if (!(PROPOSAL_DECISIONS as readonly string[]).includes(input.decision)) {
     throw new Error(`decision must be approve or reject, got ${String(input.decision)}`);
   }
+  if (input.value !== undefined && (input.decision !== 'approve' || typeof input.value !== 'string' || input.value === '')) {
+    throw new Error('an edit is sent only with an approval, and is never empty');
+  }
   return input;
 }
 
@@ -165,8 +171,9 @@ function decideResultOf(data: unknown): DecideResult {
 
 /** Approve or reject one proposal, as Stack, through 206 and nothing else. */
 export async function decideProposal(input: DecideInput): Promise<DecideResult> {
-  const { id, decision } = assertDecideInput(input);
-  const { data, error } = await untypedClient().rpc(DECIDE_FUNCTION, { p_id: id, p_decision: decision });
+  const { id, decision, value } = assertDecideInput(input);
+  const args = value === undefined ? { p_id: id, p_decision: decision } : { p_id: id, p_decision: decision, p_value: value };
+  const { data, error } = await untypedClient().rpc(DECIDE_FUNCTION, args);
   if (error) throw error;
   return decideResultOf(data);
 }
@@ -194,7 +201,7 @@ export interface DecideVariables extends DecideInput {
 export function useDecideProposal() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, decision }: DecideVariables) => decideProposal({ id, decision }),
+    mutationFn: ({ id, decision, value }: DecideVariables) => decideProposal({ id, decision, value }),
     onSuccess: (_result, variables) => invalidateProposalCaches(queryClient, variables.progress),
     onError: (error, variables) => {
       if (isAlreadyDecided(error)) invalidateProposalCaches(queryClient, variables.progress);

@@ -11,7 +11,9 @@ import { statusLabel } from '@/lib/progress-status';
 import {
   ALREADY_DECIDED_LINE,
   NO_ENTRY_YET,
+  PROPOSAL_COLUMNS,
   approveLabel,
+  itemOutcomeLine,
   decideProblemLine,
   heldStateOf,
   isAlreadyDecided,
@@ -170,6 +172,30 @@ describe('the outcome', () => {
     expect(outcomeLine(finish)).toBe('Approved: planned finish changed');
     const note = proposal({ field: 'notes', new_value: 'Start with 3.', effective_state: 'applied', state: 'applied' });
     expect(outcomeLine(note)).toBe('Approved: note replaced');
+  });
+
+  it('says the value an approval wrote, from approved_value, when the row has one (W-106)', () => {
+    const edited = proposal({ state: 'applied', effective_state: 'applied', new_value: 'submitted', approved_value: 'graded' });
+    expect(edited.approved_value).toBe('graded');
+    expect(outcomeLine(edited)).toBe('Approved: marked graded');
+    const start = proposal({ field: 'planned_start', new_value: '2026-10-21', approved_value: '2026-10-22', state: 'applied', effective_state: 'applied' });
+    expect(outcomeLine(start)).toBe('Approved: planned start Oct 22');
+    const finish = proposal({ field: 'planned_finish', new_value: '2026-10-21', approved_value: '2026-10-23', state: 'applied', effective_state: 'applied' });
+    expect(outcomeLine(finish)).toBe('Approved: planned finish Oct 23');
+    const note = proposal({ field: 'notes', new_value: 'Theirs.', approved_value: 'Mine.', state: 'applied', effective_state: 'applied' });
+    expect(outcomeLine(note)).toBe('Approved: note replaced');
+  });
+
+  it('reads approved_value as null when the row has none', () => {
+    expect(proposal().approved_value).toBeNull();
+    expect(PROPOSAL_COLUMNS).toContain('approved_value');
+  });
+
+  it('from the Inbox item alone, an edited approval names no value it cannot know', () => {
+    const item = { state: 'resolved', field: 'status', to_value: 'submitted', resolution: { outcome: 'applied', proposal_id: 7, edited: true } };
+    expect(itemOutcomeLine(item)).toBe('Approved with your edit');
+    expect(itemOutcomeLine({ ...item, resolution: { outcome: 'applied', proposal_id: 7, edited: false } })).toBe('Approved: marked submitted');
+    expect(itemOutcomeLine({ ...item, field: 'planned_start', to_value: '2026-10-21' })).toBe('Approved: planned start changed');
   });
 
   it('is open only while the effective state is proposed (an expired row is decided)', () => {
