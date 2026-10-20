@@ -111,3 +111,17 @@ Ten turns in five pairs, no error, no limit message, no rate-limit text on stder
 | 2026-10-19 | expiry is also swept hourly (`workspace_proposals_expire()`, a `pg_cron` job), besides the view and the decide call | the Inbox count and Home read `attention_items`, not the view; without the sweep an expired proposal would count as waiting |
 | 2026-10-19 | the tool is served by a credential-free MCP server in `workspace/`; the runner makes the call to 204 on its own login over a per-turn socket | 204 is `workspace_runner`'s only (brief: "the runner inserts only through 204"); the materials server holds the service key and must not be the writer |
 | 2026-10-19 | E's page stream (web/ only) starts while D builds; E's database and tool stream waits for D's merge into the phase branch | Stack's order exists because D and E both touch `workspace/` and `compose.yaml` and the pinned function lists; `web/` touches neither |
+
+### 25b streams
+
+| stream | branch, worktree | state |
+|---|---|---|
+| W-103 (D) | `feat/phase25b-w103-runner`, `bb2dash-wt-25b-runner`; bb2dash-stack `feat/phase25b-w103-doctor`, `bb2dash-stack-wt-25b-runner` | done: 4bfa4954, 32bd2298, d335ca0a; bb2dash-stack b0d23d7. 202 `workspace_claim_v3(p_runner, p_max_open default 2)` (v2 with the cap), `workspace_runner_beats` keyed by runner, `v_workspace_status` + `runners_alive`, `alive_runners`; role at thirteen functions, no table grant; runner name from `WORKSPACE_RUNNER_NAME`; `workspace-2` by `extends` with `build: !reset null` (rendered config checked by the PM: `depends_on: egress` kept); doctor rows `workspace-2` and `workspace runners`. workspace 1045, docker 108, acceptance 56, bb2dash-stack 414; 202 dry-run in PGlite (five mutants fail) and rolled back on prod (SHA matched; not-applied run fails as it should); prod unchanged |
+| W-104b (E, page) | `feat/phase25b-w104-page`, `bb2dash-wt-25b-page` | done: 539af8d6, 965ea7d3, 52a36e61, 02228d9b; round 2 9686f39e (a view not yet on the database reads as no proposals, no banner, for the window between the merge's deploy and the cut-over). web 3984 tests, typecheck, build; `web/e2e/walk25b.spec.ts` 4/4 in the walk box (run 20261020T002046Z); 32 shots in `walks/walk-25b/` |
+| W-104a (E, database and tool) | `feat/phase25b-w104-propose`, `bb2dash-wt-25b-propose` | started after D's merge (7f1cca86) |
+| W-105 (pack 25) | `feat/phase25b-pack`, `bb2dash-wt-25b-pack` | started on 119b |
+
+| merge | what |
+|---|---|
+| 365bf33a | W-104b (9686f39e) |
+| 7f1cca86 | W-103 (d335ca0a) |
