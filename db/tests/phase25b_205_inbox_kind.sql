@@ -7,7 +7,8 @@
 --      where set and set exactly on the kind; v_workspace_proposals has the page's eighteen columns,
 --      is security_invoker and readable by authenticated and service_role alone; v_inbox_queue is
 --      security_invoker with 090's columns; the sweep is a pinned SECURITY DEFINER no client role
---      executes, scheduled hourly as bb2dash-proposals-expire
+--      executes (its hourly job, bb2dash-proposals-expire, is checked by 205's own guard: this login
+--      reads nothing in the cron schema, 100's rule)
 --   1. no assistant_proposal item reaches the apply side, open or decided: v_inbox_queue; what
 --      inbox_apply_runner can select; inbox_apply_begin_item (false) and a write naming the item
 --      (42501); inbox_apply_archive (false) and archive_attention_item (P0002), the item not archived;
@@ -176,11 +177,6 @@ begin
                  ('inbox_apply_runner'), ('sync_runner'), ('workspace_ingest_runner')) as w(who)
    where has_function_privilege(w.who::name, 'public.workspace_proposals_expire()', 'execute');
   if v_got is not null then v_fail := v_fail || format('the sweep is executable by %s', v_got); end if;
-  if (select count(*) from cron.job j
-       where j.jobname = 'bb2dash-proposals-expire' and j.schedule = '7 * * * *'
-         and j.command = 'select public.workspace_proposals_expire()') <> 1 then
-    v_fail := v_fail || 'the job bb2dash-proposals-expire is not scheduled once, hourly'::text;
-  end if;
 
   if cardinality(v_fail) > 0 then
     raise exception 'FAIL phase25b_205 (0): %', array_to_string(v_fail, '; ');

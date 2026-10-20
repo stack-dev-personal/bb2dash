@@ -81,7 +81,7 @@ begin
   end if;
 
   select string_agg(regexp_replace(pg_get_indexdef(i.indexrelid), '^.* USING ', ''), ' | '
-                    order by regexp_replace(pg_get_indexdef(i.indexrelid), '^.* USING ', ''))
+                    order by regexp_replace(pg_get_indexdef(i.indexrelid), '^.* USING ', '') collate "C")
     into v_got
     from pg_index i where i.indrelid = 'public.workspace_proposals'::regclass;
   if v_got is distinct from
