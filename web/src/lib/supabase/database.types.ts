@@ -80,6 +80,213 @@ export type Database = {
           },
         ]
       }
+      announcement_review_attempts: {
+        Row: {
+          announcement_id: number
+          at: string
+          request_id: number
+        }
+        Insert: {
+          announcement_id: number
+          at?: string
+          request_id: number
+        }
+        Update: {
+          announcement_id?: number
+          at?: string
+          request_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcement_review_attempts_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "announcements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_review_attempts_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "v_announcements_unread"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_review_attempts_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "v_announcements_unreviewed"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_review_attempts_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "agent_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_review_attempts_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "v_inbox_apply_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      announcement_review_writes: {
+        Row: {
+          action: string
+          announcement_id: number
+          assignment_id: string | null
+          at: string
+          attention_item_id: number | null
+          id: number
+          request_id: number | null
+        }
+        Insert: {
+          action: string
+          announcement_id: number
+          assignment_id?: string | null
+          at?: string
+          attention_item_id?: number | null
+          id?: never
+          request_id?: number | null
+        }
+        Update: {
+          action?: string
+          announcement_id?: number
+          assignment_id?: string | null
+          at?: string
+          attention_item_id?: number | null
+          id?: never
+          request_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcement_review_writes_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "announcements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_review_writes_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "v_announcements_unread"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_review_writes_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "v_announcements_unreviewed"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_review_writes_attention_item_id_fkey"
+            columns: ["attention_item_id"]
+            isOneToOne: false
+            referencedRelation: "attention_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_review_writes_attention_item_id_fkey"
+            columns: ["attention_item_id"]
+            isOneToOne: false
+            referencedRelation: "v_inbox_queue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_review_writes_attention_item_id_fkey"
+            columns: ["attention_item_id"]
+            isOneToOne: false
+            referencedRelation: "v_workspace_proposals"
+            referencedColumns: ["attention_item_id"]
+          },
+          {
+            foreignKeyName: "announcement_review_writes_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "agent_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_review_writes_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "v_inbox_apply_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      announcement_reviews: {
+        Row: {
+          announcement_id: number
+          detail: Json
+          modified_seen: string | null
+          outcome: string
+          request_id: number | null
+          reviewed_at: string
+          summary: string | null
+        }
+        Insert: {
+          announcement_id: number
+          detail?: Json
+          modified_seen?: string | null
+          outcome: string
+          request_id?: number | null
+          reviewed_at?: string
+          summary?: string | null
+        }
+        Update: {
+          announcement_id?: number
+          detail?: Json
+          modified_seen?: string | null
+          outcome?: string
+          request_id?: number | null
+          reviewed_at?: string
+          summary?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcement_reviews_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: true
+            referencedRelation: "announcements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_reviews_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: true
+            referencedRelation: "v_announcements_unread"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_reviews_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: true
+            referencedRelation: "v_announcements_unreviewed"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_reviews_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "agent_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_reviews_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "v_inbox_apply_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       announcements: {
         Row: {
           author: string | null
@@ -476,7 +683,6 @@ export type Database = {
           state: string
           suggested: Json | null
           to_value: Json | null
-          // Phase 25b (migrations 203–206), by hand in the shape generate_typescript_types gives; regenerated after the cut-over.
           workspace_proposal_id: number | null
         }
         Insert: {
@@ -575,15 +781,15 @@ export type Database = {
           {
             foreignKeyName: "attention_items_workspace_proposal_id_fkey"
             columns: ["workspace_proposal_id"]
-            isOneToOne: true
-            referencedRelation: "workspace_proposals"
+            isOneToOne: false
+            referencedRelation: "v_workspace_proposals"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "attention_items_workspace_proposal_id_fkey"
             columns: ["workspace_proposal_id"]
-            isOneToOne: true
-            referencedRelation: "v_workspace_proposals"
+            isOneToOne: false
+            referencedRelation: "workspace_proposals"
             referencedColumns: ["id"]
           },
         ]
@@ -839,6 +1045,56 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_content_tree"
             referencedColumns: ["content_id"]
+          },
+        ]
+      }
+      bb_file_pull_failures: {
+        Row: {
+          file_id: number
+          first_at: string
+          last_at: string
+          reason: string
+        }
+        Insert: {
+          file_id: number
+          first_at?: string
+          last_at?: string
+          reason: string
+        }
+        Update: {
+          file_id?: number
+          first_at?: string
+          last_at?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bb_file_pull_failures_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: true
+            referencedRelation: "bb_files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bb_file_pull_failures_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: true
+            referencedRelation: "v_bb_files_current"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bb_file_pull_failures_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: true
+            referencedRelation: "v_content_tree"
+            referencedColumns: ["file_id"]
+          },
+          {
+            foreignKeyName: "bb_file_pull_failures_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: true
+            referencedRelation: "v_file_layout"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -2088,6 +2344,13 @@ export type Database = {
             referencedRelation: "v_inbox_queue"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "inbox_apply_holds_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: true
+            referencedRelation: "v_workspace_proposals"
+            referencedColumns: ["attention_item_id"]
+          },
         ]
       }
       inbox_apply_writes: {
@@ -2138,6 +2401,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_inbox_queue"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inbox_apply_writes_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "v_workspace_proposals"
+            referencedColumns: ["attention_item_id"]
           },
           {
             foreignKeyName: "inbox_apply_writes_request_id_fkey"
@@ -2983,7 +3253,6 @@ export type Database = {
         }
         Relationships: []
       }
-      // Phase 25b (migrations 203–206), by hand in the shape generate_typescript_types gives; regenerated after the cut-over.
       workspace_proposals: {
         Row: {
           approved_value: Json | null
@@ -3231,6 +3500,21 @@ export type Database = {
         }
         Relationships: []
       }
+      workspace_runner_beats: {
+        Row: {
+          polled_at: string
+          runner: string
+        }
+        Insert: {
+          polled_at: string
+          runner: string
+        }
+        Update: {
+          polled_at?: string
+          runner?: string
+        }
+        Relationships: []
+      }
       workspace_runner_heartbeat: {
         Row: {
           id: number
@@ -3430,6 +3714,48 @@ export type Database = {
           modified_at: string | null
           posted_at: string | null
           read_at: string | null
+          title: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcements_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcements_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "v_course_corpus"
+            referencedColumns: ["course_id"]
+          },
+          {
+            foreignKeyName: "announcements_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "v_course_grade"
+            referencedColumns: ["course_id"]
+          },
+          {
+            foreignKeyName: "announcements_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "v_course_points_median"
+            referencedColumns: ["course_id"]
+          },
+        ]
+      }
+      v_announcements_unreviewed: {
+        Row: {
+          bb_item_id: string | null
+          captured_at: string | null
+          course_id: string | null
+          edited_since_review: boolean | null
+          id: number | null
+          modified_at: string | null
+          posted_at: string | null
           title: string | null
         }
         Relationships: [
@@ -4862,7 +5188,6 @@ export type Database = {
           },
         ]
       }
-      // Phase 25b (migrations 203–206), by hand in the shape generate_typescript_types gives; regenerated after the cut-over.
       v_workspace_proposals: {
         Row: {
           approved_value: Json | null
@@ -4902,13 +5227,24 @@ export type Database = {
           },
         ]
       }
+      v_workspace_runner_proof: {
+        Row: {
+          definer_functions: number | null
+          executes_propose: boolean | null
+          relations_checked: number | null
+          relations_granted: number | null
+        }
+        Relationships: []
+      }
       v_workspace_status: {
         Row: {
+          alive_runners: string[] | null
           oldest_open_at: string | null
           open_requests: number | null
           polled_age_seconds: number | null
           polled_at: string | null
           runner: string | null
+          runners_alive: number | null
         }
         Relationships: []
       }
@@ -4931,6 +5267,59 @@ export type Database = {
       }
     }
     Functions: {
+      announcement_review_check_quote: {
+        Args: {
+          p_body_n: string
+          p_entry: Json
+          p_for: string
+          p_needs_value: boolean
+          p_title_n: string
+        }
+        Returns: undefined
+      }
+      announcement_review_claim: {
+        Args: never
+        Returns: {
+          created_at: string
+          id: number
+          params: Json
+        }[]
+      }
+      announcement_review_close: {
+        Args: { p_request: number; p_result: Json; p_state: string }
+        Returns: number
+      }
+      announcement_review_is_iso_time: {
+        Args: { p_text: string }
+        Returns: boolean
+      }
+      announcement_review_is_own_claim: {
+        Args: { p_request: number }
+        Returns: boolean
+      }
+      announcement_review_norm: { Args: { p_text: string }; Returns: string }
+      announcement_review_prepare: {
+        Args: { p_request: number }
+        Returns: Json
+      }
+      announcement_review_quote_has_value: {
+        Args: { p_quote: string }
+        Returns: boolean
+      }
+      announcement_review_record: {
+        Args: { p_announcement: number; p_decision: Json; p_request: number }
+        Returns: Json
+      }
+      announcement_review_skip: {
+        Args: { p_announcement: number; p_request: number; p_why: string }
+        Returns: boolean
+      }
+      announcement_review_text: {
+        Args: { p_key: string; p_max: number; p_obj: Json; p_required: boolean }
+        Returns: string
+      }
+      announcement_singular: { Args: { p_text: string }; Returns: string }
+      announcement_slug: { Args: { p_text: string }; Returns: string }
       app_owner: { Args: never; Returns: string }
       apply_resolutions: { Args: never; Returns: Json }
       archive_attention_item: {
@@ -4958,6 +5347,7 @@ export type Database = {
           state: string
           suggested: Json | null
           to_value: Json | null
+          workspace_proposal_id: number | null
         }
         SetofOptions: {
           from: "*"
@@ -5025,6 +5415,7 @@ export type Database = {
         Args: { p_identifier: string }
         Returns: Database["public"]["Enums"]["staff_role"]
       }
+      bind_announcement_rows: { Args: { p_run_id: string }; Returns: Json }
       calendar_event_id: { Args: { p_assignment_id: string }; Returns: string }
       calendar_push_now: { Args: never; Returns: undefined }
       calendar_push_tick: { Args: never; Returns: Json }
@@ -5038,6 +5429,15 @@ export type Database = {
           name: string
           secret: string
         }[]
+      }
+      class_day_knowledge_check: {
+        Args: {
+          p_course_id: string
+          p_due_at: string
+          p_name: string
+          p_possible: number
+        }
+        Returns: Json
       }
       classify_bb_file: {
         Args: { p_mime: string; p_name: string; p_path: string }
@@ -5325,6 +5725,7 @@ export type Database = {
         Args: { p_id: number; p_url: string }
         Returns: boolean
       }
+      sync_file_pull_outcomes: { Args: { p_failed: Json }; Returns: Json }
       sync_file_stored: {
         Args: {
           p_bytes: number
@@ -5336,6 +5737,13 @@ export type Database = {
           p_text_status: string
         }
         Returns: boolean
+      }
+      sync_file_text_put: {
+        Args: { p_file_id: number; p_units: Json }
+        Returns: {
+          inserted: number
+          present: number
+        }[]
       }
       sync_file_worklist: {
         Args: never
@@ -5372,6 +5780,10 @@ export type Database = {
       sync_register_run: {
         Args: { p_id: number; p_run_id: string }
         Returns: boolean
+      }
+      sync_request_announcement_review: {
+        Args: { p_after: number }
+        Returns: number
       }
       sync_request_inbox_apply: { Args: { p_after: number }; Returns: number }
       sync_requeue_orphans: { Args: never; Returns: number }
@@ -5421,6 +5833,15 @@ export type Database = {
       }
       workspace_claim_v2: {
         Args: { p_runner: string }
+        Returns: {
+          conversation_id: string
+          prompt: string
+          request_id: number
+          user_message_id: string
+        }[]
+      }
+      workspace_claim_v3: {
+        Args: { p_max_open?: number; p_runner: string }
         Returns: {
           conversation_id: string
           prompt: string
@@ -5490,7 +5911,6 @@ export type Database = {
         Returns: Json
       }
       workspace_prompt_max: { Args: never; Returns: number }
-      // Phase 25b (migrations 203–206), by hand in the shape generate_typescript_types gives; regenerated after the cut-over.
       workspace_proposal_decide: {
         Args: { p_decision: string; p_id: number; p_value?: Json }
         Returns: {
@@ -5547,6 +5967,7 @@ export type Database = {
           written_at: string
         }[]
       }
+      workspace_search_timing: { Args: never; Returns: number[] }
       workspace_stream: {
         Args: { p_delta: string; p_request_id: number; p_seq: number }
         Returns: boolean
