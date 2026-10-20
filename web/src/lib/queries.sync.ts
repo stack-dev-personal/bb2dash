@@ -136,6 +136,8 @@ export interface AttentionItem {
   archived_by?: string | null;
   /** 090 — the worker's own record of what it did. jsonb: trust no inner shape. */
   decision?: Record<string, unknown> | null;
+  /** 205 — an `assistant_proposal` item's proposal (checked FK, unique); null on every other kind. */
+  workspace_proposal_id?: number | null;
 }
 
 /** One row of `agent_requests` (migration 032). */
@@ -1079,6 +1081,25 @@ const ATTENTION_COLUMNS =
   'archived_at, archived_by, decision';
 
 /**
+ * 205 (Phase 25b, R2-8): the checked link from an `assistant_proposal` item to its proposal. Vercel
+ * deploys on merge and 205 goes on at the cut-over, so for that window the column is not there
+ * (Postgres 42703) and the read is made once more without it: no proposal item exists before 205.
+ */
+const PROPOSAL_LINK_COLUMN = 'workspace_proposal_id';
+const UNDEFINED_COLUMN = '42703';
+let proposalLinkMissingLogged = false;
+
+function isUndefinedColumn(error: unknown): boolean {
+  return error !== null && typeof error === 'object' && (error as { code?: unknown }).code === UNDEFINED_COLUMN;
+}
+
+async function readAttentionItems(columns: string, state?: AttentionState) {
+  let query = untypedClient().from('attention_items').select(columns);
+  if (state) query = query.eq('state', state);
+  return query.order('raised_at', { ascending: false }).order('id', { ascending: false });
+}
+
+/**
  * `attention_items`. Pass a state to scope the list (the Home row wants only
  * `open`); the Inbox reads them all so it can show answered and dismissed rows.
  */
@@ -1086,12 +1107,14 @@ export function attentionItemsOptions(state?: AttentionState) {
   return queryOptions({
     queryKey: syncKeys.attention(state),
     queryFn: async (): Promise<AttentionItem[]> => {
-      const supabase = untypedClient();
-      let query = supabase.from('attention_items').select(ATTENTION_COLUMNS);
-      if (state) query = query.eq('state', state);
-      const { data, error } = await query
-        .order('raised_at', { ascending: false })
-        .order('id', { ascending: false });
+      let { data, error } = await readAttentionItems(`${ATTENTION_COLUMNS}, ${PROPOSAL_LINK_COLUMN}`, state);
+      if (error && isUndefinedColumn(error)) {
+        if (!proposalLinkMissingLogged) {
+          proposalLinkMissingLogged = true;
+          console.warn(`attention_items.${PROPOSAL_LINK_COLUMN} is not on the database yet; reading without it`, error);
+        }
+        ({ data, error } = await readAttentionItems(ATTENTION_COLUMNS, state));
+      }
       if (error) throw error;
       return (data ?? []) as unknown as AttentionItem[];
     },

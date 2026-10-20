@@ -68,6 +68,7 @@ function proposalItem(over: Parameters<typeof makeAttentionItem>[0] = {}) {
     to_value: 'submitted',
     question: 'Mark Demo Problem Set 4 as submitted?',
     suggested: { source: 'workspace', proposal_id: 7, conversation_id: CONVERSATION, request_id: 41, reason: 'Handed in.' },
+    workspace_proposal_id: 7,
     raised_by: null,
     ...over,
   });

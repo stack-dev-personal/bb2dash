@@ -318,9 +318,12 @@ export function proposalsProblemLine(error: unknown): string {
  * The Inbox item (205): `suggested = {source: 'workspace', proposal_id, conversation_id, request_id, reason}`
  * ------------------------------------------------------------------------ */
 
-/** The proposal an `assistant_proposal` Inbox item stands for, from `suggested.proposal_id`. */
-export function proposalIdOfItem(item: { suggested: unknown }): number | null {
-  return toRequestId(asRecord(item.suggested)?.proposal_id);
+/**
+ * The proposal an `assistant_proposal` Inbox item stands for: the checked column 205 adds
+ * (`attention_items.workspace_proposal_id`), never `suggested`, which is the model's free jsonb (R2-8).
+ */
+export function proposalIdOfItem(item: { workspace_proposal_id?: unknown }): number | null {
+  return toRequestId(item.workspace_proposal_id);
 }
 
 /** The conversation the proposal was made in, from `suggested.conversation_id`. */
