@@ -109,7 +109,9 @@ describe('the framing and the question', () => {
 
   it('names the date, the courses and the scope', () => {
     const { prompt } = assemblePrompt({ ...base, context: contextFixture({ options: { ...contextFixture().options, courseIds: ['BIO.110'] } }) });
-    expect(prompt).toContain('Today is 2026-10-08 (New York).');
+    expect(prompt).toContain('Today is Thursday, 2026-10-08 (New York).');
+    expect(assemblePrompt({ ...base, context: contextFixture({ today: '' }) }).prompt).toContain('Today is not known (New York).');
+    expect(assemblePrompt({ ...base, context: contextFixture({ today: '2026-02-30' }) }).prompt).toContain('Today is 2026-02-30 (New York).');
     expect(prompt).toContain('BIO.110: Intro Biology');
     expect(prompt).toContain('limited to these course ids: BIO.110');
   });

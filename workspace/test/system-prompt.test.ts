@@ -54,6 +54,11 @@ describe('prompts/system.md, one sentence per rule', () => {
     expect(sentenceWith(/label it as speaker notes/)).toBeDefined();
   });
 
+  it('takes a weekday from the planner block or the line with today, and never works one out', () => {
+    expect(sentenceWith(/Take a weekday only from the planner block or the line that gives today's date/, /never work one out yourself/)).toBeDefined();
+    expect(sentenceWith(/When neither gives the weekday, write the date alone\./)).toBeDefined();
+  });
+
   it('sends grades to the Grades screen', () => {
     expect(sentenceWith(/Grades live on the Grades screen/)).toBeDefined();
     expect(sentenceWith(/do not work out, estimate or project a grade/)).toBeDefined();

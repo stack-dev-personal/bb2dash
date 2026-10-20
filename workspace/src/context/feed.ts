@@ -2,7 +2,8 @@
  * The planner and grades feed as the prompt holds it (brief 109, The planner and grades feed): the
  * jsonb of `workspace_planner_feed` rendered as text, one line a row, no key repeated. A work row carries its
  * item id (Phase 25b) so the assistant can name it in a planner proposal; a score row carries none.
- * `test/fixtures/contract24/feed-block.txt` is the frozen form, byte for byte.
+ * `test/fixtures/contract24/feed-block.txt` is the frozen form, byte for byte. Every date carries its New
+ * York weekday and the first line names today (`dates.ts`), so the model never works a weekday out.
  *
  * When the block would pass its ceiling, rows go in this order: the undated work rows, then the
  * score rows oldest first, then the work rows farthest from today. The last line says how many rows
@@ -10,9 +11,9 @@
  */
 
 import { CEILING_BYTES, utf8Bytes } from './budget.js';
+import { dateWithWeekday, longDayOf, newYorkDate, newYorkDateTime, newYorkDayOf } from './dates.js';
 import { oneLine } from './fence.js';
 
-const NEW_YORK = 'America/New_York';
 const NONE = '-';
 const VALUE_SEPARATOR = ' | ';
 const VALUE_SEPARATOR_REPLACEMENT = ' / ';
@@ -108,35 +109,6 @@ export function parseFeed(raw: unknown): Feed | null {
   };
 }
 
-const NEW_YORK_FORMAT = new Intl.DateTimeFormat('en-CA', {
-  timeZone: NEW_YORK,
-  hourCycle: 'h23',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-});
-
-function newYorkParts(iso: string): Record<string, string> | null {
-  // Date.parse and a number keep this a reading of the instant it is given, never of the clock.
-  const at = Date.parse(iso);
-  if (Number.isNaN(at)) return null;
-  return Object.fromEntries(NEW_YORK_FORMAT.formatToParts(at).map((part) => [part.type, part.value]));
-}
-
-/** `YYYY-MM-DD` of an instant on the New York wall clock; the text itself when it is not an instant. */
-function newYorkDate(iso: string): string {
-  const p = newYorkParts(iso);
-  return p === null ? iso : `${p.year}-${p.month}-${p.day}`;
-}
-
-/** `YYYY-MM-DD HH:MM` on the New York wall clock. */
-function newYorkDateTime(iso: string): string {
-  const p = newYorkParts(iso);
-  return p === null ? iso : `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`;
-}
-
 /** One value as a cell: a null is `-`, a boolean `Y` or `N`, a number as the jsonb holds it, one line, no ` | `. */
 function cell(value: string | number | boolean | null, maxChars?: number): string {
   if (value === null || value === '') return NONE;
@@ -148,7 +120,7 @@ function cell(value: string | number | boolean | null, maxChars?: number): strin
 function dueCell(row: FeedWorkRow): string {
   if (row.undated) return NONE;
   if (row.dueAt !== null) return newYorkDateTime(row.dueAt);
-  return row.dueOn ?? NONE;
+  return row.dueOn === null ? NONE : dateWithWeekday(row.dueOn);
 }
 
 function workLine(row: FeedWorkRow): string {
@@ -195,9 +167,17 @@ interface Rows {
   readonly scores: readonly FeedScoreRow[];
 }
 
-function textOf(feed: Feed, rows: Rows, workOut: number, scoresOut: number): string {
+/** When the feed was read and which day today is, both on the New York clock, and the window it covers. */
+function headerLine(feed: Feed): string {
+  const today = newYorkDayOf(feed.asOf);
+  const todayWords = today === null ? null : longDayOf(today);
+  const read = `${newYorkDateTime(feed.asOf)} New York time${todayWords === null ? '' : ` (today is ${todayWords})`}`;
+  return `Planner and grades, read ${read}. Work due ${dateWithWeekday(feed.from)} to ${dateWithWeekday(feed.to)}; posted scores are not limited to those dates.`;
+}
+
+function textOf(header: string, rows: Rows, workOut: number, scoresOut: number): string {
   return [
-    `Planner and grades, read ${newYorkDateTime(feed.asOf)} New York time. Work due ${feed.from} to ${feed.to}; posted scores are not limited to those dates.`,
+    header,
     'The "graded so far" figure is on the Grades screen. Never work out, project or suppose a grade.',
     WORK_HEADER,
     ...rows.work.map(workLine),
@@ -223,7 +203,8 @@ export function renderFeed(feed: Feed, maxBytes: number = CEILING_BYTES.feed): R
   let rows: Rows = { work: feed.work, scores: feed.scores };
   let workCut = 0;
   let scoresCut = 0;
-  const render = (): string => textOf(feed, rows, feed.workMore + workCut, feed.scoresMore + scoresCut);
+  const header = headerLine(feed);
+  const render = (): string => textOf(header, rows, feed.workMore + workCut, feed.scoresMore + scoresCut);
   let text = render();
   while (utf8Bytes(text) > maxBytes) {
     const next = dropOne(rows);

@@ -1,10 +1,10 @@
-Planner and grades, read 2026-10-08 14:05 New York time. Work due 2026-10-01 to 2026-11-05; posted scores are not limited to those dates.
+Planner and grades, read 2026-10-08 Thu 14:05 New York time (today is Thursday, October 8, 2026). Work due 2026-10-01 Thu to 2026-11-05 Thu; posted scores are not limited to those dates.
 The "graded so far" figure is on the Grades screen. Never work out, project or suppose a grade.
 work: kind | course | due | status | type | points | workload | id | title
-A | BIO.110 | 2026-10-09 23:59 | in_progress | lab_report | 20 | Y | BIO.110/lab-report-2 | Lab Report 2
-R | HST.205 | 2026-10-12 | not_started | reading | - | Y | 314 | Synthetic Author, Industry and Empire, chapter 3
+A | BIO.110 | 2026-10-09 Fri 23:59 | in_progress | lab_report | 20 | Y | BIO.110/lab-report-2 | Lab Report 2
+R | HST.205 | 2026-10-12 Mon | not_started | reading | - | Y | 314 | Synthetic Author, Industry and Empire, chapter 3
 A | MAT.221 | - | not_started | homework | 10.5 | N | MAT.221/practice-set-c | Practice set C / optional
 scores: course | name | score | possible | grade | released | exempt | submission | seen
-BIO.110 | Quiz 3 | 8 | 10 | - | Y | N | graded | 2026-10-06
-HST.205 | Essay 1 | - | 50 | B+ | Y | N | - | 2026-10-02
+BIO.110 | Quiz 3 | 8 | 10 | - | Y | N | graded | 2026-10-06 Tue
+HST.205 | Essay 1 | - | 50 | B+ | Y | N | - | 2026-10-02 Fri
 left out: 0 work rows, 0 score rows
