@@ -125,3 +125,34 @@ Ten turns in five pairs, no error, no limit message, no rate-limit text on stder
 |---|---|
 | 365bf33a | W-104b (9686f39e) |
 | 7f1cca86 | W-103 (d335ca0a) |
+
+| 3e2d3518 | W-104a (f394ceba, round 2: `v_workspace_runner_proof` in 206) |
+| d9509fb6 | W-105 pack 25 (cb06a8cb) |
+
+### Integration (2026-10-20), on the phase branch at 3e2d3518
+
+web 3983 of 3984, typecheck, build; workspace 1086 and typecheck; mcp-server 143; scripts 378; sync 207; apply 177;
+workspace-ingest 120; acceptance 64. The one web failure: `walk22-lib.test.ts` held pack 25's spec to the walk
+box's write guard; pack 24's had passed by being listed as older than Phase 22. Fixed by the PM (d3c6230b): acceptance
+pack files after Phase 22 are listed by name as what they are. Docker: 6 failures being read.
+
+### Review round 2 (2026-10-20), on the phase branch at 3e2d3518
+
+`/code-review main high` (nine findings) and `/security-review` (an Opus agent: **no finding at confidence 8 or
+above**; checked sound: every SECURITY DEFINER function's `search_path` and grants, the request binding in 204 and
+`channel.ts`, the field allow-lists in three places, 206 under the owner's row security, 205's readers each only
+adding the kind filter, the three views, the socket's path and mode, `workspace-2`'s networks and volumes, the
+cards as text nodes). Its three observations under 8: 204 does not hold a proposal to the request's course scope
+(3); an injected note is written as shown once approved (2); `p_runner` is trusted from the runner (1).
+
+| # | finding | severity (PM) | owner, ruling |
+|---|---|---|---|
+| R2-1 | 205 restates `run_transform`, which 212 defines; replayed in name order, 212 drops 205's filter | HIGH | W-104a: 205 leaves `run_transform` alone. Every number in 200–209 sorts below 212, so the filter cannot live in this block. Cost, accepted: a proposal filed during a fold (seconds) adds one to that fold's `attention_raised`, and it is a new Inbox item |
+| R2-2 | fixed runner names: a test project's `workspace` claims as the live `workspace@workspace` and its own-dead-turn rule closes the live turn | HIGH | W-103: the name takes a prefix from the environment that a test project's second compose file sets; a docker test proves a test file cannot leave it empty |
+| R2-3 | an approval does not refresh the planner caches (`invalidateProgressCaches`) | MEDIUM | W-104b |
+| R2-4 | 206 compares a status read as JSON null (no row) with `not_started` once a row exists, and calls an unchanged status stale | MEDIUM | W-104a: no row and `not_started` are the same status in 206, as in 204 |
+| R2-5 | refused calls count toward the five | MEDIUM | W-104a: five filed proposals a turn, and at most ten calls in all |
+| R2-6 | the owner can PATCH a proposal's `state` without 206 | LOW | ruled: stays. 206 runs as Stack and needs the update; only the owner can do it, to his own rows, and nothing writes the planner that way |
+| R2-7 | a proposal past `expires_at` stays in "Needs you" until the hourly sweep | MEDIUM | W-104b: the Inbox files it by the proposal's state; W-104a: the sweep runs every five minutes |
+| R2-8 | the Inbox finds the proposal through `suggested.proposal_id`, not the checked column | LOW | W-104b: `workspace_proposal_id` |
+| R2-9 | the tool's status labels are a copy of the enum | LOW | W-104a: a unit holds the copy to `web/src/lib/progress-status.ts` |
