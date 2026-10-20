@@ -139,8 +139,8 @@ begin
   if v_got is distinct from
      'id bigint, created_at timestamp with time zone, expires_at timestamp with time zone, request_id bigint, '
      'conversation_id uuid, target text, row_id text, course_id text, label text, field text, old_value jsonb, '
-     'new_value jsonb, reason text, state text, decided_at timestamp with time zone, effective_state text, '
-     'attention_item_id bigint, attention_state text' then
+     'new_value jsonb, reason text, state text, decided_at timestamp with time zone, approved_value jsonb, '
+     'effective_state text, attention_item_id bigint, attention_state text' then
     v_fail := v_fail || format('v_workspace_proposals columns are [%s]', v_got);
   end if;
   select string_agg(a.attname, ',' order by a.attnum) into v_got

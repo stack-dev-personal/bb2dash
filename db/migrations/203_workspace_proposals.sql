@@ -26,12 +26,16 @@
 --
 -- THE VALUES. old_value is the value 204 read itself, never one it was handed: a status label or a date
 -- (`YYYY-MM-DD`) or a note as a JSON string, and JSON null when there is no progress row or the field
--- is empty. new_value is always a JSON string of 1 to 2,000 characters (204 checks the field's own rule).
+-- is empty. new_value is always a JSON string of 1 to 2,000 characters (204 checks the field's own rule),
+-- and stays what the assistant proposed: the record of what it asked. approved_value (W-106, Stack's
+-- edit of a proposed value, amended in place before the cut-over) is the value an approval actually
+-- wrote: new_value, or Stack's edit of it (206's p_value); null until then, and set exactly when the
+-- state is `applied` (a check holds it), a JSON string of 1 to 2,000 characters like new_value.
 --
 -- No grant to workspace_runner, anon, inbox_apply_runner, sync_runner or workspace_ingest_runner: the
 -- runner reaches this table only through 204, and still holds no table grant anywhere. authenticated may
--- select, and update only the two columns a decision writes (state, decided_at); 206 is the one caller
--- that does. db_test_runner gets the writes its units make (brief 95, "The role db_test_runner").
+-- select, and update only the three columns a decision writes (state, decided_at, approved_value); 206
+-- is the one caller that does. db_test_runner gets the writes its units make (brief 95, "The role db_test_runner").
 --
 -- Additive: one table with its indexes and policies. No earlier object changes. No password, key or
 -- DSN is in this file.
@@ -86,11 +90,19 @@ create table public.workspace_proposals (
                   constraint workspace_proposals_state_known
                   check (state in ('proposed', 'approved', 'rejected', 'stale', 'applied', 'expired')),
   decided_at      timestamptz,
+  approved_value  jsonb
+                  constraint workspace_proposals_approved_value_shape
+                  check (approved_value is null
+                         or (jsonb_typeof(approved_value) = 'string'
+                             and char_length(approved_value #>> '{}') between 1 and 2000)),
   -- The planned dates are an assignment's alone.
   constraint workspace_proposals_field_target
     check (target = 'assignment_progress' or field in ('status', 'notes')),
   constraint workspace_proposals_decided
     check ((state = 'proposed') = (decided_at is null)),
+  -- What an approval wrote is there exactly when it wrote (W-106).
+  constraint workspace_proposals_applied_value
+    check ((state = 'applied') = (approved_value is not null)),
   constraint workspace_proposals_expires_after_created
     check (expires_at > created_at)
 );
@@ -119,7 +131,10 @@ comment on column public.workspace_proposals.old_value is
   'progress row or the field was empty. 206 approves only while the row still holds it.';
 comment on column public.workspace_proposals.new_value is
   'The value proposed: a progress_status label, a YYYY-MM-DD date, or the whole note (1 to 2,000 '
-  'characters), as a JSON string.';
+  'characters), as a JSON string. Kept as the assistant proposed it, also when Stack approved an edit.';
+comment on column public.workspace_proposals.approved_value is
+  'The value an approval wrote (206): new_value, or Stack''s edit of it (p_value), as a JSON string. '
+  'Null until then; set exactly when state is applied.';
 comment on column public.workspace_proposals.state is
   'proposed until decided; applied (approved and written), rejected, stale (approved, but the row had '
   'changed: nothing written) or expired (left past expires_at). approved is unused in v1.';
@@ -145,7 +160,7 @@ create policy workspace_proposals_owner_update on public.workspace_proposals
 -- then give each role its list, as 202 did for the beats table.
 revoke all on public.workspace_proposals from public, anon, authenticated, service_role;
 grant select on public.workspace_proposals to authenticated, service_role;
-grant update (state, decided_at) on public.workspace_proposals to authenticated;
+grant update (state, decided_at, approved_value) on public.workspace_proposals to authenticated;
 -- The units' setup rows (brief 95); it reads through 100's default privilege.
 grant insert, update, delete on public.workspace_proposals to db_test_runner;
 
@@ -165,7 +180,7 @@ begin
      'expires_at timestamp with time zone not null, request_id bigint not null, '
      'conversation_id uuid not null, target text not null, row_id text not null, course_id text, '
      'label text not null, field text not null, old_value jsonb, new_value jsonb not null, '
-     'reason text not null, state text not null, decided_at timestamp with time zone' then
+     'reason text not null, state text not null, decided_at timestamp with time zone, approved_value jsonb' then
     raise exception 'FAIL 203: workspace_proposals columns are [%]', v_got;
   end if;
 
@@ -183,7 +198,7 @@ begin
   end if;
 
   -- (c) No client role but authenticated and service_role holds anything; authenticated writes two
-  --     columns and nothing else.
+  --     columns and nothing else (three since W-106: approved_value).
   select string_agg(w.who, ', ' order by w.who) into v_bad
     from (values ('anon'), ('workspace_runner'), ('inbox_apply_runner'), ('sync_runner'),
                  ('workspace_ingest_runner')) as w(who)
@@ -197,11 +212,12 @@ begin
      or has_table_privilege('authenticated', 'public.workspace_proposals', 'insert, update, delete, truncate, references, trigger')
      or not has_column_privilege('authenticated', 'public.workspace_proposals', 'state', 'update')
      or not has_column_privilege('authenticated', 'public.workspace_proposals', 'decided_at', 'update')
+     or not has_column_privilege('authenticated', 'public.workspace_proposals', 'approved_value', 'update')
      or has_column_privilege('authenticated', 'public.workspace_proposals', 'new_value', 'update')
      or has_column_privilege('authenticated', 'public.workspace_proposals', 'old_value', 'update')
      or has_any_column_privilege('authenticated', 'public.workspace_proposals', 'insert, references')
      or not has_table_privilege('service_role', 'public.workspace_proposals', 'select')
      or has_table_privilege('service_role', 'public.workspace_proposals', 'insert, update, delete, truncate') then
-    raise exception 'FAIL 203: workspace_proposals grants are not select (authenticated, service_role) and update (state, decided_at) for authenticated';
+    raise exception 'FAIL 203: workspace_proposals grants are not select (authenticated, service_role) and update (state, decided_at, approved_value) for authenticated';
   end if;
 end $$;
