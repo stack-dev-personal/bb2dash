@@ -69,6 +69,93 @@
   overflow-y: auto;
 }
 
+/* — Stack's edit of the proposed value (W-106) ————————————————————————
+   A grey text button: muted at rest, the strongest text colour on hover and focus (white in the
+   dark theme, near-black in the light one). "edit" ends the Proposed box's label row, at its
+   top-right, and shows on hover and on keyboard focus within the box; on a device with no hover it
+   always shows. The row keeps Reset and edit apart and inset from the box's edge, so a focus ring
+   never meets the border, and wraps at a phone's width rather than crowd them (round 2). */
+.paneHead {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: var(--space-3);
+  row-gap: var(--space-1);
+}
+.headActions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-4);
+}
+.textButton {
+  appearance: none;
+  padding: 0 var(--space-1);
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: color var(--motion-state) var(--ease-out), opacity var(--motion-state) var(--ease-out);
+}
+.textButton:hover:not(:disabled),
+.textButton:focus-visible {
+  color: var(--color-text);
+}
+.textButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 var(--size-focus) var(--color-accent);
+  border-radius: var(--radius-xs);
+}
+.textButton:disabled {
+  cursor: not-allowed;
+}
+.editButton {
+  opacity: 0;
+}
+.editable:hover .editButton,
+.editable:focus-within .editButton {
+  opacity: 1;
+}
+@media (hover: none) {
+  .editButton {
+    opacity: 1;
+  }
+}
+.editing {
+  gap: var(--space-2);
+}
+.noteEditor {
+  resize: vertical;
+  line-height: 1.5;
+}
+.editFoot {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.count,
+.hint {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+.hint {
+  flex: 1 1 auto;
+}
+
+/* Under Approve / Reject while the Proposed box is in edit mode: they wait for the edit. */
+.waitHint {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+.actions button[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .reason {
   margin: 0;
   display: flex;

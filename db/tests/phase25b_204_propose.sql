@@ -18,6 +18,13 @@
 --      string, not a status, not a real date (2026-02-30, Oct 21, 2026-1-5), an empty or blank note or
 --      one of 2,001 characters; a reason blank or of 501 characters; the value already shown (also
 --      not_started where there is no progress row); the same field of a row twice in one request
+--   3. the value check 204 and 206 share, `workspace_proposal_value_check(target, field, value)`
+--      (W-106, Stack's edit of a proposed value): SECURITY INVOKER with a pinned path, returns jsonb,
+--      executable by authenticated alone (206's caller; 204, a SECURITY DEFINER of postgres, calls it
+--      as postgres, so the runner needs no grant and holds none: round 2), and not one of the runner's
+--      SECURITY DEFINER functions (the fence above still reads fourteen); as authenticated it returns
+--      each value that fits its field as given, and refuses each that does not with 22023 and 204's
+--      own message; section 1's proposals, filed by the runner through 204, show 204 still reaches it
 --
 -- Every call is made under `set local role workspace_runner` (142's membership), the way the runner
 -- calls it; setup rows are written as the session role. All data is synthetic. Nothing is committed.
@@ -326,6 +333,109 @@ begin
 
   if cardinality(v_fail) > 0 then
     raise exception 'FAIL phase25b_204 (2): %', array_to_string(v_fail, '; ');
+  end if;
+end $$;
+
+-- =============================================================================================
+-- 3. The shared value check (W-106)
+-- =============================================================================================
+-- One call as the given role: the value it returned as text, or the SQLSTATE and the message.
+create function pg_temp.w106_check(p_role text, p_target text, p_field text, p_value jsonb) returns text
+  language plpgsql as $$
+declare
+  v text;
+begin
+  perform set_config('request.jwt.claim.sub', (select public.app_owner()::text), true);
+  execute format('set local role %I', p_role);
+  begin
+    select public.workspace_proposal_value_check(p_target, p_field, p_value)::text into v;
+  exception when others then
+    v := sqlstate || ' ' || sqlerrm;
+  end;
+  reset role;
+  return v;
+end $$;
+
+do $$
+declare
+  f      constant text := 'public.workspace_proposal_value_check(text, text, jsonb)';
+  v_fail text[] := '{}';
+  v_got  text;
+  c      record;
+begin
+  if to_regprocedure(f) is null then
+    raise exception 'FAIL phase25b_204 (3): workspace_proposal_value_check(text, text, jsonb) is missing';
+  end if;
+  if not exists (select 1 from pg_proc p
+                  where p.oid = f::regprocedure and not p.prosecdef
+                    and coalesce(p.proconfig, '{}') @> array['search_path=public, pg_temp']) then
+    v_fail := v_fail || 'the check is not SECURITY INVOKER with search_path pinned'::text;
+  end if;
+  if pg_get_function_result(f::regprocedure) is distinct from 'jsonb' then
+    v_fail := v_fail || format('the check returns %s', pg_get_function_result(f::regprocedure));
+  end if;
+  select string_agg(w.who, ', ' order by w.who collate "C") into v_got
+    from (values ('public'), ('anon'), ('authenticated'), ('service_role'), ('db_test_runner'), ('workspace_runner'),
+                 ('sync_runner'), ('inbox_apply_runner'), ('workspace_ingest_runner')) as w(who)
+   where has_function_privilege(w.who::name, f, 'execute');
+  if v_got is distinct from 'authenticated' then
+    v_fail := v_fail || format('the check is executable by [%s], not authenticated alone', v_got);
+  end if;
+  if pg_temp.w106_check('anon', 'assignment_progress', 'status', '"graded"') not like '42501 %'
+     or pg_temp.w106_check('workspace_runner', 'assignment_progress', 'status', '"graded"') not like '42501 %' then
+    v_fail := v_fail || 'anon or the runner can call the check directly'::text;
+  end if;
+
+  -- What fits its field comes back as given.
+  for c in
+    select * from (values
+      ('assignment_progress', 'status',         '"graded"'),
+      ('assignment_progress', 'status',         '"planned"'),
+      ('reading_progress',    'status',         '"in_progress"'),
+      ('assignment_progress', 'planned_start',  '"2026-10-22"'),
+      ('assignment_progress', 'planned_finish', '"2028-02-29"'),
+      ('reading_progress',    'notes',          '" read section 2 "')
+    ) as t(target, field, val)
+  loop
+    v_got := pg_temp.w106_check('authenticated', c.target, c.field, c.val::jsonb);
+    if v_got is distinct from c.val then v_fail := v_fail || format('%s %s %s: %s', c.target, c.field, c.val, v_got); end if;
+  end loop;
+  v_got := pg_temp.w106_check('authenticated', 'assignment_progress', 'notes', to_jsonb(repeat('n', 2000)));
+  if v_got is distinct from to_jsonb(repeat('n', 2000))::text then
+    v_fail := v_fail || 'a 2,000-character note is refused'::text;
+  end if;
+
+  -- What does not fit is refused with 22023 and 204's own words.
+  for c in
+    select * from (values
+      ('assignment_progress', 'status',         '"done"',         '22023 workspace_propose: done is not a planner status'),
+      ('assignment_progress', 'status',         '"Graded"',       '22023 workspace_propose: Graded is not a planner status'),
+      ('assignment_progress', 'status',         '12',             '22023 workspace_propose: the value must be a JSON string'),
+      ('assignment_progress', 'status',         'null',           '22023 workspace_propose: the value must be a JSON string'),
+      ('assignment_progress', 'planned_start',  '"2026-02-30"',   '22023 workspace_propose: a planned date is written YYYY-MM-DD and must be a real date, not 2026-02-30'),
+      ('assignment_progress', 'planned_finish', '"Oct 21"',       '22023 workspace_propose: a planned date is written YYYY-MM-DD and must be a real date, not Oct 21'),
+      ('assignment_progress', 'planned_start',  '"graded"',       '22023 workspace_propose: a planned date is written YYYY-MM-DD and must be a real date, not graded'),
+      ('assignment_progress', 'notes',          '""',             '22023 workspace_propose: a note is 1 to 2000 characters and not only blanks'),
+      ('assignment_progress', 'notes',          '"   "',          '22023 workspace_propose: a note is 1 to 2000 characters and not only blanks'),
+      ('reading_progress',    'planned_start',  '"2026-10-22"',   '22023 workspace_propose: planned_start cannot be proposed on reading_progress'),
+      ('assignment_progress', 'score',          '"1"',            '22023 workspace_propose: score cannot be proposed on assignment_progress'),
+      ('assignments',         'status',         '"graded"',       '22023 workspace_propose: the target must be assignment_progress or reading_progress')
+    ) as t(target, field, val, want)
+  loop
+    v_got := pg_temp.w106_check('authenticated', c.target, c.field, c.val::jsonb);
+    if v_got is distinct from c.want then v_fail := v_fail || format('%s %s %s: [%s]', c.target, c.field, c.val, v_got); end if;
+  end loop;
+  v_got := pg_temp.w106_check('authenticated', 'assignment_progress', 'notes', to_jsonb(repeat('n', 2001)));
+  if v_got is distinct from '22023 workspace_propose: a note is 1 to 2000 characters and not only blanks' then
+    v_fail := v_fail || format('a 2,001-character note: [%s]', v_got);
+  end if;
+  v_got := pg_temp.w106_check('authenticated', 'assignment_progress', 'status', null);
+  if v_got is distinct from '22023 workspace_propose: the value must be a JSON string' then
+    v_fail := v_fail || format('an SQL null value: [%s]', v_got);
+  end if;
+
+  if cardinality(v_fail) > 0 then
+    raise exception 'FAIL phase25b_204 (3): %', array_to_string(v_fail, '; ');
   end if;
 end $$;
 

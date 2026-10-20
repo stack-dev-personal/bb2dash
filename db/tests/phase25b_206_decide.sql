@@ -21,6 +21,14 @@
 --   6. none of it is logged as an apply run: inbox_apply_writes has no new row
 --   7. refusals: a decision that is not approve or reject (22023); a proposal the caller cannot see
 --      (a stranger, 22023); anon and the runner roles cannot call it (42501)
+--   8. Stack's edit of the proposed value (W-106, p_value): an approval with an edit writes the edit,
+--      keeps new_value as the assistant proposed it, stores approved_value and resolves the item with
+--      edited: true (a status, a note, a date); an approval without one stores approved_value =
+--      new_value and edited: false (sections 1 and 4); an edit that does not fit its field, or equals
+--      what the planner has (a status with no row reads as not_started), is refused with 22023 and
+--      changes nothing; an edit with a reject is refused with 22023 and changes nothing; an edit on a
+--      row that changed since the proposal still finds it stale and writes nothing; an edit on an
+--      expired proposal is never looked at: expired, nothing written (round 2)
 --
 -- Proposals are filed through 204 as the runner; every decision is made as the owner under `set local
 -- role authenticated`, the way the page calls it. All data is synthetic. Nothing is committed.
@@ -70,6 +78,23 @@ begin
   return v;
 end $$;
 
+-- The same with Stack's edit (p_value, W-106).
+create function pg_temp.w106_decide(p_id bigint, p_decision text, p_value jsonb) returns text
+  language plpgsql as $$
+declare
+  v text;
+begin
+  perform set_config('request.jwt.claim.sub', (select public.app_owner()::text), true);
+  set local role authenticated;
+  begin
+    select d.state || '|' || d.applied into v from public.workspace_proposal_decide(p_id, p_decision, p_value) d;
+  exception when others then
+    v := sqlstate || ' ' || sqlerrm;
+  end;
+  reset role;
+  return v;
+end $$;
+
 create function pg_temp.w104_req(p_title text) returns bigint
   language plpgsql as $$
 declare
@@ -100,12 +125,21 @@ end $$;
 -- =============================================================================================
 do $$
 declare
-  f      constant text := 'public.workspace_proposal_decide(bigint, text)';
+  f      constant text := 'public.workspace_proposal_decide(bigint, text, jsonb)';
   v_fail text[] := '{}';
   v_got  text;
 begin
   if to_regprocedure(f) is null then
-    raise exception 'FAIL phase25b_206: migration 206 is not applied (workspace_proposal_decide is missing)';
+    raise exception 'FAIL phase25b_206: migration 206 is not applied (workspace_proposal_decide(bigint, text, jsonb) is missing)';
+  end if;
+  -- One signature (W-106): the edit is an optional third argument, and no two-argument overload is left.
+  if to_regprocedure('public.workspace_proposal_decide(bigint, text)') is not null
+     or (select count(*) from pg_proc p
+          where p.pronamespace = 'public'::regnamespace and p.proname = 'workspace_proposal_decide') <> 1 then
+    v_fail := v_fail || 'workspace_proposal_decide has more than the one signature'::text;
+  end if;
+  if pg_get_function_arguments(f::regprocedure) is distinct from 'p_id bigint, p_decision text, p_value jsonb DEFAULT NULL::jsonb' then
+    v_fail := v_fail || format('arguments are [%s]', pg_get_function_arguments(f::regprocedure));
   end if;
   if not exists (select 1 from pg_proc p
                   where p.oid = f::regprocedure and not p.prosecdef
@@ -208,10 +242,11 @@ begin
   if r.n <> 1 or r.status <> 'submitted' or r.notes is not null or r.ps is not null then
     v_fail := v_fail || format('1 the row: %s', to_jsonb(r));
   end if;
-  select w.state, w.decided_at, i.state as item_state, i.resolved_at, i.resolution into r
+  select w.state, w.decided_at, w.new_value, w.approved_value, i.state as item_state, i.resolved_at, i.resolution into r
     from workspace_proposals w join attention_items i on i.workspace_proposal_id = w.id where w.id = p_applied;
   if r.state <> 'applied' or r.decided_at is null or r.item_state <> 'resolved' or r.resolved_at is null
-     or r.resolution is distinct from jsonb_build_object('outcome', 'applied', 'proposal_id', p_applied) then
+     or r.new_value is distinct from '"submitted"'::jsonb or r.approved_value is distinct from '"submitted"'::jsonb
+     or r.resolution is distinct from jsonb_build_object('outcome', 'applied', 'proposal_id', p_applied, 'edited', false) then
     v_fail := v_fail || format('1 after approve: %s', to_jsonb(r));
   end if;
   v_got := pg_temp.w104_decide(p_applied, 'approve');
@@ -272,7 +307,8 @@ begin
     v_fail := v_fail || format('4 the view: %s', to_jsonb(r));
   end if;
   if (select i.resolution from attention_items i where i.workspace_proposal_id = p_rejected)
-     is distinct from jsonb_build_object('outcome', 'rejected', 'proposal_id', p_rejected) then
+     is distinct from jsonb_build_object('outcome', 'rejected', 'proposal_id', p_rejected, 'edited', false)
+     or (select w.approved_value from workspace_proposals w where w.id = p_rejected) is not null then
     v_fail := v_fail || '4 the Inbox item is not resolved as rejected'::text;
   end if;
   if exists (select 1 from reading_progress p where p.reading_id = v_reading and p.status <> 'not_started') then
@@ -337,6 +373,167 @@ begin
 
   if cardinality(v_fail) > 0 then
     raise exception 'FAIL phase25b_206: %', array_to_string(v_fail, '; ');
+  end if;
+end $$;
+
+-- =============================================================================================
+-- 8. Stack's edit of the proposed value (W-106)
+-- =============================================================================================
+do $$
+declare
+  v_req bigint;
+begin
+  insert into assignments (id, course_id, title, type, due_at)
+  values ('ECN.304/w106-e1', 'ECN.304', 'W106 Edit 1', 'homework', '2026-11-11 14:00+00'),
+         ('ECN.304/w106-e2', 'ECN.304', 'W106 Edit 2', 'homework', '2026-11-12 14:00+00'),
+         ('ECN.304/w106-e3', 'ECN.304', 'W106 Edit 3', 'homework', '2026-11-13 14:00+00'),
+         ('ECN.304/w106-e4', 'ECN.304', 'W106 Edit 4', 'homework', '2026-11-14 14:00+00'),
+         ('ECN.304/w106-e5', 'ECN.304', 'W106 Edit 5', 'homework', '2026-11-15 14:00+00'),
+         ('ECN.304/w106-e6', 'ECN.304', 'W106 Edit 6', 'homework', '2026-11-16 14:00+00');
+  insert into assignment_progress (assignment_id, status, planned_finish)
+  values ('ECN.304/w106-e3', 'in_progress', date '2026-10-30');
+  insert into assignment_progress (assignment_id, notes) values ('ECN.304/w106-e5', 'his note');
+  v_req := pg_temp.w104_req('w106 206 edit');
+  insert into _w104 values
+    ('e_status', pg_temp.w104_propose(v_req, 'assignment_progress', 'ECN.304/w106-e1', 'status', '"submitted"')::text),
+    ('e_note',   pg_temp.w104_propose(v_req, 'assignment_progress', 'ECN.304/w106-e2', 'notes', '"proposed note"')::text),
+    ('e_date',   pg_temp.w104_propose(v_req, 'assignment_progress', 'ECN.304/w106-e3', 'planned_finish', '"2026-11-01"')::text),
+    ('e_bad',    pg_temp.w104_propose(v_req, 'assignment_progress', 'ECN.304/w106-e4', 'status', '"submitted"')::text),
+    ('e_stale',  pg_temp.w104_propose(v_req, 'assignment_progress', 'ECN.304/w106-e5', 'notes', '"proposed"')::text);
+  -- An expired one (round 2): an edit sent with it is never looked at.
+  v_req := pg_temp.w104_req('w106 206 edit expired');
+  insert into _w104 values
+    ('e_exp', pg_temp.w104_propose(v_req, 'assignment_progress', 'ECN.304/w106-e6', 'status', '"submitted"')::text);
+  update workspace_proposals set created_at = now() - interval '8 days', expires_at = now() - interval '1 second'
+   where id = (select v::bigint from _w104 where k = 'e_exp');
+end $$;
+
+do $$
+declare
+  p_status constant bigint := (select v::bigint from _w104 where k = 'e_status');
+  p_note   constant bigint := (select v::bigint from _w104 where k = 'e_note');
+  p_date   constant bigint := (select v::bigint from _w104 where k = 'e_date');
+  p_bad    constant bigint := (select v::bigint from _w104 where k = 'e_bad');
+  p_stale  constant bigint := (select v::bigint from _w104 where k = 'e_stale');
+  p_exp    constant bigint := (select v::bigint from _w104 where k = 'e_exp');
+  v_owner  constant text   := (select public.app_owner()::text);
+  v_fail   text[] := '{}';
+  v_got    text;
+  r        record;
+  c        record;
+begin
+  -- 8a. Edits that do not fit their field: 22023, and nothing changes.
+  for c in
+    select * from (values
+      ('status not a label',  p_bad,  '"done"'),
+      ('status a date',       p_bad,  '"2026-10-22"'),
+      ('status a number',     p_bad,  '12'),
+      ('status json null',    p_bad,  'null'),
+      ('date not real',       p_date, '"2026-02-30"'),
+      ('date not iso',        p_date, '"Nov 3"'),
+      ('note blank',          p_note, '"   "'),
+      ('note empty',          p_note, '""')
+    ) as t(what, id, val)
+  loop
+    v_got := pg_temp.w106_decide(c.id, 'approve', c.val::jsonb);
+    if v_got not like '22023 %' then v_fail := v_fail || format('8a %s: %s', c.what, v_got); end if;
+  end loop;
+  v_got := pg_temp.w106_decide(p_note, 'approve', to_jsonb(repeat('n', 2001)));
+  if v_got not like '22023 %' then v_fail := v_fail || format('8a note 2001: %s', v_got); end if;
+
+  -- 8b. An edit equal to what the planner has: 22023 with its own words (no row reads as not_started).
+  v_got := pg_temp.w106_decide(p_bad, 'approve', '"not_started"');
+  if v_got is distinct from '22023 workspace_proposal_decide: an edited value must differ from the planner''s' then
+    v_fail := v_fail || format('8b status equal to the planner: %s', v_got);
+  end if;
+  v_got := pg_temp.w106_decide(p_date, 'approve', '"2026-10-30"');
+  if v_got is distinct from '22023 workspace_proposal_decide: an edited value must differ from the planner''s' then
+    v_fail := v_fail || format('8b date equal to the planner: %s', v_got);
+  end if;
+
+  -- 8c. An edit with a reject: 22023, and nothing changes; a reject without one is recorded as not edited.
+  v_got := pg_temp.w106_decide(p_bad, 'reject', '"graded"');
+  if v_got not like '22023 %' then v_fail := v_fail || format('8c reject with an edit: %s', v_got); end if;
+  if exists (select 1 from workspace_proposals w where w.id in (p_status, p_note, p_date, p_bad, p_stale)
+              and (w.state <> 'proposed' or w.decided_at is not null or w.approved_value is not null))
+     or exists (select 1 from attention_items i where i.workspace_proposal_id in (p_status, p_note, p_date, p_bad, p_stale)
+                 and i.state <> 'open')
+     or exists (select 1 from assignment_progress p where p.assignment_id in ('ECN.304/w106-e1', 'ECN.304/w106-e2', 'ECN.304/w106-e4'))
+     or (select p.planned_finish from assignment_progress p where p.assignment_id = 'ECN.304/w106-e3') <> date '2026-10-30' then
+    v_fail := v_fail || '8a-c a refused edit changed something'::text;
+  end if;
+  v_got := pg_temp.w104_decide(p_bad, 'reject');
+  if v_got is distinct from 'rejected|false'
+     or (select i.resolution from attention_items i where i.workspace_proposal_id = p_bad)
+        is distinct from jsonb_build_object('outcome', 'rejected', 'proposal_id', p_bad, 'edited', false) then
+    v_fail := v_fail || format('8c reject: %s', v_got);
+  end if;
+
+  -- 8d. Approve with an edit: the edit is written; new_value keeps what the assistant proposed.
+  v_got := pg_temp.w106_decide(p_status, 'approve', '"graded"');
+  select w.state, w.new_value, w.approved_value, i.resolution, p.status::text as status into r
+    from workspace_proposals w
+    join attention_items i on i.workspace_proposal_id = w.id
+    left join assignment_progress p on p.assignment_id = w.row_id
+   where w.id = p_status;
+  if v_got is distinct from 'applied|true' or r.state <> 'applied' or r.status is distinct from 'graded'
+     or r.new_value is distinct from '"submitted"'::jsonb or r.approved_value is distinct from '"graded"'::jsonb
+     or r.resolution is distinct from jsonb_build_object('outcome', 'applied', 'proposal_id', p_status, 'edited', true) then
+    v_fail := v_fail || format('8d status: %s %s', v_got, to_jsonb(r));
+  end if;
+  v_got := pg_temp.w106_decide(p_note, 'approve', to_jsonb('my own words'::text));
+  if v_got is distinct from 'applied|true'
+     or (select p.notes from assignment_progress p where p.assignment_id = 'ECN.304/w106-e2') is distinct from 'my own words'
+     or (select w.approved_value from workspace_proposals w where w.id = p_note) is distinct from '"my own words"'::jsonb
+     or (select w.new_value from workspace_proposals w where w.id = p_note) is distinct from '"proposed note"'::jsonb then
+    v_fail := v_fail || format('8d note: %s', v_got);
+  end if;
+  v_got := pg_temp.w106_decide(p_date, 'approve', '"2026-11-03"');
+  select p.status::text as status, p.planned_finish into r from assignment_progress p where p.assignment_id = 'ECN.304/w106-e3';
+  if v_got is distinct from 'applied|true' or r.planned_finish is distinct from date '2026-11-03' or r.status <> 'in_progress'
+     or (select w.approved_value from workspace_proposals w where w.id = p_date) is distinct from '"2026-11-03"'::jsonb then
+    v_fail := v_fail || format('8d date: %s %s', v_got, to_jsonb(r));
+  end if;
+  -- A decided proposal refuses a second edit as it refuses any decision: 55000.
+  v_got := pg_temp.w106_decide(p_status, 'approve', '"excused"');
+  if v_got not like '55000 %already applied%'
+     or (select p.status::text from assignment_progress p where p.assignment_id = 'ECN.304/w106-e1') <> 'graded' then
+    v_fail := v_fail || format('8d a second edit: %s', v_got);
+  end if;
+
+  -- 8e. The row changed since the proposal: an edit does not get past the stale check.
+  v_got := pg_temp.w104_try('authenticated', v_owner,
+    'update public.assignment_progress set notes = ''edited in the planner'' where assignment_id = ''ECN.304/w106-e5''');
+  if v_got <> 'ok:1' then v_fail := v_fail || format('8e the owner''s edit: %s', v_got); end if;
+  v_got := pg_temp.w106_decide(p_stale, 'approve', '"my own words"');
+  if v_got is distinct from 'stale|false'
+     or (select p.notes from assignment_progress p where p.assignment_id = 'ECN.304/w106-e5') <> 'edited in the planner'
+     or (select w.approved_value from workspace_proposals w where w.id = p_stale) is not null
+     or (select i.resolution from attention_items i where i.workspace_proposal_id = p_stale)
+        is distinct from jsonb_build_object('outcome', 'stale', 'proposal_id', p_stale, 'edited', false) then
+    v_fail := v_fail || format('8e stale: %s', v_got);
+  end if;
+
+  -- 8f. Expired (round 2): an edit with a reject is still refused (22023) and changes nothing; an
+  --     approval with an edit, even one that would not fit, is expired as any decision is: nothing
+  --     written, no approved_value, edited false; a later edit is refused with 55000.
+  v_got := pg_temp.w106_decide(p_exp, 'reject', '"graded"');
+  if v_got not like '22023 %' or (select w.state from workspace_proposals w where w.id = p_exp) <> 'proposed' then
+    v_fail := v_fail || format('8f reject with an edit on an expired proposal: %s', v_got);
+  end if;
+  v_got := pg_temp.w106_decide(p_exp, 'approve', '"done"');
+  if v_got is distinct from 'expired|false'
+     or exists (select 1 from assignment_progress p where p.assignment_id = 'ECN.304/w106-e6')
+     or (select w.approved_value from workspace_proposals w where w.id = p_exp) is not null
+     or (select i.resolution from attention_items i where i.workspace_proposal_id = p_exp)
+        is distinct from jsonb_build_object('outcome', 'expired', 'proposal_id', p_exp, 'edited', false) then
+    v_fail := v_fail || format('8f approve with an edit on an expired proposal: %s', v_got);
+  end if;
+  v_got := pg_temp.w106_decide(p_exp, 'approve', '"graded"');
+  if v_got not like '55000 %already expired%' then v_fail := v_fail || format('8f an edit after expiry: %s', v_got); end if;
+
+  if cardinality(v_fail) > 0 then
+    raise exception 'FAIL phase25b_206 (8): %', array_to_string(v_fail, '; ');
   end if;
 end $$;
 

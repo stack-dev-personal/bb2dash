@@ -2,13 +2,16 @@
 -- Phase 25b (docs/planning/sprint-2/briefs/119_PHASE25_after_24b.md), item E. Worker W-104a. Tests
 -- migration 203, `workspace_proposals` (the contract `119b_PHASE25B_contract.md`, "203").
 --
---   0. installed and shaped: the fifteen columns in order with their defaults; row security on with
---      the owner's select and update policies and nothing else; the unique key and the three indexes
---   1. the grants: authenticated selects and updates state and decided_at only; service_role selects;
---      anon, workspace_runner, inbox_apply_runner, sync_runner and workspace_ingest_runner hold nothing
+--   0. installed and shaped: the sixteen columns in order with their defaults (approved_value last,
+--      W-106); row security on with the owner's select and update policies and nothing else; the
+--      unique key and the three indexes
+--   1. the grants: authenticated selects and updates state, decided_at and approved_value only;
+--      service_role selects; anon, workspace_runner, inbox_apply_runner, sync_runner and
+--      workspace_ingest_runner hold nothing
 --   2. the checks: target, field (planned dates on an assignment only), new_value a string of 1 to
---      2,000 characters, reason 1 to 500, state, decided_at set exactly when decided, one proposal per
---      field of a row per request
+--      2,000 characters, reason 1 to 500, state, decided_at set exactly when decided, approved_value
+--      a string of 1 to 2,000 characters set exactly when applied (W-106), one proposal per field of
+--      a row per request
 --   3. row security: the owner reads and updates his rows; a stranger reads none and updates none;
 --      the owner cannot insert or delete
 --
@@ -65,7 +68,7 @@ begin
      'expires_at timestamp with time zone not null = (now() + ''7 days''::interval), request_id bigint not null, '
      'conversation_id uuid not null, target text not null, row_id text not null, course_id text, '
      'label text not null, field text not null, old_value jsonb, new_value jsonb not null, reason text not null, '
-     'state text not null = ''proposed''::text, decided_at timestamp with time zone' then
+     'state text not null = ''proposed''::text, decided_at timestamp with time zone, approved_value jsonb' then
     v_fail := v_fail || format('columns are [%s]', v_got);
   end if;
 
@@ -120,7 +123,7 @@ begin
     from pg_attribute a
    where a.attrelid = 'public.workspace_proposals'::regclass and a.attnum > 0 and not a.attisdropped
      and has_column_privilege('authenticated', 'public.workspace_proposals', a.attname, 'update');
-  if v_got is distinct from 'state,decided_at' then
+  if v_got is distinct from 'state,decided_at,approved_value' then
     v_fail := v_fail || format('authenticated updates [%s]', v_got);
   end if;
   if not has_table_privilege('authenticated', 'public.workspace_proposals', 'select')
@@ -172,6 +175,9 @@ declare
   v_fail  text[] := '{}';
   v_ins   constant text :=
     'insert into public.workspace_proposals (request_id, conversation_id, target, row_id, label, field, new_value, reason, state, decided_at) values (%s, %L, %L, %L, %L, %L, %L::jsonb, %L, %L, %s)';
+  -- The same with approved_value (W-106): the value an approval wrote.
+  v_ins_a constant text :=
+    'insert into public.workspace_proposals (request_id, conversation_id, target, row_id, label, field, new_value, reason, state, decided_at, approved_value) values (%s, %L, %L, %L, %L, %L, %L::jsonb, %L, %L, %s, %s)';
   v_got   text;
   c       record;
 begin
@@ -189,6 +195,7 @@ begin
       ('state',          'assignment_progress', 'notes',          '"x"',                       'r', 'done',     'now()', '23514'),
       ('decided open',   'assignment_progress', 'notes',          '"x"',                       'r', 'proposed', 'now()', '23514'),
       ('undecided',      'assignment_progress', 'notes',          '"x"',                       'r', 'rejected', 'null', '23514'),
+      ('applied bare',   'assignment_progress', 'notes',          '"x"',                       'r', 'applied',  'now()', '23514'),
       ('duplicate',      'assignment_progress', 'status',         '"graded"',                  'r', 'proposed', 'null', '23505')
     ) as t(what, target, field, val, reason, state, decided, code)
   loop
@@ -198,11 +205,46 @@ begin
              'label', c.field, c.val, c.reason, c.state, c.decided));
     if v_got <> c.code then v_fail := v_fail || format('%s: %s, not %s', c.what, v_got, c.code); end if;
   end loop;
-  -- And the edge that passes: a note of exactly 2,000 characters, decided with its time.
+  -- approved_value (W-106): a JSON string of 1 to 2,000 characters, set exactly when applied.
+  for c in
+    select * from (values
+      ('approved on proposed', 'proposed', 'null',  '''"x"''::jsonb'),
+      ('approved on rejected', 'rejected', 'now()', '''"x"''::jsonb'),
+      ('approved number',      'applied',  'now()', '''12''::jsonb'),
+      ('approved json null',   'applied',  'now()', '''null''::jsonb'),
+      ('approved empty',       'applied',  'now()', '''""''::jsonb'),
+      ('approved 2001',        'applied',  'now()', quote_literal(to_jsonb(repeat('a', 2001))::text) || '::jsonb')
+    ) as t(what, state, decided, approved)
+  loop
+    v_got := pg_temp.w104_try(null, null,
+      format(v_ins_a, v_req, v_conv, 'assignment_progress', 'ECN.304/w104-203-' || c.what, 'label', 'notes', '"x"',
+             'r', c.state, c.decided, c.approved));
+    if v_got <> '23514' then v_fail := v_fail || format('%s: %s, not 23514', c.what, v_got); end if;
+  end loop;
+  -- And the edge that passes: a note of exactly 2,000 characters, applied with its time and a
+  -- 2,000-character value written.
   v_got := pg_temp.w104_try(null, null,
-    format(v_ins, v_req, v_conv, 'assignment_progress', 'ECN.304/w104-203-edge', 'label', 'notes',
-           to_jsonb(repeat('n', 2000))::text, repeat('r', 500), 'applied', 'now()'));
+    format(v_ins_a, v_req, v_conv, 'assignment_progress', 'ECN.304/w104-203-edge', 'label', 'notes',
+           to_jsonb(repeat('n', 2000))::text, repeat('r', 500), 'applied', 'now()',
+           quote_literal(to_jsonb(repeat('a', 2000))::text) || '::jsonb'));
   if v_got <> 'ok:1' then v_fail := v_fail || format('a 2,000-character note: %s', v_got); end if;
+  -- Once written, approved_value stays (W-106 round 2): no one rewrites it, the owner included (55000);
+  -- writing the same value again, or anything else on the row, is not a rewrite.
+  v_got := pg_temp.w104_try(null, null,
+    'update public.workspace_proposals set approved_value = ''"b"'' where row_id = ''ECN.304/w104-203-edge''');
+  if v_got <> '55000' then v_fail := v_fail || format('approved_value rewritten by the session: %s, not 55000', v_got); end if;
+  v_got := pg_temp.w104_try('authenticated', v_owner,
+    'update public.workspace_proposals set approved_value = ''"b"'' where row_id = ''ECN.304/w104-203-edge''');
+  if v_got <> '55000' then v_fail := v_fail || format('approved_value rewritten by the owner: %s, not 55000', v_got); end if;
+  v_got := pg_temp.w104_try('authenticated', v_owner,
+    'update public.workspace_proposals set approved_value = null, state = ''rejected'' where row_id = ''ECN.304/w104-203-edge''');
+  if v_got <> '55000' then v_fail := v_fail || format('approved_value cleared by the owner: %s, not 55000', v_got); end if;
+  v_got := pg_temp.w104_try('authenticated', v_owner,
+    'update public.workspace_proposals set approved_value = approved_value, decided_at = now() where row_id = ''ECN.304/w104-203-edge''');
+  if v_got <> 'ok:1' then v_fail := v_fail || format('the same approved_value again: %s', v_got); end if;
+  if (select approved_value #>> '{}' from workspace_proposals where row_id = 'ECN.304/w104-203-edge') <> repeat('a', 2000) then
+    v_fail := v_fail || 'approved_value changed'::text;
+  end if;
 
   -- 3. Row security.
   if pg_temp.w104_try('authenticated', v_owner,

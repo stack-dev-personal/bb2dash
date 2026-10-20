@@ -394,6 +394,7 @@ select p.id,
        p.reason,
        p.state,
        p.decided_at,
+       p.approved_value,   -- W-106: what an approval wrote, Stack's edit or the proposal
        case when p.state = 'proposed' and now() >= p.expires_at then 'expired' else p.state end
          as effective_state,
        a.id    as attention_item_id,
@@ -485,8 +486,8 @@ begin
   if v_got is distinct from
      'id bigint, created_at timestamp with time zone, expires_at timestamp with time zone, request_id bigint, '
      'conversation_id uuid, target text, row_id text, course_id text, label text, field text, old_value jsonb, '
-     'new_value jsonb, reason text, state text, decided_at timestamp with time zone, effective_state text, '
-     'attention_item_id bigint, attention_state text' then
+     'new_value jsonb, reason text, state text, decided_at timestamp with time zone, approved_value jsonb, '
+     'effective_state text, attention_item_id bigint, attention_state text' then
     raise exception 'FAIL 205: v_workspace_proposals columns are [%]', v_got;
   end if;
   if not has_table_privilege('authenticated', 'public.v_workspace_proposals', 'select')

@@ -35,9 +35,22 @@
 -- the function only works once 205 is on; nothing calls it before the cut-over's `workspace` rebuild,
 -- which comes after 206. Its unit (phase25b_204_propose.sql) is run with 205 applied.
 --
+-- THE SHARED VALUE CHECK (W-106, Stack's edit of a proposed value; amended in place before the
+-- cut-over). Check 4 lives in its own function, workspace_proposal_value_check(target, field, value),
+-- so that 206 holds Stack's edit (p_value) to exactly the rule the assistant's value met here: the
+-- same refusals with the same words (22023, "workspace_propose: ..."), and the value returned as given.
+-- It also refuses a target or a field outside the list, so it stands alone when 206 calls it. It is
+-- SECURITY INVOKER with a pinned path, reads no table, and is executable by authenticated alone (206
+-- runs as Stack). workspace_runner needs no grant (round 2): 204 is a SECURITY DEFINER of postgres, and
+-- a function it calls is checked against postgres, not against the runner that called 204; the runner
+-- cannot call the check directly. 204's behaviour is unchanged: its checks still
+-- run in the order above (2 stays here, before the fact row is read).
+--
 -- workspace_runner goes from THIRTEEN SECURITY DEFINER functions (202) to FOURTEEN and still holds no
--- grant on any table, view or sequence (guard below). Additive: one new function. No password, key or
--- DSN is in this file.
+-- grant on any table, view or sequence (guard below). The value check is SECURITY INVOKER, so it is not
+-- one of the fourteen: every count of the runner's functions (this guard, the units, 206's
+-- v_workspace_runner_proof) counts SECURITY DEFINER functions alone. Additive: two new functions. No
+-- password, key or DSN is in this file.
 
 do $$
 begin
@@ -50,7 +63,71 @@ begin
   if to_regprocedure('public.workspace_propose(bigint, text, text, text, text, jsonb, text)') is not null then
     raise exception '204: workspace_propose already exists';
   end if;
+  if to_regprocedure('public.workspace_proposal_value_check(text, text, jsonb)') is not null then
+    raise exception '204: workspace_proposal_value_check already exists';
+  end if;
 end $$;
+
+-- =============================================================================================
+-- The shared value check (W-106)
+-- =============================================================================================
+create function public.workspace_proposal_value_check(p_target text, p_field text, p_value jsonb)
+  returns jsonb
+  language plpgsql stable security invoker set search_path = public, pg_temp as $$
+declare
+  c_note_max   constant integer := 2000;
+  c_date_shape constant text    := '^[0-9]{4}-[0-9]{2}-[0-9]{2}$';
+  v_text text;
+  v_date date;
+begin
+  if p_target is null or p_target not in ('assignment_progress', 'reading_progress') then
+    raise exception 'workspace_propose: the target must be assignment_progress or reading_progress'
+      using errcode = '22023';
+  end if;
+  if p_field is null
+     or not (p_field in ('status', 'notes')
+             or (p_target = 'assignment_progress' and p_field in ('planned_start', 'planned_finish'))) then
+    raise exception 'workspace_propose: % cannot be proposed on %', coalesce(p_field, 'null'), p_target
+      using errcode = '22023';
+  end if;
+
+  if p_value is null or jsonb_typeof(p_value) <> 'string' then
+    raise exception 'workspace_propose: the value must be a JSON string' using errcode = '22023';
+  end if;
+  v_text := p_value #>> '{}';
+  if p_field = 'status' then
+    if not (v_text = any (enum_range(null::progress_status)::text[])) then
+      raise exception 'workspace_propose: % is not a planner status', left(v_text, 40) using errcode = '22023';
+    end if;
+  elsif p_field in ('planned_start', 'planned_finish') then
+    v_date := null;
+    if v_text ~ c_date_shape then
+      begin
+        v_date := v_text::date;
+      exception when others then
+        v_date := null;   -- 2026-02-30 and the like: not a calendar date
+      end;
+    end if;
+    if v_date is null or to_char(v_date, 'YYYY-MM-DD') <> v_text then
+      raise exception 'workspace_propose: a planned date is written YYYY-MM-DD and must be a real date, not %',
+        left(v_text, 40) using errcode = '22023';
+    end if;
+  else
+    if btrim(v_text) = '' or char_length(v_text) > c_note_max then
+      raise exception 'workspace_propose: a note is 1 to % characters and not only blanks', c_note_max
+        using errcode = '22023';
+    end if;
+  end if;
+  return p_value;
+end $$;
+
+comment on function public.workspace_proposal_value_check(text, text, jsonb) is
+  'Whether a value fits a proposal''s field (migration 204, W-106): a JSON string that is a '
+  'progress_status label (status), a real YYYY-MM-DD date (planned_start, planned_finish, on an '
+  'assignment only) or a note of 1 to 2,000 characters that is not only blanks (notes). Returns the '
+  'value as given, or raises 22023 with workspace_propose''s own words. Shared by workspace_propose '
+  '(the assistant''s value) and workspace_proposal_decide (Stack''s edit). SECURITY INVOKER, reads no '
+  'table; authenticated only (204 calls it as its definer).';
 
 create function public.workspace_propose(
     p_request_id bigint, p_runner text, p_target text, p_row_id text, p_field text,
@@ -60,10 +137,8 @@ create function public.workspace_propose(
 #variable_conflict use_column
 declare
   c_max_per_request constant integer := 5;
-  c_note_max        constant integer := 2000;
   c_reason_max      constant integer := 500;
   c_question_label  constant integer := 200;
-  c_date_shape      constant text    := '^[0-9]{4}-[0-9]{2}-[0-9]{2}$';
   c_reading_id      constant text    := '^[1-9][0-9]{0,17}$';
   v_state    text;
   v_by       text;
@@ -77,7 +152,6 @@ declare
   v_id       bigint;
   v_question text;
   v_short    text;
-  v_date     date;
 begin
   -- 1. The request is the caller's own claim, held until this transaction ends.
   select r.state, r.claimed_by, r.conversation_id into v_state, v_by, v_conv
@@ -133,34 +207,9 @@ begin
   v_exists := coalesce(v_exists, false);
   v_old := coalesce(v_old, 'null'::jsonb);
 
-  -- 4. The value fits the field.
-  if p_value is null or jsonb_typeof(p_value) <> 'string' then
-    raise exception 'workspace_propose: the value must be a JSON string' using errcode = '22023';
-  end if;
+  -- 4. The value fits the field: the check 206 holds Stack's edit to as well (W-106).
+  perform workspace_proposal_value_check(p_target, p_field, p_value);
   v_text := p_value #>> '{}';
-  if p_field = 'status' then
-    if not (v_text = any (enum_range(null::progress_status)::text[])) then
-      raise exception 'workspace_propose: % is not a planner status', left(v_text, 40) using errcode = '22023';
-    end if;
-  elsif p_field in ('planned_start', 'planned_finish') then
-    v_date := null;
-    if v_text ~ c_date_shape then
-      begin
-        v_date := v_text::date;
-      exception when others then
-        v_date := null;   -- 2026-02-30 and the like: not a calendar date
-      end;
-    end if;
-    if v_date is null or to_char(v_date, 'YYYY-MM-DD') <> v_text then
-      raise exception 'workspace_propose: a planned date is written YYYY-MM-DD and must be a real date, not %',
-        left(v_text, 40) using errcode = '22023';
-    end if;
-  else
-    if btrim(v_text) = '' or char_length(v_text) > c_note_max then
-      raise exception 'workspace_propose: a note is 1 to % characters and not only blanks', c_note_max
-        using errcode = '22023';
-    end if;
-  end if;
 
   -- 5. The reason.
   if p_reason is null or btrim(p_reason) = '' or char_length(p_reason) > c_reason_max then
@@ -233,13 +282,35 @@ comment on function public.workspace_propose(bigint, text, text, text, text, jso
 revoke all on function public.workspace_propose(bigint, text, text, text, text, jsonb, text)
   from public, anon, authenticated, service_role;
 grant execute on function public.workspace_propose(bigint, text, text, text, text, jsonb, text) to workspace_runner;
+revoke all on function public.workspace_proposal_value_check(text, text, jsonb)
+  from public, anon, authenticated, service_role;
+grant execute on function public.workspace_proposal_value_check(text, text, jsonb) to authenticated;
 
 do $$
 declare
   f     constant text := 'public.workspace_propose(bigint, text, text, text, text, jsonb, text)';
+  g     constant text := 'public.workspace_proposal_value_check(text, text, jsonb)';
   v_got text;
   v_bad text;
 begin
+  -- (0) The shared value check (W-106): SECURITY INVOKER with a pinned path, returning jsonb, and
+  --     executable by authenticated alone among the client roles (204 calls it as postgres).
+  if not exists (select 1 from pg_proc p
+                  where p.oid = g::regprocedure and not p.prosecdef
+                    and coalesce(p.proconfig, '{}') @> array['search_path=public, pg_temp']) then
+    raise exception 'FAIL 204: workspace_proposal_value_check is not SECURITY INVOKER with search_path pinned';
+  end if;
+  if pg_get_function_result(g::regprocedure) is distinct from 'jsonb' then
+    raise exception 'FAIL 204: workspace_proposal_value_check returns %', pg_get_function_result(g::regprocedure);
+  end if;
+  select string_agg(w.who, ', ' order by w.who) into v_got
+    from (values ('public'), ('anon'), ('authenticated'), ('service_role'), ('workspace_runner'), ('sync_runner'),
+                 ('inbox_apply_runner'), ('workspace_ingest_runner')) as w(who)
+   where has_function_privilege(w.who::name, g, 'execute');
+  if v_got is distinct from 'authenticated' then
+    raise exception 'FAIL 204: workspace_proposal_value_check is executable by [%], not authenticated alone', v_got;
+  end if;
+
   -- (a) The fourteen are exactly the SECURITY DEFINER functions workspace_runner can execute.
   select string_agg(p.proname, ',' order by p.proname collate "C") into v_got
     from pg_proc p

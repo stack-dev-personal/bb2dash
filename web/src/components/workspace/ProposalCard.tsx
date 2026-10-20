@@ -9,7 +9,8 @@
  * the value read and the value proposed side by side (a note's old and new text, which keeps its
  * line breaks and scrolls inside its pane), the reason, and Approve / Reject. Each button's name
  * says the item ("Approve: mark ECN 304 Problem Set 4 as submitted"), and both are disabled while a
- * decision is in flight.
+ * decision is in flight. The Proposed box has a grey "edit" on hover and focus (W-106,
+ * `ProposedValue.tsx`): Stack's edit is a draft on this card, and Approve sends it.
  *
  * DECIDED: the item's name and the outcome, and nothing else (Stack, 2026-10-19): no old or new
  * value, no reason, no button. The Inbox adds "Open the answer →". When the decision was made on
@@ -23,12 +24,12 @@
  */
 
 import Link from 'next/link';
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { EDIT_FIRST_LINE } from '@/lib/proposal-draft';
 import tokens from '@/styles/tokens.module.css';
 import {
   ALREADY_DECIDED_LINE,
   APPROVE_WORD,
-  NEW_VALUE_HEADING,
   OLD_VALUE_HEADING,
   OPEN_ANSWER_LABEL,
   PROPOSAL_KICKER,
@@ -44,6 +45,7 @@ import {
   type WorkspaceProposal,
 } from '@/lib/workspace-proposals';
 import styles from './ProposalCard.module.css';
+import { ProposedValue } from './ProposedValue';
 
 export interface ProposalCardProps {
   proposal: WorkspaceProposal;
@@ -58,50 +60,86 @@ export interface ProposalCardProps {
   focusOutcome?: boolean;
   /** Drawn as an Inbox item: on the page's ground, and one of the cards `j` / `k` move between. */
   inbox?: boolean;
+  /** W-106: Stack's kept edit of the proposed value on this card, or null. */
+  draft?: string | null;
+  /** W-106: keep or drop the draft; without it the Proposed box is not editable. */
+  onDraftChange?: (draft: string | null) => void;
 }
 
-/** The value read and the value proposed, side by side. */
-function Values({ proposal }: { proposal: WorkspaceProposal }) {
-  const panes = [
-    { which: 'old', heading: OLD_VALUE_HEADING, value: proposal.old_value },
-    { which: 'new', heading: NEW_VALUE_HEADING, value: proposal.new_value },
-  ] as const;
+/** The value read and the value proposed, side by side; the proposed one Stack may edit (W-106). */
+function Values(props: {
+  proposal: WorkspaceProposal;
+  draft: string | null;
+  onDraftChange?: (draft: string | null) => void;
+  onEditingChange: (editing: boolean) => void;
+  pending: boolean;
+}) {
+  const { proposal } = props;
   return (
     <div className={styles.panes}>
-      {panes.map((pane) => (
-        <div key={pane.which} role="group" aria-label={pane.heading} className={styles.pane} data-proposal-value={pane.which}>
-          <span className={tokens.kicker}>{pane.heading}</span>
-          <span className={styles.value}>{valueWords(proposal.field, pane.value)}</span>
-        </div>
-      ))}
+      <div role="group" aria-label={OLD_VALUE_HEADING} className={styles.pane} data-proposal-value="old">
+        <span className={tokens.kicker}>{OLD_VALUE_HEADING}</span>
+        <span className={styles.value}>{valueWords(proposal.field, proposal.old_value)}</span>
+      </div>
+      <ProposedValue
+        proposal={proposal}
+        draft={props.draft}
+        onDraftChange={props.onDraftChange}
+        onEditingChange={props.onEditingChange}
+        disabled={props.pending}
+      />
     </div>
   );
 }
 
-function Actions(props: { proposal: WorkspaceProposal; pending: boolean; onDecide?: (decision: ProposalDecision) => void }) {
-  const { proposal, pending, onDecide } = props;
+/**
+ * Approve and Reject. While the Proposed box is in edit mode (W-106 round 2) they wait: marked
+ * aria-disabled with a hint under them, and a press neither decides nor takes the focus from the
+ * editor (a mousedown that moved the focus would be a click off the box and drop the edit).
+ */
+function Actions(props: {
+  proposal: WorkspaceProposal;
+  pending: boolean;
+  waiting: boolean;
+  onDecide?: (decision: ProposalDecision) => void;
+}) {
+  const { proposal, pending, waiting, onDecide } = props;
   const disabled = pending || onDecide === undefined;
+  const hintId = useId();
+  const buttons = [
+    { decision: 'approve', className: tokens.btnPrimary, label: approveLabel(proposal), word: APPROVE_WORD },
+    { decision: 'reject', className: tokens.btnSecondary, label: rejectLabel(proposal), word: REJECT_WORD },
+  ] as const;
   return (
-    <div className={styles.actions} aria-busy={pending}>
-      <button
-        type="button"
-        className={tokens.btnPrimary}
-        aria-label={approveLabel(proposal)}
-        disabled={disabled}
-        onClick={() => onDecide?.('approve')}
-      >
-        {APPROVE_WORD}
-      </button>
-      <button
-        type="button"
-        className={tokens.btnSecondary}
-        aria-label={rejectLabel(proposal)}
-        disabled={disabled}
-        onClick={() => onDecide?.('reject')}
-      >
-        {REJECT_WORD}
-      </button>
-    </div>
+    <>
+      <div className={styles.actions} aria-busy={pending}>
+        {buttons.map((button) => (
+          <button
+            key={button.decision}
+            type="button"
+            className={button.className}
+            aria-label={button.label}
+            aria-disabled={waiting || undefined}
+            aria-describedby={waiting ? hintId : undefined}
+            data-waiting={waiting ? '' : undefined}
+            disabled={disabled}
+            onMouseDown={(event) => {
+              if (waiting) event.preventDefault();
+            }}
+            onClick={() => {
+              if (!waiting) onDecide?.(button.decision);
+            }}
+          >
+            {button.word}
+          </button>
+        ))}
+      </div>
+      {waiting && (
+        <p id={hintId} className={styles.waitHint}>
+          {EDIT_FIRST_LINE}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -119,10 +157,15 @@ function Outcome(props: { words: string; focus: boolean }) {
 
 export function ProposalCard(props: ProposalCardProps) {
   const { proposal, pending = false, problem = null, answerHref = null, focusOutcome = false, inbox = false } = props;
+  const draft = props.draft ?? null;
+  // The Proposed box is in edit mode: the decision waits until the edit is saved or dropped.
+  const [editing, setEditing] = useState(false);
   const titleId = useId();
   const open = isOpenProposal(proposal);
   const outcome = outcomeLine(proposal);
-  const line = lineParts(proposal);
+  // With a draft kept, the line and the buttons' names say the value Approve would write.
+  const asApproved = draft === null ? proposal : { ...proposal, new_value: draft };
+  const line = lineParts(asApproved);
   // Once the card shows where it stands, "already decided" has said all it had to.
   const shownProblem = !open && problem === ALREADY_DECIDED_LINE ? null : problem;
 
@@ -148,14 +191,22 @@ export function ProposalCard(props: ProposalCardProps) {
         </p>
       )}
 
-      {open && <Values proposal={proposal} />}
+      {open && (
+        <Values
+          proposal={proposal}
+          draft={draft}
+          onDraftChange={props.onDraftChange}
+          onEditingChange={setEditing}
+          pending={pending}
+        />
+      )}
       {open && proposal.reason !== '' && (
         <p className={styles.reason}>
           <span className={tokens.kicker}>{REASON_HEADING}</span>
           <span>{proposal.reason}</span>
         </p>
       )}
-      {open && <Actions proposal={proposal} pending={pending} onDecide={props.onDecide} />}
+      {open && <Actions proposal={asApproved} pending={pending} waiting={editing} onDecide={props.onDecide} />}
 
       {outcome !== null && <Outcome words={outcome} focus={focusOutcome} />}
       {!open && answerHref !== null && (

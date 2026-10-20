@@ -8,7 +8,8 @@
 -- and the two planner tables: the write to the planner is his own, as any planner edit is.
 --
 -- WHAT
---   workspace_proposal_decide(p_id bigint, p_decision text) returns table(state text, applied boolean)
+--   workspace_proposal_decide(p_id bigint, p_decision text, p_value jsonb default null)
+--     returns table(state text, applied boolean)
 --
 --   In one transaction: p_decision must be approve or reject (22023); the proposal is locked (for
 --   update; one the caller cannot see does not exist for him, 22023); one no longer `proposed` is
@@ -20,7 +21,22 @@
 --   For a status, no progress row and a row at not_started are the same value, on both tables, as 204
 --   reads them (119a R2-4): a row Stack created since (a note, say) does not make a status proposal stale.
 --   Then decided_at = now(), and the Inbox item is resolved: state resolved, resolved_at = now(),
---   resolution = {outcome: <state>, proposal_id}.
+--   resolution = {outcome: <state>, proposal_id, edited}.
+--
+-- STACK'S EDIT (W-106; amended in place before the cut-over, so the signature is new rather than a
+-- second overload). On an open card Stack may edit the proposed value before he approves it; the page
+-- then sends p_value, a JSON string, and the approval writes his value instead of the assistant's:
+--   * p_value with reject is refused (22023): there is nothing to edit in a rejection;
+--   * with approve it must fit the field by 204's own rule (workspace_proposal_value_check, 22023 with
+--     204's words), and once the planner value is re-read and found unchanged (the stale check is
+--     against old_value, as without an edit) it must differ from that value (22023, "an edited value
+--     must differ from the planner's"; a status with no row reads as not_started there too);
+--   * a refusal raises, so the whole call rolls back and the proposal stays `proposed`;
+--   * new_value keeps what the assistant proposed; approved_value (203) is what was written: the edit,
+--     or new_value when there was none; it stays null on every outcome but `applied`;
+--   * the Inbox item's resolution says edited: true when the value written was Stack's edit, false
+--     otherwise (also on rejected, stale and expired).
+-- Without p_value the function behaves exactly as before, besides storing approved_value.
 --
 -- THE INBOX-APPLY LOG. 181's trigger `assignment_progress_inbox_apply_log` fires only `WHEN
 -- (CURRENT_USER = 'inbox_apply_runner')`. This function is SECURITY INVOKER and executable by
@@ -51,7 +67,11 @@ begin
                        and a.attname = 'workspace_proposal_id' and not a.attisdropped) then
     raise exception '206: v_workspace_proposals or attention_items.workspace_proposal_id does not exist; apply 205 first';
   end if;
-  if to_regprocedure('public.workspace_proposal_decide(bigint, text)') is not null then
+  if to_regprocedure('public.workspace_proposal_value_check(text, text, jsonb)') is null then
+    raise exception '206: workspace_proposal_value_check does not exist; apply 204 first';
+  end if;
+  if exists (select 1 from pg_proc p
+              where p.pronamespace = 'public'::regnamespace and p.proname = 'workspace_proposal_decide') then
     raise exception '206: workspace_proposal_decide already exists';
   end if;
   if to_regclass('public.v_workspace_runner_proof') is not null then
@@ -59,7 +79,7 @@ begin
   end if;
 end $$;
 
-create function public.workspace_proposal_decide(p_id bigint, p_decision text)
+create function public.workspace_proposal_decide(p_id bigint, p_decision text, p_value jsonb default null)
   returns table (state text, applied boolean)
   language plpgsql security invoker set search_path = public, pg_temp as $$
 #variable_conflict use_column
@@ -70,11 +90,15 @@ declare
   v_fact    boolean;
   v_state   text;
   v_applied boolean := false;
+  v_write   jsonb;   -- the value an approval writes: Stack's edit (p_value) or new_value (W-106)
   v_text    text;
   v_was     jsonb;   -- the value 204 read, a status with no row read as not_started (R2-4)
 begin
   if p_decision is null or p_decision not in ('approve', 'reject') then
     raise exception 'workspace_proposal_decide: the decision must be approve or reject' using errcode = '22023';
+  end if;
+  if p_value is not null and p_decision <> 'approve' then
+    raise exception 'workspace_proposal_decide: an edited value is taken only with approve' using errcode = '22023';
   end if;
 
   select * into v from workspace_proposals w where w.id = p_id for update;
@@ -86,7 +110,13 @@ begin
     raise exception 'proposal % is already %', p_id, v.state using errcode = '55000';
   end if;
 
-  v_text := v.new_value #>> '{}';
+  -- Stack's edit, on an approval that can still be made: it fits the field by 204's rule, or the call
+  -- is refused (22023) and nothing changes.
+  v_write := v.new_value;
+  if p_value is not null and p_decision = 'approve' and now() < v.expires_at then
+    v_write := workspace_proposal_value_check(v.target, v.field, p_value);
+  end if;
+  v_text := v_write #>> '{}';
   v_was := coalesce(v.old_value, 'null'::jsonb);
   if v.field = 'status' and v_was = 'null'::jsonb then v_was := to_jsonb('not_started'::text); end if;
   if now() >= v.expires_at then
@@ -109,6 +139,8 @@ begin
     if v.field = 'status' and v_now = 'null'::jsonb then v_now := to_jsonb('not_started'::text); end if;
     if not v_fact or v_now is distinct from v_was then
       v_state := 'stale';
+    elsif p_value is not null and v_write = v_now then
+      raise exception 'workspace_proposal_decide: an edited value must differ from the planner''s' using errcode = '22023';
     else
       if not coalesce(v_found, false) then
         insert into assignment_progress (assignment_id) values (v.row_id);
@@ -140,6 +172,8 @@ begin
     if v.field = 'status' and v_now = 'null'::jsonb then v_now := to_jsonb('not_started'::text); end if;
     if not v_fact or v_now is distinct from v_was then
       v_state := 'stale';
+    elsif p_value is not null and v_write = v_now then
+      raise exception 'workspace_proposal_decide: an edited value must differ from the planner''s' using errcode = '22023';
     else
       if not coalesce(v_found, false) then
         insert into reading_progress (reading_id) values (v.row_id::bigint);
@@ -154,24 +188,31 @@ begin
     end if;
   end if;
 
-  update workspace_proposals w set state = v_state, decided_at = now() where w.id = p_id;
+  -- approved_value: what was written (W-106), only on applied (203's check).
+  update workspace_proposals w
+     set state = v_state, decided_at = now(), approved_value = case when v_applied then v_write end
+   where w.id = p_id;
 
   update attention_items a
      set state = 'resolved', resolved_at = now(),
-         resolution = jsonb_build_object('outcome', v_state, 'proposal_id', p_id)
+         resolution = jsonb_build_object('outcome', v_state, 'proposal_id', p_id,
+                                         'edited', v_applied and p_value is not null)
    where a.workspace_proposal_id = p_id and a.state = 'open';
 
   return query select v_state, v_applied;
 end $$;
 
-comment on function public.workspace_proposal_decide(bigint, text) is
+comment on function public.workspace_proposal_decide(bigint, text, jsonb) is
   'Stack decides one planner proposal (migration 206, Phase 25b), from the Workspace card or the Inbox '
   'item, which call nothing else. SECURITY INVOKER: it runs under his own row security. p_decision is '
   'approve or reject (22023 otherwise). Locks the proposal; refuses one not proposed with 55000 '
   '"proposal <id> is already <state>"; writes expired past expires_at; reject -> rejected; approve '
   're-reads the planner value and writes the one field (inserting the progress row when there is none) '
-  '-> applied, or writes nothing -> stale when the value changed or the item is gone. Sets decided_at and '
-  'resolves the Inbox item with {outcome, proposal_id}. Returns (state, applied). authenticated only.';
+  '-> applied, or writes nothing -> stale when the value changed or the item is gone. p_value (W-106) is '
+  'Stack''s edit of the proposed value, taken only with approve (22023 otherwise): it must fit the field '
+  '(workspace_proposal_value_check) and differ from the planner''s value (22023), and is written instead '
+  'of new_value. Sets decided_at and approved_value (the value written, on applied only) and resolves the '
+  'Inbox item with {outcome, proposal_id, edited}. Returns (state, applied). authenticated only.';
 
 -- =============================================================================================
 -- v_workspace_runner_proof: pack 25's runner-grants proof as one row of plain columns
@@ -215,14 +256,23 @@ grant select on public.v_workspace_runner_proof to service_role;
 -- =============================================================================================
 -- Privileges and the guard
 -- =============================================================================================
-revoke all on function public.workspace_proposal_decide(bigint, text) from public, anon, authenticated, service_role;
-grant execute on function public.workspace_proposal_decide(bigint, text) to authenticated;
+revoke all on function public.workspace_proposal_decide(bigint, text, jsonb) from public, anon, authenticated, service_role;
+grant execute on function public.workspace_proposal_decide(bigint, text, jsonb) to authenticated;
 
 do $$
 declare
-  f     constant text := 'public.workspace_proposal_decide(bigint, text)';
+  f     constant text := 'public.workspace_proposal_decide(bigint, text, jsonb)';
   v_bad text;
 begin
+  -- One signature (W-106): the edit is an optional third argument; no two-argument overload is left.
+  if (select count(*) from pg_proc p
+       where p.pronamespace = 'public'::regnamespace and p.proname = 'workspace_proposal_decide') <> 1
+     or to_regprocedure('public.workspace_proposal_decide(bigint, text)') is not null then
+    raise exception 'FAIL 206: workspace_proposal_decide has more than one signature';
+  end if;
+  if pg_get_function_arguments(f::regprocedure) is distinct from 'p_id bigint, p_decision text, p_value jsonb DEFAULT NULL::jsonb' then
+    raise exception 'FAIL 206: workspace_proposal_decide takes %', pg_get_function_arguments(f::regprocedure);
+  end if;
   if not exists (select 1 from pg_proc p
                   where p.oid = f::regprocedure and not p.prosecdef
                     and coalesce(p.proconfig, '{}') @> array['search_path=public, pg_temp']) then

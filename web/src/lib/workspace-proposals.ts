@@ -14,7 +14,9 @@
  *     a short month and day, a note as its text; JSON null (no progress row yet) as the planner
  *     shows it: a status reads as not started, a date or a note as "no entry yet";
  *   * THE OUTCOME once decided, and nothing else (Stack, 2026-10-19): "Approved: marked submitted",
- *     "Rejected", "Stale: the row changed", "Expired". An approved date or note names no value;
+ *     "Rejected", "Stale: the row changed", "Expired". An approved note names no value, and an
+ *     approved date names one only from `approved_value`, the value written (W-106: Stack may edit
+ *     the proposed value before approving it; the edit itself is `proposal-draft.ts`'s);
  *   * the refusal of a second decision (SQLSTATE 55000, "proposal <id> is already <state>").
  *
  * Nothing here reads a clock, the cache, the network or the DOM. Every string is a React text node
@@ -68,6 +70,8 @@ export interface WorkspaceProposal {
   reason: string;
   state: ProposalState;
   decided_at: string | null;
+  /** W-106: the value an approval wrote (Stack's edit, or new_value); null until applied. jsonb. */
+  approved_value: unknown;
   /** `expired` once `expires_at` has passed while still `proposed`; else `state`. */
   effective_state: ProposalState;
   attention_item_id: number | null;
@@ -77,7 +81,7 @@ export interface WorkspaceProposal {
 /** The view's columns, by name (no `*`: the select says what the page reads). */
 export const PROPOSAL_COLUMNS =
   'id, created_at, expires_at, request_id, conversation_id, target, row_id, course_id, label, field, ' +
-  'old_value, new_value, reason, state, decided_at, effective_state, attention_item_id, attention_state';
+  'old_value, new_value, reason, state, decided_at, approved_value, effective_state, attention_item_id, attention_state';
 
 /* ---------------------------------------------------------------------------
  * Words
@@ -96,6 +100,8 @@ export const PROPOSAL_LOADING_LINE = 'Reading the proposal…';
 export const PROPOSAL_MISSING_LINE = 'The proposal behind this item could not be found.';
 /** A 55000: the other place decided first; the card is read again and shows where it stands. */
 export const ALREADY_DECIDED_LINE = 'Already decided in the other place; showing where it stands.';
+/** An approved status from the Inbox item alone, when the value written was Stack's edit (W-106). */
+export const EDITED_APPROVAL_LINE = 'Approved with your edit';
 
 const DECIDED_WORDS: Readonly<Record<Exclude<ProposalState, 'proposed' | 'approved' | 'applied'>, string>> = {
   rejected: 'Rejected',
@@ -117,6 +123,8 @@ const MIDDAY_UTC_HOUR = 12;
 const SHORT_DATE = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric' });
 const NO_REASON = 'the database gave no reason';
 const HELD_STATE = /already\s+([a-z]+)/i;
+/** A database refusal names its function first ("workspace_propose: …"); the card leaves the name out. */
+const FUNCTION_PREFIX = /^[a-z][a-z0-9_]*:\s+/;
 
 /* ---------------------------------------------------------------------------
  * Normalising a row
@@ -165,6 +173,7 @@ export function normalizeProposal(row: unknown): WorkspaceProposal | null {
     reason: typeof raw.reason === 'string' ? raw.reason : '',
     state,
     decided_at: textOrNull(raw.decided_at),
+    approved_value: raw.approved_value ?? null,
     effective_state: oneOf(PROPOSAL_STATES, raw.effective_state) ?? state,
     attention_item_id: toRequestId(raw.attention_item_id),
     attention_state: textOrNull(raw.attention_state),
@@ -266,17 +275,31 @@ export function isOpenProposal(proposal: Pick<WorkspaceProposal, 'effective_stat
   return proposal.effective_state === 'proposed';
 }
 
-/** A decided state in words; null for `proposed`. An approval names a status, never a date or a note. */
-export function outcomeWords(state: ProposalState, field: ProposalField, newValue: unknown): string | null {
+/**
+ * A decided state in words; null for `proposed`. An approval names a status, never a note; a date
+ * only when the value written is known (`approved_value`, W-106: "Approved: planned start Oct 22").
+ */
+export function outcomeWords(
+  state: ProposalState,
+  field: ProposalField,
+  newValue: unknown,
+  approvedValue: unknown = null,
+): string | null {
   if (state === 'proposed') return null;
   if (state === 'applied' || state === 'approved') {
-    return field === 'status' ? `Approved: marked ${valueWords('status', newValue)}` : APPROVED_WITHOUT_VALUE[field];
+    const written = approvedValue ?? newValue;
+    if (field === 'status') return `Approved: marked ${valueWords('status', written)}`;
+    const date = DATE_FIELDS.has(field) && typeof approvedValue === 'string' ? shortDate(approvedValue) : null;
+    if (date !== null) return `Approved: planned ${field === 'planned_start' ? 'start' : 'finish'} ${date}`;
+    return APPROVED_WITHOUT_VALUE[field];
   }
   return DECIDED_WORDS[state];
 }
 
-export function outcomeLine(proposal: Pick<WorkspaceProposal, 'effective_state' | 'field' | 'new_value'>): string | null {
-  return outcomeWords(proposal.effective_state, proposal.field, proposal.new_value);
+export function outcomeLine(
+  proposal: Pick<WorkspaceProposal, 'effective_state' | 'field' | 'new_value'> & Partial<Pick<WorkspaceProposal, 'approved_value'>>,
+): string | null {
+  return outcomeWords(proposal.effective_state, proposal.field, proposal.new_value, proposal.approved_value ?? null);
 }
 
 /* ---------------------------------------------------------------------------
@@ -306,7 +329,8 @@ export function heldStateOf(error: unknown): ProposalState | null {
 /** What the card says when a decision did not go through. */
 export function decideProblemLine(error: unknown): string {
   if (isAlreadyDecided(error)) return ALREADY_DECIDED_LINE;
-  return `That decision was not saved: ${messageOf(error) ?? NO_REASON}. Try again.`;
+  const message = messageOf(error)?.replace(FUNCTION_PREFIX, '') || null;
+  return `That decision was not saved: ${message ?? NO_REASON}. Try again.`;
 }
 
 /** What the page says when the proposals could not be read. */
@@ -361,5 +385,8 @@ export function itemOutcomeLine(item: { state: string; resolution: unknown; fiel
   const state = itemOutcomeState(item);
   const field = oneOf(PROPOSAL_FIELDS, item.field);
   if (state === null || field === null) return null;
+  // W-106: an approval of Stack's edit wrote a value the item does not hold (to_value is the
+  // assistant's), so a status says only that it was his edit.
+  if (state === 'applied' && field === 'status' && asRecord(item.resolution)?.edited === true) return EDITED_APPROVAL_LINE;
   return outcomeWords(state, field, item.to_value);
 }

@@ -146,6 +146,22 @@ describe('decideProposal', () => {
     expect(calls).toEqual([{ method: 'rpc', args: ['workspace_proposal_decide', { p_id: 7, p_decision: 'approve' }] }]);
   });
 
+  it('sends Stack’s edit as p_value with an approval, and only when there is one (W-106)', async () => {
+    answer.data = [{ state: 'applied', applied: true }];
+    await decideProposal({ id: 7, decision: 'approve', value: 'graded' });
+    await decideProposal({ id: 7, decision: 'approve', value: undefined });
+    expect(calls).toEqual([
+      { method: 'rpc', args: ['workspace_proposal_decide', { p_id: 7, p_decision: 'approve', p_value: 'graded' }] },
+      { method: 'rpc', args: ['workspace_proposal_decide', { p_id: 7, p_decision: 'approve' }] },
+    ]);
+  });
+
+  it('refuses an edit with a rejection, or an empty edit, before anything is sent', async () => {
+    await expect(decideProposal({ id: 7, decision: 'reject', value: 'graded' })).rejects.toThrow(/edit/);
+    await expect(decideProposal({ id: 7, decision: 'approve', value: '' })).rejects.toThrow(/edit/);
+    expect(calls).toEqual([]);
+  });
+
   it('refuses a bad id or decision before anything is sent', async () => {
     await expect(decideProposal({ id: 0, decision: 'approve' })).rejects.toThrow(/proposal id/);
     await expect(decideProposal({ id: 7, decision: 'maybe' as 'approve' })).rejects.toThrow(/decision/);
