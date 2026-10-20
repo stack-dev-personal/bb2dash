@@ -22,6 +22,7 @@
  */
 
 import { asRecord } from './json-record';
+import type { ProgressTarget } from './progress-cache';
 import { statusLabel, STATUS_LABEL, type ProgressStatus } from './progress-status';
 import { parseConversationId, toRequestId } from './queries.workspace';
 
@@ -173,6 +174,14 @@ export function normalizeProposal(row: unknown): WorkspaceProposal | null {
 /** Every row of a read that normalises, in the order read. */
 export function normalizeProposals(data: unknown): WorkspaceProposal[] {
   return (Array.isArray(data) ? data : []).flatMap((row: unknown) => normalizeProposal(row) ?? []);
+}
+
+/** The planner row an approval writes, as the planner's caches name it (`progress-cache.ts`). */
+export function progressTargetOf(proposal: Pick<WorkspaceProposal, 'target' | 'row_id'>): ProgressTarget {
+  return {
+    item_kind: proposal.target === 'assignment_progress' ? 'assignment' : 'reading',
+    item_id: proposal.row_id,
+  };
 }
 
 /** The rows by request id, each request's cards in id order. */

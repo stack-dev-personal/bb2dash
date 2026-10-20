@@ -22,6 +22,9 @@ vi.mock('next/link', () => ({
 const { AnswerProposals, DecidableProposal } = await import('@/components/workspace/DecidableProposal');
 const { proposalKeys } = await import('@/lib/queries.workspace-proposals');
 const { syncKeys } = await import('@/lib/queries.sync');
+const { COURSE_STREAM_KEY, COURSE_WORK_ITEMS_KEY, WORK_ITEMS_KEY, assignmentProgressKey } = await import(
+  '@/lib/progress-cache'
+);
 const { ALREADY_DECIDED_LINE, normalizeProposal } = await import('@/lib/workspace-proposals');
 
 function proposal(over: Record<string, unknown> = {}) {
@@ -78,6 +81,23 @@ describe('DecidableProposal', () => {
     await waitFor(() => expect(keys()).toContainEqual(proposalKeys.all()));
     expect(keys()).toContainEqual(syncKeys.attentionAll());
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('reads the planner’s own caches again after a decision, so every screen shows the new value (R2-3)', async () => {
+    rpc.mockResolvedValue({ data: [{ state: 'applied', applied: true }], error: null });
+    const { keys } = setup(<DecidableProposal proposal={proposal()} />);
+    fireEvent.click(screen.getByRole('button', { name: /^Approve/ }));
+    await waitFor(() => expect(keys()).toContainEqual(assignmentProgressKey('ECN.304/problem-set-4')));
+    expect(keys()).toContainEqual(WORK_ITEMS_KEY);
+    expect(keys()).toContainEqual(COURSE_STREAM_KEY);
+  });
+
+  it('reads a reading’s planner caches again after a 55000 too', async () => {
+    rpc.mockResolvedValue({ data: null, error: { code: '55000', message: 'proposal 7 is already applied' } });
+    const { keys } = setup(<DecidableProposal proposal={proposal({ target: 'reading_progress', row_id: 31 })} />);
+    fireEvent.click(screen.getByRole('button', { name: /^Approve/ }));
+    await waitFor(() => expect(keys()).toContainEqual(WORK_ITEMS_KEY));
+    expect(keys()).toContainEqual(COURSE_WORK_ITEMS_KEY);
   });
 
   it('on a 55000 reads both places again and says it was already decided', async () => {

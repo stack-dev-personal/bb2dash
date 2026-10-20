@@ -18,6 +18,7 @@
 
 import { queryOptions, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { asRecord } from './json-record';
+import { invalidateProgressCaches, type ProgressTarget } from './progress-cache';
 import { invalidateInboxCaches, untypedClient } from './queries.sync';
 import { parseConversationId, toRequestId } from './queries.workspace';
 import {
@@ -170,23 +171,33 @@ export async function decideProposal(input: DecideInput): Promise<DecideResult> 
   return decideResultOf(data);
 }
 
-/** The proposals, wherever they are read, and the Inbox's three caches. */
-export function invalidateProposalCaches(queryClient: QueryClient): void {
+/**
+ * The proposals, wherever they are read, and the Inbox's three caches; with the planner row an
+ * approval may have written, the planner's own caches too (R2-3), as a planner edit refreshes them
+ * (`useSavePlanner`): Home, the tracker, the course Stream and the popout show the new value at once.
+ */
+export function invalidateProposalCaches(queryClient: QueryClient, progress?: ProgressTarget): void {
   void queryClient.invalidateQueries({ queryKey: proposalKeys.all() });
   invalidateInboxCaches(queryClient);
+  if (progress !== undefined) invalidateProgressCaches(queryClient, progress);
+}
+
+/** One card's decision, and the planner row its proposal names. */
+export interface DecideVariables extends DecideInput {
+  progress: ProgressTarget;
 }
 
 /**
- * One card's decision. On success, and on a 55000 (the other place decided first), both places are
- * read again; any other failure leaves the caches alone and the card says why.
+ * One card's decision. On success, and on a 55000 (the other place decided first), both places and
+ * the planner's caches are read again; any other failure leaves the caches alone and the card says why.
  */
 export function useDecideProposal() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: decideProposal,
-    onSuccess: () => invalidateProposalCaches(queryClient),
-    onError: (error) => {
-      if (isAlreadyDecided(error)) invalidateProposalCaches(queryClient);
+    mutationFn: ({ id, decision }: DecideVariables) => decideProposal({ id, decision }),
+    onSuccess: (_result, variables) => invalidateProposalCaches(queryClient, variables.progress),
+    onError: (error, variables) => {
+      if (isAlreadyDecided(error)) invalidateProposalCaches(queryClient, variables.progress);
     },
   });
 }
