@@ -140,11 +140,26 @@ describe('proposals under an answer', () => {
 
   it('says a failed read once, above the column', async () => {
     seed('done', []);
-    fake.state.readErrors = { ...fake.state.readErrors, [VIEW]: { code: '42P01', message: 'relation does not exist' } };
+    fake.state.readErrors = { ...fake.state.readErrors, [VIEW]: { code: '42501', message: 'permission denied' } };
     open();
     const alerts = await screen.findAllByRole('alert');
     expect(alerts.map((alert) => alert.textContent)).toContain(
-      'Could not read the proposed planner changes: relation does not exist',
+      'Could not read the proposed planner changes: permission denied',
     );
+  });
+
+  it('says nothing while the view is not on the database yet (before the cut-over)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    seed('done', []);
+    fake.state.readErrors = {
+      ...fake.state.readErrors,
+      [VIEW]: { code: 'PGRST205', message: "Could not find the table 'public.v_workspace_proposals' in the schema cache" },
+    };
+    const { container } = open();
+    await waitFor(() => expect(container.querySelector('[data-answer-text]')).not.toBeNull());
+    await waitFor(() => expect(fake.state.log).toContain(`from:${VIEW}`));
+    expect(screen.queryAllByRole('alert')).toHaveLength(0);
+    expect(container.querySelector('[data-proposal]')).toBeNull();
+    warn.mockRestore();
   });
 });

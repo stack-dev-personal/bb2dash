@@ -17,6 +17,7 @@ import { makeAttentionItem } from './factories';
 
 const CONVERSATION = '11111111-2222-4333-8444-555555555555';
 const tables: Record<string, unknown[]> = {};
+const tableErrors: Record<string, unknown> = {};
 const rpc = vi.fn();
 const reads: { table: string; filters: unknown[][] }[] = [];
 
@@ -32,7 +33,8 @@ function chain(table: string) {
   builder.maybeSingle = async () => ({ data: (tables[table] ?? [])[0] ?? null, error: null });
   builder.then = (resolve: (value: unknown) => unknown) => {
     reads.push({ table, filters });
-    return resolve({ data: tables[table] ?? [], error: null });
+    const error = tableErrors[table] ?? null;
+    return resolve({ data: error ? null : (tables[table] ?? []), error });
   };
   return builder;
 }
@@ -105,6 +107,7 @@ function withClient(node: React.ReactNode) {
 
 beforeEach(() => {
   for (const key of Object.keys(tables)) delete tables[key];
+  for (const key of Object.keys(tableErrors)) delete tableErrors[key];
   reads.length = 0;
   rpc.mockReset();
 });
@@ -187,6 +190,25 @@ describe('InboxProposalCard', () => {
     expect(screen.getByText(PROPOSAL_MISSING_LINE)).toBeTruthy();
     expect(screen.getByText('Approved: marked submitted')).toBeTruthy();
     expect(screen.getByRole('link', { name: /Open the answer/ })).toBeTruthy();
+  });
+});
+
+describe('the Inbox screen, when the proposals cannot be read', () => {
+  it('says nothing while the view is not on the database yet: the item shows what it alone knows', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    tables.attention_items = [proposalItem()];
+    tableErrors.v_workspace_proposals = { code: '42P01', message: 'relation "v_workspace_proposals" does not exist' };
+    withClient(<Inbox />);
+    expect(await screen.findByText(PROPOSAL_MISSING_LINE)).toBeTruthy();
+    expect(screen.queryAllByRole('alert')).toHaveLength(0);
+    warn.mockRestore();
+  });
+
+  it('says any other failure on the item, as an alert', async () => {
+    tables.attention_items = [proposalItem()];
+    tableErrors.v_workspace_proposals = { code: '42501', message: 'permission denied' };
+    withClient(<Inbox />);
+    expect((await screen.findByRole('alert')).textContent).toBe('Could not read the proposed planner changes: permission denied');
   });
 });
 

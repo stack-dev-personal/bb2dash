@@ -103,9 +103,20 @@ describe('the proposals of a conversation', () => {
     expect(conversationProposalsOptions('nope').enabled).toBe(false);
   });
 
-  it('throws the database’s error', async () => {
-    answer.error = { message: 'relation does not exist', code: '42P01' };
-    await expect(run(conversationProposalsOptions(CONVERSATION))).rejects.toMatchObject({ code: '42P01' });
+  it('throws any other database error, so the page says it', async () => {
+    answer.error = { message: 'permission denied', code: '42501' };
+    await expect(run(conversationProposalsOptions(CONVERSATION))).rejects.toMatchObject({ code: '42501' });
+  });
+
+  it('reads a view that does not exist yet (before the cut-over) as no proposals, and logs it once', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    for (const code of ['PGRST205', '42P01', 'PGRST202', '42883']) {
+      answer.error = { message: 'Could not find the table', code };
+      await expect(run(conversationProposalsOptions(CONVERSATION))).resolves.toEqual([]);
+      await expect(run(proposalsByIdsOptions([7]))).resolves.toEqual([]);
+    }
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
   });
 });
 

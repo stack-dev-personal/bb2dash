@@ -47,6 +47,33 @@ export const proposalKeys = {
   ids: (ids: readonly number[]) => ['workspace', 'proposals', 'ids', [...ids]] as const,
 } as const;
 
+/**
+ * The codes a read gets while 203–206 are not on the database yet: PostgREST's "not in the schema
+ * cache" for a relation (PGRST205) or a function (PGRST202), and Postgres's undefined table (42P01)
+ * or function (42883). Vercel deploys on merge and the migrations go on at the cut-over, so for that
+ * window a missing view is "no proposals", not a failure to show on every conversation (the PM,
+ * 25b round 2). Every other error is thrown and said.
+ */
+const NOT_YET_THERE: ReadonlySet<string> = new Set(['PGRST205', 'PGRST202', '42P01', '42883']);
+
+let notYetLogged = false;
+
+function isNotYetThere(error: unknown): boolean {
+  const code = asRecord(error)?.code;
+  return typeof code === 'string' && NOT_YET_THERE.has(code);
+}
+
+/** No rows for a view that does not exist yet (logged once a page load); the error itself otherwise. */
+function rowsOrThrow(data: unknown, error: unknown): WorkspaceProposal[] {
+  if (!error) return normalizeProposals(data);
+  if (!isNotYetThere(error)) throw error;
+  if (!notYetLogged) {
+    notYetLogged = true;
+    console.warn(`${VIEW} is not on the database yet; showing no proposals`, error);
+  }
+  return [];
+}
+
 /** Distinct positive ids, ascending: the order the page holds them in never changes a key. */
 function sortedIds(ids: readonly number[]): number[] {
   return [...new Set(ids.filter((id) => toRequestId(id) === id))].sort((left, right) => left - right);
@@ -70,8 +97,7 @@ export function conversationProposalsOptions(conversationId: string | null) {
         .select(PROPOSAL_COLUMNS)
         .eq('conversation_id', id)
         .order('id', { ascending: true });
-      if (error) throw error;
-      return normalizeProposals(data);
+      return rowsOrThrow(data, error);
     },
   });
 }
@@ -89,8 +115,7 @@ export function proposalsByIdsOptions(ids: readonly number[]) {
         .select(PROPOSAL_COLUMNS)
         .in('id', wanted)
         .order('id', { ascending: true });
-      if (error) throw error;
-      return normalizeProposals(data);
+      return rowsOrThrow(data, error);
     },
   });
 }
