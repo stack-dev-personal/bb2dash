@@ -492,6 +492,13 @@ const countOf = (source: string, pattern: RegExp): number => source.match(patter
  * * A context the file opens itself has no fixture: each `newContext(` needs its own
  *   `guardWrites22(`, and `browser.newPage(` (a context nobody can guard first) is not used.
  */
+/**
+ * Acceptance packs written after Phase 22 (`just accept <NN>`). They run against the live site and
+ * write as Stack on purpose (pack 25 approves and rejects proposals and restores a note), so the walk
+ * box's write guard cannot hold them; `accept.lib.ts` and the run's host proofs guard them instead.
+ */
+const ACCEPTANCE_PACK_FILES: ReadonlySet<string> = new Set(['accept25.lib.ts', 'accept25.spec.ts']);
+
 function problemsOf(name: string, source: string): string[] {
   const problems: string[] = [];
   if (namedImports(source, OLD_GUARD_MODULE).includes('guardWrites') || takesWhole(source, OLD_GUARD_PATH)) {
@@ -571,7 +578,9 @@ describe('an e2e file from Phase 22 on', () => {
       .filter((file) => file.endsWith('.ts') && !file.endsWith('.d.ts') && !/(^|\/)(\.auth|\.results|node_modules)\//.test(file));
     expect(files).toContain(LIB_FILE);
     expect(files).toContain('harness.spec.ts');
-    const fromPhase22On = files.filter((file) => !BEFORE_PHASE_22.has(file) && file !== LIB_FILE);
+    const fromPhase22On = files.filter(
+      (file) => !BEFORE_PHASE_22.has(file) && !ACCEPTANCE_PACK_FILES.has(file) && file !== LIB_FILE,
+    );
     for (const file of fromPhase22On) {
       expect(problemsOf(file, readFileSync(join(E2E_DIR, file), 'utf8')), `web/e2e/${file}`).toEqual([]);
     }
