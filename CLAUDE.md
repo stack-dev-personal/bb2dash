@@ -184,8 +184,9 @@ Supabase project: `goultdzqcavefcgnifdy` (us-east-1, Postgres 17). Full access v
   **Two runners (Phase 25b, from its cut-over):** `workspace` and `workspace-2` (`extends: workspace`, the same
   image `bb2dash-workspace:local` with no build of its own, the same secrets, network and egress port 3128)
   claim through `workspace_claim_v3(runner, 2)` (202): at most two answers at once across both, one open request
-  per conversation. Each names itself by `WORKSPACE_RUNNER_NAME` (`workspace@workspace`,
-  `workspace@workspace-2`) and beats into `workspace_runner_beats`; `v_workspace_status.runners_alive` counts
+  per conversation. Each names itself by `WORKSPACE_RUNNER_NAME` (`workspace@bb2dash-workspace`,
+  `workspace@bb2dash-workspace-2`: `<compose project>-<service>`, so a test project's runner never claims under a
+  live name, R2-2) and beats into `workspace_runner_beats`; `v_workspace_status.runners_alive` counts
   beats under 90 s, and the doctor has a row for each and a `workspace runners` row. Build `workspace` first,
   then `up -d workspace-2`; each alone, by name, never during a turn.
   **Egress (Phase 25a, from its cut-over):** `workspace`, `apply` and `workspace-ingest` reach the internet only
