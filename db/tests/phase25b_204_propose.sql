@@ -20,10 +20,11 @@
 --      not_started where there is no progress row); the same field of a row twice in one request
 --   3. the value check 204 and 206 share, `workspace_proposal_value_check(target, field, value)`
 --      (W-106, Stack's edit of a proposed value): SECURITY INVOKER with a pinned path, returns jsonb,
---      executable by authenticated and workspace_runner alone, and not one of the runner's SECURITY
---      DEFINER functions (the fence above still reads fourteen); as authenticated it returns each
---      value that fits its field as given, and refuses each that does not with 22023 and 204's own
---      message
+--      executable by authenticated alone (206's caller; 204, a SECURITY DEFINER of postgres, calls it
+--      as postgres, so the runner needs no grant and holds none: round 2), and not one of the runner's
+--      SECURITY DEFINER functions (the fence above still reads fourteen); as authenticated it returns
+--      each value that fits its field as given, and refuses each that does not with 22023 and 204's
+--      own message; section 1's proposals, filed by the runner through 204, show 204 still reaches it
 --
 -- Every call is made under `set local role workspace_runner` (142's membership), the way the runner
 -- calls it; setup rows are written as the session role. All data is synthetic. Nothing is committed.
@@ -377,11 +378,12 @@ begin
     from (values ('public'), ('anon'), ('authenticated'), ('service_role'), ('db_test_runner'), ('workspace_runner'),
                  ('sync_runner'), ('inbox_apply_runner'), ('workspace_ingest_runner')) as w(who)
    where has_function_privilege(w.who::name, f, 'execute');
-  if v_got is distinct from 'authenticated, workspace_runner' then
-    v_fail := v_fail || format('the check is executable by [%s], not authenticated and workspace_runner', v_got);
+  if v_got is distinct from 'authenticated' then
+    v_fail := v_fail || format('the check is executable by [%s], not authenticated alone', v_got);
   end if;
-  if pg_temp.w106_check('anon', 'assignment_progress', 'status', '"graded"') not like '42501 %' then
-    v_fail := v_fail || 'anon can call the check'::text;
+  if pg_temp.w106_check('anon', 'assignment_progress', 'status', '"graded"') not like '42501 %'
+     or pg_temp.w106_check('workspace_runner', 'assignment_progress', 'status', '"graded"') not like '42501 %' then
+    v_fail := v_fail || 'anon or the runner can call the check directly'::text;
   end if;
 
   -- What fits its field comes back as given.
@@ -398,9 +400,9 @@ begin
     v_got := pg_temp.w106_check('authenticated', c.target, c.field, c.val::jsonb);
     if v_got is distinct from c.val then v_fail := v_fail || format('%s %s %s: %s', c.target, c.field, c.val, v_got); end if;
   end loop;
-  v_got := pg_temp.w106_check('workspace_runner', 'assignment_progress', 'notes', to_jsonb(repeat('n', 2000)));
+  v_got := pg_temp.w106_check('authenticated', 'assignment_progress', 'notes', to_jsonb(repeat('n', 2000)));
   if v_got is distinct from to_jsonb(repeat('n', 2000))::text then
-    v_fail := v_fail || 'a 2,000-character note is refused for the runner'::text;
+    v_fail := v_fail || 'a 2,000-character note is refused'::text;
   end if;
 
   -- What does not fit is refused with 22023 and 204's own words.

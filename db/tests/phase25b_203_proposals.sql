@@ -228,6 +228,23 @@ begin
            to_jsonb(repeat('n', 2000))::text, repeat('r', 500), 'applied', 'now()',
            quote_literal(to_jsonb(repeat('a', 2000))::text) || '::jsonb'));
   if v_got <> 'ok:1' then v_fail := v_fail || format('a 2,000-character note: %s', v_got); end if;
+  -- Once written, approved_value stays (W-106 round 2): no one rewrites it, the owner included (55000);
+  -- writing the same value again, or anything else on the row, is not a rewrite.
+  v_got := pg_temp.w104_try(null, null,
+    'update public.workspace_proposals set approved_value = ''"b"'' where row_id = ''ECN.304/w104-203-edge''');
+  if v_got <> '55000' then v_fail := v_fail || format('approved_value rewritten by the session: %s, not 55000', v_got); end if;
+  v_got := pg_temp.w104_try('authenticated', v_owner,
+    'update public.workspace_proposals set approved_value = ''"b"'' where row_id = ''ECN.304/w104-203-edge''');
+  if v_got <> '55000' then v_fail := v_fail || format('approved_value rewritten by the owner: %s, not 55000', v_got); end if;
+  v_got := pg_temp.w104_try('authenticated', v_owner,
+    'update public.workspace_proposals set approved_value = null, state = ''rejected'' where row_id = ''ECN.304/w104-203-edge''');
+  if v_got <> '55000' then v_fail := v_fail || format('approved_value cleared by the owner: %s, not 55000', v_got); end if;
+  v_got := pg_temp.w104_try('authenticated', v_owner,
+    'update public.workspace_proposals set approved_value = approved_value, decided_at = now() where row_id = ''ECN.304/w104-203-edge''');
+  if v_got <> 'ok:1' then v_fail := v_fail || format('the same approved_value again: %s', v_got); end if;
+  if (select approved_value #>> '{}' from workspace_proposals where row_id = 'ECN.304/w104-203-edge') <> repeat('a', 2000) then
+    v_fail := v_fail || 'approved_value changed'::text;
+  end if;
 
   -- 3. Row security.
   if pg_temp.w104_try('authenticated', v_owner,

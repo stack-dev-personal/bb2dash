@@ -40,8 +40,10 @@
 -- so that 206 holds Stack's edit (p_value) to exactly the rule the assistant's value met here: the
 -- same refusals with the same words (22023, "workspace_propose: ..."), and the value returned as given.
 -- It also refuses a target or a field outside the list, so it stands alone when 206 calls it. It is
--- SECURITY INVOKER with a pinned path, reads no table, and is executable by workspace_runner (204's
--- caller) and authenticated (206 runs as Stack) alone. 204's behaviour is unchanged: its checks still
+-- SECURITY INVOKER with a pinned path, reads no table, and is executable by authenticated alone (206
+-- runs as Stack). workspace_runner needs no grant (round 2): 204 is a SECURITY DEFINER of postgres, and
+-- a function it calls is checked against postgres, not against the runner that called 204; the runner
+-- cannot call the check directly. 204's behaviour is unchanged: its checks still
 -- run in the order above (2 stays here, before the fact row is read).
 --
 -- workspace_runner goes from THIRTEEN SECURITY DEFINER functions (202) to FOURTEEN and still holds no
@@ -125,7 +127,7 @@ comment on function public.workspace_proposal_value_check(text, text, jsonb) is
   'assignment only) or a note of 1 to 2,000 characters that is not only blanks (notes). Returns the '
   'value as given, or raises 22023 with workspace_propose''s own words. Shared by workspace_propose '
   '(the assistant''s value) and workspace_proposal_decide (Stack''s edit). SECURITY INVOKER, reads no '
-  'table; workspace_runner and authenticated only.';
+  'table; authenticated only (204 calls it as its definer).';
 
 create function public.workspace_propose(
     p_request_id bigint, p_runner text, p_target text, p_row_id text, p_field text,
@@ -282,7 +284,7 @@ revoke all on function public.workspace_propose(bigint, text, text, text, text, 
 grant execute on function public.workspace_propose(bigint, text, text, text, text, jsonb, text) to workspace_runner;
 revoke all on function public.workspace_proposal_value_check(text, text, jsonb)
   from public, anon, authenticated, service_role;
-grant execute on function public.workspace_proposal_value_check(text, text, jsonb) to workspace_runner, authenticated;
+grant execute on function public.workspace_proposal_value_check(text, text, jsonb) to authenticated;
 
 do $$
 declare
@@ -292,7 +294,7 @@ declare
   v_bad text;
 begin
   -- (0) The shared value check (W-106): SECURITY INVOKER with a pinned path, returning jsonb, and
-  --     executable by workspace_runner and authenticated alone among the client roles.
+  --     executable by authenticated alone among the client roles (204 calls it as postgres).
   if not exists (select 1 from pg_proc p
                   where p.oid = g::regprocedure and not p.prosecdef
                     and coalesce(p.proconfig, '{}') @> array['search_path=public, pg_temp']) then
@@ -305,8 +307,8 @@ begin
     from (values ('public'), ('anon'), ('authenticated'), ('service_role'), ('workspace_runner'), ('sync_runner'),
                  ('inbox_apply_runner'), ('workspace_ingest_runner')) as w(who)
    where has_function_privilege(w.who::name, g, 'execute');
-  if v_got is distinct from 'authenticated, workspace_runner' then
-    raise exception 'FAIL 204: workspace_proposal_value_check is executable by [%], not authenticated and workspace_runner', v_got;
+  if v_got is distinct from 'authenticated' then
+    raise exception 'FAIL 204: workspace_proposal_value_check is executable by [%], not authenticated alone', v_got;
   end if;
 
   -- (a) The fourteen are exactly the SECURITY DEFINER functions workspace_runner can execute.

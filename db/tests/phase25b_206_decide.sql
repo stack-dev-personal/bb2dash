@@ -27,7 +27,8 @@
 --      new_value and edited: false (sections 1 and 4); an edit that does not fit its field, or equals
 --      what the planner has (a status with no row reads as not_started), is refused with 22023 and
 --      changes nothing; an edit with a reject is refused with 22023 and changes nothing; an edit on a
---      row that changed since the proposal still finds it stale and writes nothing
+--      row that changed since the proposal still finds it stale and writes nothing; an edit on an
+--      expired proposal is never looked at: expired, nothing written (round 2)
 --
 -- Proposals are filed through 204 as the runner; every decision is made as the owner under `set local
 -- role authenticated`, the way the page calls it. All data is synthetic. Nothing is committed.
@@ -387,7 +388,8 @@ begin
          ('ECN.304/w106-e2', 'ECN.304', 'W106 Edit 2', 'homework', '2026-11-12 14:00+00'),
          ('ECN.304/w106-e3', 'ECN.304', 'W106 Edit 3', 'homework', '2026-11-13 14:00+00'),
          ('ECN.304/w106-e4', 'ECN.304', 'W106 Edit 4', 'homework', '2026-11-14 14:00+00'),
-         ('ECN.304/w106-e5', 'ECN.304', 'W106 Edit 5', 'homework', '2026-11-15 14:00+00');
+         ('ECN.304/w106-e5', 'ECN.304', 'W106 Edit 5', 'homework', '2026-11-15 14:00+00'),
+         ('ECN.304/w106-e6', 'ECN.304', 'W106 Edit 6', 'homework', '2026-11-16 14:00+00');
   insert into assignment_progress (assignment_id, status, planned_finish)
   values ('ECN.304/w106-e3', 'in_progress', date '2026-10-30');
   insert into assignment_progress (assignment_id, notes) values ('ECN.304/w106-e5', 'his note');
@@ -398,6 +400,12 @@ begin
     ('e_date',   pg_temp.w104_propose(v_req, 'assignment_progress', 'ECN.304/w106-e3', 'planned_finish', '"2026-11-01"')::text),
     ('e_bad',    pg_temp.w104_propose(v_req, 'assignment_progress', 'ECN.304/w106-e4', 'status', '"submitted"')::text),
     ('e_stale',  pg_temp.w104_propose(v_req, 'assignment_progress', 'ECN.304/w106-e5', 'notes', '"proposed"')::text);
+  -- An expired one (round 2): an edit sent with it is never looked at.
+  v_req := pg_temp.w104_req('w106 206 edit expired');
+  insert into _w104 values
+    ('e_exp', pg_temp.w104_propose(v_req, 'assignment_progress', 'ECN.304/w106-e6', 'status', '"submitted"')::text);
+  update workspace_proposals set created_at = now() - interval '8 days', expires_at = now() - interval '1 second'
+   where id = (select v::bigint from _w104 where k = 'e_exp');
 end $$;
 
 do $$
@@ -407,6 +415,7 @@ declare
   p_date   constant bigint := (select v::bigint from _w104 where k = 'e_date');
   p_bad    constant bigint := (select v::bigint from _w104 where k = 'e_bad');
   p_stale  constant bigint := (select v::bigint from _w104 where k = 'e_stale');
+  p_exp    constant bigint := (select v::bigint from _w104 where k = 'e_exp');
   v_owner  constant text   := (select public.app_owner()::text);
   v_fail   text[] := '{}';
   v_got    text;
@@ -504,6 +513,24 @@ begin
         is distinct from jsonb_build_object('outcome', 'stale', 'proposal_id', p_stale, 'edited', false) then
     v_fail := v_fail || format('8e stale: %s', v_got);
   end if;
+
+  -- 8f. Expired (round 2): an edit with a reject is still refused (22023) and changes nothing; an
+  --     approval with an edit, even one that would not fit, is expired as any decision is: nothing
+  --     written, no approved_value, edited false; a later edit is refused with 55000.
+  v_got := pg_temp.w106_decide(p_exp, 'reject', '"graded"');
+  if v_got not like '22023 %' or (select w.state from workspace_proposals w where w.id = p_exp) <> 'proposed' then
+    v_fail := v_fail || format('8f reject with an edit on an expired proposal: %s', v_got);
+  end if;
+  v_got := pg_temp.w106_decide(p_exp, 'approve', '"done"');
+  if v_got is distinct from 'expired|false'
+     or exists (select 1 from assignment_progress p where p.assignment_id = 'ECN.304/w106-e6')
+     or (select w.approved_value from workspace_proposals w where w.id = p_exp) is not null
+     or (select i.resolution from attention_items i where i.workspace_proposal_id = p_exp)
+        is distinct from jsonb_build_object('outcome', 'expired', 'proposal_id', p_exp, 'edited', false) then
+    v_fail := v_fail || format('8f approve with an edit on an expired proposal: %s', v_got);
+  end if;
+  v_got := pg_temp.w106_decide(p_exp, 'approve', '"graded"');
+  if v_got not like '55000 %already expired%' then v_fail := v_fail || format('8f an edit after expiry: %s', v_got); end if;
 
   if cardinality(v_fail) > 0 then
     raise exception 'FAIL phase25b_206 (8): %', array_to_string(v_fail, '; ');

@@ -37,8 +37,8 @@
 -- select, and update only the three columns a decision writes (state, decided_at, approved_value); 206
 -- is the one caller that does. db_test_runner gets the writes its units make (brief 95, "The role db_test_runner").
 --
--- Additive: one table with its indexes and policies. No earlier object changes. No password, key or
--- DSN is in this file.
+-- Additive: one table with its indexes and policies, and the trigger that keeps approved_value once
+-- written (W-106 round 2). No earlier object changes. No password, key or DSN is in this file.
 
 do $$
 begin
@@ -154,6 +154,34 @@ create policy workspace_proposals_owner_update on public.workspace_proposals
   with check ((select auth.uid()) = (select public.app_owner()));
 
 -- =============================================================================================
+-- 2b. approved_value is written once (W-106 round 2)
+-- =============================================================================================
+-- authenticated may update approved_value (206 runs as Stack and writes it), so nothing but this
+-- trigger stops a later PATCH from rewriting the record of what an approval wrote. Once it holds a
+-- value it keeps it: any other value, null included, is refused with 55000. Every other update is left
+-- alone: R2-6's owner PATCH of state, the expiry sweep (it touches only proposed rows, whose
+-- approved_value is null) and 206's own single write.
+create function public.workspace_proposals_approved_value_kept()
+  returns trigger
+  language plpgsql security invoker set search_path = public, pg_temp as $$
+begin
+  raise exception 'workspace_proposals: the approved value of proposal % is written once', old.id
+    using errcode = '55000';
+end $$;
+
+comment on function public.workspace_proposals_approved_value_kept() is
+  'Trigger function (migration 203, W-106 round 2): refuses (55000) an update that changes '
+  'workspace_proposals.approved_value once it holds a value. Fired only by its trigger''s WHEN.';
+
+revoke all on function public.workspace_proposals_approved_value_kept() from public, anon, authenticated, service_role;
+
+create trigger workspace_proposals_approved_value_kept
+  before update on public.workspace_proposals
+  for each row
+  when (old.approved_value is not null and new.approved_value is distinct from old.approved_value)
+  execute function public.workspace_proposals_approved_value_kept();
+
+-- =============================================================================================
 -- 3. Privileges and the guard
 -- =============================================================================================
 -- The project's default ACL hands a new table to anon, authenticated and service_role: take it back,
@@ -219,5 +247,25 @@ begin
      or not has_table_privilege('service_role', 'public.workspace_proposals', 'select')
      or has_table_privilege('service_role', 'public.workspace_proposals', 'insert, update, delete, truncate') then
     raise exception 'FAIL 203: workspace_proposals grants are not select (authenticated, service_role) and update (state, decided_at, approved_value) for authenticated';
+  end if;
+end $$;
+
+-- (d) The approved value is kept once written (W-106 round 2): the trigger, its WHEN, and a function
+--     no client role can call.
+do $$
+begin
+  if not exists (select 1 from pg_trigger t
+                  where t.tgrelid = 'public.workspace_proposals'::regclass
+                    and t.tgname = 'workspace_proposals_approved_value_kept' and not t.tgisinternal
+                    and pg_get_triggerdef(t.oid) like '%BEFORE UPDATE%WHEN (((old.approved_value IS NOT NULL) AND (new.approved_value IS DISTINCT FROM old.approved_value)))%') then
+    raise exception 'FAIL 203: workspace_proposals_approved_value_kept is not the BEFORE UPDATE trigger it should be';
+  end if;
+  if exists (select 1 from (values ('public'), ('anon'), ('authenticated'), ('service_role'), ('workspace_runner'),
+                                   ('inbox_apply_runner'), ('sync_runner'), ('workspace_ingest_runner')) as w(who)
+              where has_function_privilege(w.who::name, 'public.workspace_proposals_approved_value_kept()', 'execute'))
+     or not exists (select 1 from pg_proc p
+                     where p.oid = 'public.workspace_proposals_approved_value_kept()'::regprocedure and not p.prosecdef
+                       and coalesce(p.proconfig, '{}') @> array['search_path=public, pg_temp']) then
+    raise exception 'FAIL 203: workspace_proposals_approved_value_kept is callable by a client role, or not INVOKER with search_path pinned';
   end if;
 end $$;
