@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { HEARTBEAT_MS } from '../../src/config.js';
+import { HEARTBEAT_MS, MAX_OPEN_CLAIMS } from '../../src/config.js';
 import {
   APPLICATION_NAME,
   PG_CLIENT_OPTIONS,
@@ -44,11 +44,13 @@ const CLAIM_ROW = {
 };
 
 describe('the runner calls', () => {
-  it('claims under the runner name through workspace_claim_v2 and reads the row', async () => {
+  it('claims under the runner name through workspace_claim_v3 with the cap of two, and reads the row', async () => {
     const { query, sent } = fakeQuery([CLAIM_ROW]);
     const claim = await createRpc(query).claim('workspace@test');
-    expect(sent[0]?.sql).toContain('public.workspace_claim_v2($1)');
-    expect(sent[0]?.params).toEqual(['workspace@test']);
+    expect(MAX_OPEN_CLAIMS).toBe(2);
+    expect(sent[0]?.sql).toContain('public.workspace_claim_v3($1, $2)');
+    expect(sent[0]?.sql).not.toContain('workspace_claim_v2');
+    expect(sent[0]?.params).toEqual(['workspace@test', MAX_OPEN_CLAIMS]);
     expect(claim).toEqual({
       requestId: '41',
       conversationId: CONVERSATION_ID,
@@ -255,7 +257,7 @@ describe('the runner calls', () => {
     await rpc.jobFinish('w', { conversationId: CONVERSATION_ID, kind: 'rolling', outcome: 'released', summary: null, through: null });
     expect(sent).toHaveLength(10);
     for (const { sql } of sent) {
-      expect(sql).toMatch(/public\.workspace_(claim_v2|begin|stream|finish|heartbeat|turn_context|turn_put|planner_feed|job_claim|job_finish)\(/);
+      expect(sql).toMatch(/public\.workspace_(claim_v3|begin|stream|finish|heartbeat|turn_context|turn_put|planner_feed|job_claim|job_finish)\(/);
       expect(sql).not.toMatch(/\b(insert|update|delete)\b/i);
       expect(sql).not.toMatch(/\bfrom\s+(public\.)?(workspace_messages|workspace_requests|assignment_progress|reading_progress)/i);
     }

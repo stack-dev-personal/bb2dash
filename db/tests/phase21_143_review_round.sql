@@ -60,14 +60,19 @@ begin
     raise exception 'FAIL phase21_143: migration 143 is not applied (v_workspace_status has no column polled_age_seconds)';
   end if;
 
-  -- The view: 140's four columns unchanged in name, type and order, then 143's one.
+  -- The view: 140's four columns unchanged in name, type and order, then 143's one; 202 adds two
+  -- after those (unit 202 holds them), and this unit runs on both sides of that apply.
   select string_agg(a.attname || ' ' || format_type(a.atttypid, a.atttypmod), ', ' order by a.attnum)
     into v_got
     from pg_attribute a
    where a.attrelid = 'public.v_workspace_status'::regclass and a.attnum > 0 and not a.attisdropped;
   if v_got is distinct from
      'polled_at timestamp with time zone, runner text, open_requests integer, '
-     'oldest_open_at timestamp with time zone, polled_age_seconds integer' then
+     'oldest_open_at timestamp with time zone, polled_age_seconds integer'
+     and v_got is distinct from
+     'polled_at timestamp with time zone, runner text, open_requests integer, '
+     'oldest_open_at timestamp with time zone, polled_age_seconds integer, '
+     'runners_alive integer, alive_runners text[]' then
     v_fail := v_fail || format('v_workspace_status columns are [%s]', v_got);
   end if;
   -- `create or replace view` replaces a view's options, so this is the one that could be lost.
@@ -149,16 +154,16 @@ begin
       v_fail := v_fail || format('the comment on %s does not name 143', f);
     end if;
   end loop;
-  -- Still 142's five, now among the twelve (196 adds six, 207 one), for workspace_runner and for
-  -- nobody else. RED against prod until 207 is applied (25a's cut-over).
+  -- Still 142's five, now among the thirteen (196 adds six, 207 one, 202 one), for workspace_runner and
+  -- for nobody else. RED against prod until 202 is applied (25b's cut-over).
   select string_agg(p.proname, ',' order by p.proname collate "C") into v_got
     from pg_proc p
    where p.pronamespace = 'public'::regnamespace and p.prosecdef
      and has_function_privilege('workspace_runner', p.oid, 'execute');
   if v_got is distinct from
-     'workspace_begin,workspace_claim,workspace_claim_v2,workspace_finish,workspace_heartbeat,'
-     'workspace_job_claim,workspace_job_finish,workspace_planner_feed,workspace_search_timing,'
-     'workspace_stream,workspace_turn_context,workspace_turn_put' then
+     'workspace_begin,workspace_claim,workspace_claim_v2,workspace_claim_v3,workspace_finish,'
+     'workspace_heartbeat,workspace_job_claim,workspace_job_finish,workspace_planner_feed,'
+     'workspace_search_timing,workspace_stream,workspace_turn_context,workspace_turn_put' then
     v_fail := v_fail || format('workspace_runner executes the SECURITY DEFINER functions [%s]', v_got);
   end if;
   select string_agg(w.who || ':' || g.fn, ', ' order by w.who collate "C", g.fn collate "C")

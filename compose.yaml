@@ -191,6 +191,11 @@ services:
   #
   # Nothing here is interpolated outside `build:`, the secret paths and WORKSPACE_TURN_BUDGET_USD, so
   # this file resolves with only SECRETS_DIR and BB2DASH_DIR set.
+  #
+  # Phase 25b: two runners answer at once (Stack's answer 5, cap 2): this service and `workspace-2`
+  # below, which extends this one and changes only its name, its build and its pull policy. Each
+  # claims through workspace_claim_v3 (migration 202) under its own fixed name, WORKSPACE_RUNNER_NAME,
+  # so a recreated container keeps it.
   workspace:
     profiles: [workspace]
     build:
@@ -213,6 +218,9 @@ services:
     # with an empty bounding set, so the runner and everything it starts hold neither.
     cap_add: [NET_ADMIN, NET_RAW]
     environment:
+      # The name the runner claims and beats under, `workspace@<this>`: fixed per service, never the
+      # container's hostname, which a recreate changes (Phase 25b; workspace/src/config.ts checks its shape).
+      WORKSPACE_RUNNER_NAME: workspace
       # The CLI's config lives on a tmpfs (freeze amendment F-4): no session persists.
       CLAUDE_CONFIG_DIR: /home/node/.claude
       # Off turns off the memory jobs only (the remembered items). The rolling summary of a long
@@ -276,6 +284,26 @@ services:
       options:
         max-size: 10m
         max-file: "3"
+
+  # The second Workspace runner (Phase 25b, brief 119 item D). It EXTENDS `workspace`, so the two
+  # cannot drift: compose copies that service whole (the same image, secrets, network workspace-net,
+  # egress port 3128 and its allow-list: it is the same kind of client, so no port of its own;
+  # healthcheck, tmpfs (its own: a tmpfs is per container), profile, depends_on egress and memory
+  # jobs), then applies the three keys below. Its environment is merged, so only the name changes.
+  #   * build reset: one service builds bb2dash-workspace:local (a second `build:` would build the
+  #     same tag twice). After `docker compose up -d --build workspace`, `docker compose up -d
+  #     workspace-2` takes the new image up alone;
+  #   * pull_policy never: the image is local, so a missing one is an error, never a pull;
+  #   * WORKSPACE_RUNNER_NAME workspace-2.
+  # Started, restarted and recreated alone, by name, like `workspace`; never through a bare `up`
+  # while a sync is open. docker/workspace/compose.test.mjs pins this block.
+  workspace-2:
+    extends:
+      service: workspace
+    build: !reset null
+    pull_policy: never
+    environment:
+      WORKSPACE_RUNNER_NAME: workspace-2
 
   # The ingest worker (Phase 24a, brief 109, freeze amendment F-3): it claims uploads and remembered items
   # through the four workspace_ingest_runner functions, downloads a signed link, hands a parsed file to
