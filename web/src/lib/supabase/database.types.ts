@@ -476,6 +476,8 @@ export type Database = {
           state: string
           suggested: Json | null
           to_value: Json | null
+          // Phase 25b (migrations 203–206), by hand in the shape generate_typescript_types gives; regenerated after the cut-over.
+          workspace_proposal_id: number | null
         }
         Insert: {
           applied_at?: string | null
@@ -500,6 +502,7 @@ export type Database = {
           state?: string
           suggested?: Json | null
           to_value?: Json | null
+          workspace_proposal_id?: number | null
         }
         Update: {
           applied_at?: string | null
@@ -524,6 +527,7 @@ export type Database = {
           state?: string
           suggested?: Json | null
           to_value?: Json | null
+          workspace_proposal_id?: number | null
         }
         Relationships: [
           {
@@ -566,6 +570,20 @@ export type Database = {
             columns: ["raised_by"]
             isOneToOne: false
             referencedRelation: "v_sync_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attention_items_workspace_proposal_id_fkey"
+            columns: ["workspace_proposal_id"]
+            isOneToOne: true
+            referencedRelation: "workspace_proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attention_items_workspace_proposal_id_fkey"
+            columns: ["workspace_proposal_id"]
+            isOneToOne: true
+            referencedRelation: "v_workspace_proposals"
             referencedColumns: ["id"]
           },
         ]
@@ -2965,6 +2983,76 @@ export type Database = {
         }
         Relationships: []
       }
+      // Phase 25b (migrations 203–206), by hand in the shape generate_typescript_types gives; regenerated after the cut-over.
+      workspace_proposals: {
+        Row: {
+          conversation_id: string
+          course_id: string | null
+          created_at: string
+          decided_at: string | null
+          expires_at: string
+          field: string
+          id: number
+          label: string
+          new_value: Json
+          old_value: Json | null
+          reason: string
+          request_id: number
+          row_id: string
+          state: string
+          target: string
+        }
+        Insert: {
+          conversation_id: string
+          course_id?: string | null
+          created_at?: string
+          decided_at?: string | null
+          expires_at?: string
+          field: string
+          id?: never
+          label: string
+          new_value: Json
+          old_value?: Json | null
+          reason: string
+          request_id: number
+          row_id: string
+          state?: string
+          target: string
+        }
+        Update: {
+          conversation_id?: string
+          course_id?: string | null
+          created_at?: string
+          decided_at?: string | null
+          expires_at?: string
+          field?: string
+          id?: never
+          label?: string
+          new_value?: Json
+          old_value?: Json | null
+          reason?: string
+          request_id?: number
+          row_id?: string
+          state?: string
+          target?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_proposals_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workspace_proposals_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspace_request_attachments: {
         Row: {
           document_id: number | null
@@ -4771,6 +4859,45 @@ export type Database = {
           },
         ]
       }
+      // Phase 25b (migrations 203–206), by hand in the shape generate_typescript_types gives; regenerated after the cut-over.
+      v_workspace_proposals: {
+        Row: {
+          attention_item_id: number | null
+          attention_state: string | null
+          conversation_id: string | null
+          course_id: string | null
+          created_at: string | null
+          decided_at: string | null
+          effective_state: string | null
+          expires_at: string | null
+          field: string | null
+          id: number | null
+          label: string | null
+          new_value: Json | null
+          old_value: Json | null
+          reason: string | null
+          request_id: number | null
+          row_id: string | null
+          state: string | null
+          target: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_proposals_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workspace_proposals_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_workspace_status: {
         Row: {
           oldest_open_at: string | null
@@ -5359,6 +5486,32 @@ export type Database = {
         Returns: Json
       }
       workspace_prompt_max: { Args: never; Returns: number }
+      // Phase 25b (migrations 203–206), by hand in the shape generate_typescript_types gives; regenerated after the cut-over.
+      workspace_proposal_decide: {
+        Args: { p_decision: string; p_id: number }
+        Returns: {
+          applied: boolean
+          state: string
+        }[]
+      }
+      workspace_proposals_expire: { Args: never; Returns: number }
+      workspace_propose: {
+        Args: {
+          p_field: string
+          p_reason: string
+          p_request_id: number
+          p_row_id: string
+          p_runner: string
+          p_target: string
+          p_value: Json
+        }
+        Returns: {
+          label: string
+          new_value: Json
+          old_value: Json
+          proposal_id: number
+        }[]
+      }
       workspace_search: {
         Args: {
           p_courses?: string[]

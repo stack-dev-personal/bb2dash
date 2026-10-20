@@ -63,13 +63,19 @@ export const NOT_QUARANTINED_FILTER = 'scope.is.null,scope.neq.unregistered';
  * Row types (hand-declared from the frozen contract — see header)
  * ------------------------------------------------------------------------ */
 
-/** `attention_items.kind` — migration 031's check constraint, in Inbox order. */
+/**
+ * `attention_items.kind` — migration 031's check constraint, in Inbox order, and since 205
+ * (Phase 25b) `assistant_proposal`: a planner change the Workspace assistant proposed. That kind is
+ * answered only through `workspace_proposal_decide` (`queries.workspace-proposals.ts`), never by
+ * this module's resolve, and the apply side never sees it.
+ */
 export type AttentionKind =
   | 'conflict'
   | 'stack_must_confirm'
   | 'missing'
   | 'deadline'
-  | 'data_gap';
+  | 'data_gap'
+  | 'assistant_proposal';
 
 /**
  * `attention_items.state`.
@@ -209,6 +215,7 @@ export const ATTENTION_KIND_ORDER: readonly AttentionKind[] = [
   'missing',
   'deadline',
   'data_gap',
+  'assistant_proposal',
 ] as const;
 
 /** Human labels. "needs input" is the Home row's word for stack_must_confirm. */
@@ -218,6 +225,7 @@ export const ATTENTION_KIND_LABEL: Record<AttentionKind, string> = {
   missing: 'missing',
   deadline: 'deadline',
   data_gap: 'data gap',
+  assistant_proposal: 'proposal',
 };
 
 /** Longer headings for the Inbox groups. */
@@ -227,6 +235,7 @@ export const ATTENTION_KIND_HEADING: Record<AttentionKind, string> = {
   missing: 'Missing',
   deadline: 'Deadlines',
   data_gap: 'Data gaps',
+  assistant_proposal: 'Proposed planner changes',
 };
 
 /** The four counts the Home needs-attention row shows (GUI decision 5a). */
