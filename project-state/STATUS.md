@@ -198,8 +198,12 @@ Branch `feat/phase26-announcement-reader`. Migrations 210–212 in block 210–2
   * **#125** (`32f7268`): migration 214 gives `db_test_runner` the reads Phase 26's units need. Applied byte-identical
     (md5 `5e61d4b8`); all four `phase26_*` units pass through `node scripts/db-test.mjs`, `phase26_211` verbatim
     included.
-  * `phase19_135_136_sync_driver.sql` failed on prod because 212 added a tenth fold stage, `bind`; the product is right.
-    The test fix is **#129** (test only, PASS on prod), waiting for his word.
+  * Two SQL units drifted with Phase 26, the product right in both: `phase19_135_136_sync_driver.sql` (212 added a tenth
+    fold stage, `bind`) and `phase23_181_inbox_apply_runner.sql` (since 210 the apply worker also claims
+    `announcement_review`). The test fix is **#129** (test only, both PASS on prod), waiting for his word. The suite on
+    `main` (2026-10-20) read 100 of 103; the third, `phase18_post_embed_checks` (a), is live data: file 3713 (a 404) and
+    4365 (IST.323's Lecture 9 slides, first seen in sync 6020, whose pull outcomes 213 refused before #124). The next
+    sync should pull 4365.
   * The four Phase 26 worktrees were removed on his word.
 * **Still open:** nothing of Phase 26's own.
 
