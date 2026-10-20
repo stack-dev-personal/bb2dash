@@ -22,12 +22,15 @@
  *      outcome;
  *   3. Approve on the date card when the row has changed: the card reads back "Stale: the row
  *      changed" and draws no date;
- *   4. the Inbox: the open note is a card with Approve / Reject under Needs you, and its "edit" opens
+ *   1a. (round 2) the grey "edit": at rest only at 390, where the page is a touch phone (`hover: none`
+ *      by CDP); shown, grey, with the pointer over the box (12); the strong text colour with the
+ *      pointer over "edit" itself (13); the draft shot (10) is taken at rest, no focus ring;
+ *   4. the Inbox: the pointer over the open note's Proposed box shows "edit" (14), and its "edit" opens
  *      the note box, which a click off the box puts back; the two decided ones are under Archived,
  *      each with its outcome and a link back to the answer.
  */
 
-import type { BrowserContext, Locator, Page, Route } from '@playwright/test';
+import type { BrowserContext, CDPSession, Locator, Page, Route } from '@playwright/test';
 import { coldCache, fulfillView, openSignedIn } from './walk';
 import { expect, quietSync, shotPath22, shotsAsked22, test } from './walk22.lib';
 import { fulfillWorkspacePageFixture } from './walk24b.lib';
@@ -231,11 +234,51 @@ async function openEditor(page: Page, id: number): Promise<void> {
   await card(page, id).getByRole('button', { name: `Edit the proposed value for ${LABEL}` }).click();
 }
 
-async function openAt(page: Page, path: string, theme: Theme): Promise<void> {
+/**
+ * Round 2: at 390 the page is a touch phone, so CSS `(hover: none)` matches and "edit" shows at rest.
+ * Playwright's device options do not change Chromium's hover media feature, so it is set by CDP;
+ * Playwright's own media features (colour scheme, reduced motion) are named again so this call
+ * does not drop them. The spec checks `matchMedia` after every page it opens.
+ */
+async function emulatePhone(cdp: CDPSession, page: Page): Promise<void> {
+  const scheme = await page.evaluate(() => (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+  await cdp.send('Emulation.setEmulatedMedia', {
+    features: [
+      { name: 'hover', value: 'none' },
+      { name: 'any-hover', value: 'none' },
+      { name: 'pointer', value: 'coarse' },
+      { name: 'any-pointer', value: 'coarse' },
+      { name: 'prefers-reduced-motion', value: 'reduce' },
+      { name: 'prefers-color-scheme', value: scheme },
+    ],
+  });
+}
+
+async function openAt(page: Page, path: string, theme: Theme, phone: CDPSession | null): Promise<void> {
   await openSignedIn(page, path);
   await page.waitForLoadState('load');
+  if (phone !== null) await emulatePhone(phone, page);
   await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+  expect(await page.evaluate(() => window.matchMedia('(hover: none)').matches)).toBe(phone !== null);
   await page.waitForTimeout(SETTLE_MS);
+}
+
+/** The "edit" of a card's Proposed box. */
+const editOf = (page: Page, id: number): Locator =>
+  card(page, id).getByRole('button', { name: `Edit the proposed value for ${LABEL}` });
+
+/** The pointer off every card, and no focus ring left on a button: the card at rest. */
+async function rest(page: Page): Promise<void> {
+  await page.mouse.move(1, 1);
+  await page.evaluate(() => (document.activeElement instanceof HTMLElement ? document.activeElement.blur() : undefined));
+}
+
+async function opacityOf(locator: Locator): Promise<string> {
+  return locator.evaluate((element) => getComputedStyle(element).opacity);
+}
+
+async function colourOf(locator: Locator): Promise<string> {
+  return locator.evaluate((element) => getComputedStyle(element).color);
 }
 
 for (const theme of THEMES) {
@@ -250,9 +293,10 @@ for (const theme of THEMES) {
       await fulfillConversation(context);
       await fulfillProposalRows(context, fixture);
       await page.setViewportSize(width.size);
+      const phone = width.name === '390' ? await context.newCDPSession(page) : null;
 
       // 1. The Workspace: three open cards under the finished answer, each with both values.
-      await openAt(page, WORKSPACE_PATH, theme);
+      await openAt(page, WORKSPACE_PATH, theme, phone);
       for (const id of [STATUS_ID, NOTE_ID, DATE_ID]) {
         await expect(card(page, id)).toHaveAttribute('data-proposal-state', 'proposed');
         await expect(card(page, id).locator('[data-proposal-value]')).toHaveCount(2);
@@ -262,6 +306,21 @@ for (const theme of THEMES) {
       await shoot(card(page, STATUS_ID), `01-workspace-open-status-${tag}.png`);
       await shoot(card(page, NOTE_ID), `02-workspace-open-note-${tag}.png`);
       await shoot(card(page, DATE_ID), `03-workspace-open-date-${tag}.png`);
+
+      // 1a. (Round 2) The grey "edit": at rest it shows only on a phone; the pointer over the box
+      //     shows it, grey; the pointer over "edit" itself turns it to the strong text colour (the
+      //     colour of the card's line, which is set in it).
+      await rest(page);
+      expect(await opacityOf(editOf(page, STATUS_ID))).toBe(phone === null ? '0' : '1');
+      const strong = await colourOf(card(page, STATUS_ID).locator('p').first());
+      await proposedBox(page, STATUS_ID).hover();
+      await expect.poll(() => opacityOf(editOf(page, STATUS_ID))).toBe('1');
+      await expect.poll(() => colourOf(editOf(page, STATUS_ID))).not.toBe(strong);
+      await shoot(card(page, STATUS_ID), `12-workspace-hover-box-${tag}.png`);
+      await editOf(page, STATUS_ID).hover();
+      await expect.poll(() => colourOf(editOf(page, STATUS_ID))).toBe(strong);
+      await shoot(card(page, STATUS_ID), `13-workspace-hover-edit-${tag}.png`);
+      await rest(page);
 
       // 1b. (W-106) Edit: the note box, put back by Escape; then the status select, kept as a draft.
       await openEditor(page, NOTE_ID);
@@ -279,6 +338,8 @@ for (const theme of THEMES) {
       await expect(proposedBox(page, STATUS_ID)).toHaveAttribute('aria-label', 'Proposed · edited by you');
       await expect(proposedBox(page, STATUS_ID)).toContainText('graded');
       await expect(card(page, STATUS_ID).getByRole('button', { name: `Reset the proposed value for ${LABEL}` })).toBeVisible();
+      // The draft at rest: no focus ring on edit (it took the focus back) and no pointer over it.
+      await rest(page);
       await shoot(card(page, STATUS_ID), `10-workspace-edited-draft-${tag}.png`);
       expect(fixture.decisions).toEqual([]);
 
@@ -297,10 +358,15 @@ for (const theme of THEMES) {
       await shoot(card(page, DATE_ID), `05-workspace-stale-${tag}.png`);
 
       // 4. The Inbox: the open note under Needs you; the two decided ones under Archived, linked back.
-      await openAt(page, '/inbox', theme);
+      await openAt(page, '/inbox', theme, phone);
       await expect(card(page, NOTE_ID).getByRole('button', { name: /^Approve: replace the note on/ })).toBeVisible();
       await expect(card(page, STATUS_ID)).toHaveCount(0);
       await shoot(card(page, NOTE_ID), `06-inbox-open-note-${tag}.png`);
+      // (Round 2) The pointer over the Inbox card's Proposed box shows its grey "edit".
+      await proposedBox(page, NOTE_ID).hover();
+      await expect.poll(() => opacityOf(editOf(page, NOTE_ID))).toBe('1');
+      await shoot(card(page, NOTE_ID), `14-inbox-hover-box-${tag}.png`);
+      await rest(page);
       await openEditor(page, NOTE_ID);
       await expect(card(page, NOTE_ID).getByRole('textbox', { name: `Proposed note for ${LABEL}` })).toBeFocused();
       await shoot(card(page, NOTE_ID), `11-inbox-edit-mode-${tag}.png`);

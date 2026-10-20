@@ -30,6 +30,8 @@ export const EDITED_HEADING_SUFFIX = ' · edited by you';
 export const NOTE_SAVE_HINT = 'Ctrl or ⌘ + Enter to save · Esc to cancel';
 export const FIELD_SAVE_HINT = 'Enter to save · Esc to cancel';
 
+/** Under Approve / Reject while the Proposed box is in edit mode (round 2). */
+export const EDIT_FIRST_LINE = 'Save or cancel your edit first.';
 export const DRAFT_STATUS_PROBLEM = 'Pick one of the planner’s statuses.';
 export const DRAFT_DATE_PROBLEM = 'Enter a real date.';
 export const DRAFT_NOTE_EMPTY = 'A note can’t be empty.';

@@ -123,6 +123,8 @@ const MIDDAY_UTC_HOUR = 12;
 const SHORT_DATE = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric' });
 const NO_REASON = 'the database gave no reason';
 const HELD_STATE = /already\s+([a-z]+)/i;
+/** A database refusal names its function first ("workspace_propose: …"); the card leaves the name out. */
+const FUNCTION_PREFIX = /^[a-z][a-z0-9_]*:\s+/;
 
 /* ---------------------------------------------------------------------------
  * Normalising a row
@@ -327,7 +329,8 @@ export function heldStateOf(error: unknown): ProposalState | null {
 /** What the card says when a decision did not go through. */
 export function decideProblemLine(error: unknown): string {
   if (isAlreadyDecided(error)) return ALREADY_DECIDED_LINE;
-  return `That decision was not saved: ${messageOf(error) ?? NO_REASON}. Try again.`;
+  const message = messageOf(error)?.replace(FUNCTION_PREFIX, '') || null;
+  return `That decision was not saved: ${message ?? NO_REASON}. Try again.`;
 }
 
 /** What the page says when the proposals could not be read. */

@@ -217,6 +217,13 @@ describe('a decision the database refused', () => {
     expect(decideProblemLine(refused)).toBe(ALREADY_DECIDED_LINE);
     expect(decideProblemLine(new Error('network down'))).toBe('That decision was not saved: network down. Try again.');
     expect(decideProblemLine({})).toMatch(/^That decision was not saved: .+\. Try again\.$/);
+    // A 22023 from the database names its function first; the card leaves the name out (W-106 round 2).
+    expect(decideProblemLine({ code: '22023', message: 'workspace_propose: a note is 1 to 2000 characters and not only blanks' })).toBe(
+      'That decision was not saved: a note is 1 to 2000 characters and not only blanks. Try again.',
+    );
+    expect(decideProblemLine({ code: '22023', message: 'workspace_proposal_decide: an edited value is taken only with approve' })).toBe(
+      'That decision was not saved: an edited value is taken only with approve. Try again.',
+    );
   });
 });
 

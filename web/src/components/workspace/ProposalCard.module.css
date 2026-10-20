@@ -47,8 +47,6 @@
   gap: var(--space-2);
 }
 .pane {
-  /* Positioned for the Proposed box's corner "edit" (W-106). */
-  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
@@ -73,18 +71,26 @@
 
 /* — Stack's edit of the proposed value (W-106) ————————————————————————
    A grey text button: muted at rest, the strongest text colour on hover and focus (white in the
-   dark theme, near-black in the light one). "edit" sits in the Proposed box's top-right corner and
-   shows on hover and on keyboard focus within the box; on a device with no hover it always shows. */
+   dark theme, near-black in the light one). "edit" ends the Proposed box's label row, at its
+   top-right, and shows on hover and on keyboard focus within the box; on a device with no hover it
+   always shows. The row keeps Reset and edit apart and inset from the box's edge, so a focus ring
+   never meets the border, and wraps at a phone's width rather than crowd them (round 2). */
 .paneHead {
   display: flex;
   align-items: baseline;
-  gap: var(--space-2);
-  /* Room for the corner "edit", so the heading never runs under it. */
-  padding-right: var(--space-8);
+  flex-wrap: wrap;
+  column-gap: var(--space-3);
+  row-gap: var(--space-1);
+}
+.headActions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-4);
 }
 .textButton {
   appearance: none;
-  padding: 0;
+  padding: 0 var(--space-1);
   border: 0;
   background: none;
   font: inherit;
@@ -106,9 +112,6 @@
   cursor: not-allowed;
 }
 .editButton {
-  position: absolute;
-  top: var(--space-2);
-  right: var(--space-3);
   opacity: 0;
 }
 .editable:hover .editButton,
@@ -140,6 +143,17 @@
 }
 .hint {
   flex: 1 1 auto;
+}
+
+/* Under Approve / Reject while the Proposed box is in edit mode: they wait for the edit. */
+.waitHint {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+.actions button[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .reason {

@@ -173,6 +173,12 @@ describe('InboxProposalCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Edit the proposed value for Demo Problem Set 4' }));
     const box = screen.getByRole('textbox', { name: 'Proposed note for Demo Problem Set 4' });
     fireEvent.change(box, { target: { value: 'Start with 1.' } });
+    // While the box is in edit mode the decision waits, and pressing it keeps the edit (round 2).
+    expect(screen.getByRole('button', { name: /^Approve/ }).getAttribute('aria-disabled')).toBe('true');
+    expect(screen.getByText('Save or cancel your edit first.')).toBeTruthy();
+    expect(fireEvent.mouseDown(screen.getByRole('button', { name: /^Approve/ }))).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: /^Approve/ }));
+    expect(rpc).not.toHaveBeenCalled();
     fireEvent.keyDown(box, { key: 'Enter', ctrlKey: true });
     expect(screen.getByRole('group', { name: 'Proposed · edited by you' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /^Approve/ }));

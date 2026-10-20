@@ -24,7 +24,8 @@
  */
 
 import Link from 'next/link';
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { EDIT_FIRST_LINE } from '@/lib/proposal-draft';
 import tokens from '@/styles/tokens.module.css';
 import {
   ALREADY_DECIDED_LINE,
@@ -70,6 +71,7 @@ function Values(props: {
   proposal: WorkspaceProposal;
   draft: string | null;
   onDraftChange?: (draft: string | null) => void;
+  onEditingChange: (editing: boolean) => void;
   pending: boolean;
 }) {
   const { proposal } = props;
@@ -79,35 +81,65 @@ function Values(props: {
         <span className={tokens.kicker}>{OLD_VALUE_HEADING}</span>
         <span className={styles.value}>{valueWords(proposal.field, proposal.old_value)}</span>
       </div>
-      <ProposedValue proposal={proposal} draft={props.draft} onDraftChange={props.onDraftChange} disabled={props.pending} />
+      <ProposedValue
+        proposal={proposal}
+        draft={props.draft}
+        onDraftChange={props.onDraftChange}
+        onEditingChange={props.onEditingChange}
+        disabled={props.pending}
+      />
     </div>
   );
 }
 
-function Actions(props: { proposal: WorkspaceProposal; pending: boolean; onDecide?: (decision: ProposalDecision) => void }) {
-  const { proposal, pending, onDecide } = props;
+/**
+ * Approve and Reject. While the Proposed box is in edit mode (W-106 round 2) they wait: marked
+ * aria-disabled with a hint under them, and a press neither decides nor takes the focus from the
+ * editor (a mousedown that moved the focus would be a click off the box and drop the edit).
+ */
+function Actions(props: {
+  proposal: WorkspaceProposal;
+  pending: boolean;
+  waiting: boolean;
+  onDecide?: (decision: ProposalDecision) => void;
+}) {
+  const { proposal, pending, waiting, onDecide } = props;
   const disabled = pending || onDecide === undefined;
+  const hintId = useId();
+  const buttons = [
+    { decision: 'approve', className: tokens.btnPrimary, label: approveLabel(proposal), word: APPROVE_WORD },
+    { decision: 'reject', className: tokens.btnSecondary, label: rejectLabel(proposal), word: REJECT_WORD },
+  ] as const;
   return (
-    <div className={styles.actions} aria-busy={pending}>
-      <button
-        type="button"
-        className={tokens.btnPrimary}
-        aria-label={approveLabel(proposal)}
-        disabled={disabled}
-        onClick={() => onDecide?.('approve')}
-      >
-        {APPROVE_WORD}
-      </button>
-      <button
-        type="button"
-        className={tokens.btnSecondary}
-        aria-label={rejectLabel(proposal)}
-        disabled={disabled}
-        onClick={() => onDecide?.('reject')}
-      >
-        {REJECT_WORD}
-      </button>
-    </div>
+    <>
+      <div className={styles.actions} aria-busy={pending}>
+        {buttons.map((button) => (
+          <button
+            key={button.decision}
+            type="button"
+            className={button.className}
+            aria-label={button.label}
+            aria-disabled={waiting || undefined}
+            aria-describedby={waiting ? hintId : undefined}
+            data-waiting={waiting ? '' : undefined}
+            disabled={disabled}
+            onMouseDown={(event) => {
+              if (waiting) event.preventDefault();
+            }}
+            onClick={() => {
+              if (!waiting) onDecide?.(button.decision);
+            }}
+          >
+            {button.word}
+          </button>
+        ))}
+      </div>
+      {waiting && (
+        <p id={hintId} className={styles.waitHint}>
+          {EDIT_FIRST_LINE}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -126,6 +158,8 @@ function Outcome(props: { words: string; focus: boolean }) {
 export function ProposalCard(props: ProposalCardProps) {
   const { proposal, pending = false, problem = null, answerHref = null, focusOutcome = false, inbox = false } = props;
   const draft = props.draft ?? null;
+  // The Proposed box is in edit mode: the decision waits until the edit is saved or dropped.
+  const [editing, setEditing] = useState(false);
   const titleId = useId();
   const open = isOpenProposal(proposal);
   const outcome = outcomeLine(proposal);
@@ -157,14 +191,22 @@ export function ProposalCard(props: ProposalCardProps) {
         </p>
       )}
 
-      {open && <Values proposal={proposal} draft={draft} onDraftChange={props.onDraftChange} pending={pending} />}
+      {open && (
+        <Values
+          proposal={proposal}
+          draft={draft}
+          onDraftChange={props.onDraftChange}
+          onEditingChange={setEditing}
+          pending={pending}
+        />
+      )}
       {open && proposal.reason !== '' && (
         <p className={styles.reason}>
           <span className={tokens.kicker}>{REASON_HEADING}</span>
           <span>{proposal.reason}</span>
         </p>
       )}
-      {open && <Actions proposal={asApproved} pending={pending} onDecide={props.onDecide} />}
+      {open && <Actions proposal={asApproved} pending={pending} waiting={editing} onDecide={props.onDecide} />}
 
       {outcome !== null && <Outcome words={outcome} focus={focusOutcome} />}
       {!open && answerHref !== null && (

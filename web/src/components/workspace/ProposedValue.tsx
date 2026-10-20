@@ -47,6 +47,8 @@ export interface ProposedValueProps {
   onDraftChange?: (draft: string | null) => void;
   /** A decision is in flight: edit and Reset are off. */
   disabled?: boolean;
+  /** Told when edit mode starts and ends, so the card holds its decision meanwhile (round 2). */
+  onEditingChange?: (editing: boolean) => void;
 }
 
 const NOTE_ROWS = 5;
@@ -89,7 +91,7 @@ function Editor(props: {
   return <input {...common} type="date" onChange={(event) => onText(event.target.value)} />;
 }
 
-export function ProposedValue({ proposal, draft, onDraftChange, disabled = false }: ProposedValueProps) {
+export function ProposedValue({ proposal, draft, onDraftChange, onEditingChange, disabled = false }: ProposedValueProps) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
@@ -122,11 +124,13 @@ export function ProposedValue({ proposal, draft, onDraftChange, disabled = false
     setProblem(null);
     open.current = true;
     setEditing(true);
+    onEditingChange?.(true);
   }
 
   function stop(returnFocus: boolean) {
     open.current = false;
     setEditing(false);
+    onEditingChange?.(false);
     setProblem(null);
     focusEdit.current = returnFocus;
   }
@@ -223,31 +227,35 @@ export function ProposedValue({ proposal, draft, onDraftChange, disabled = false
     >
       <span className={styles.paneHead}>
         <span className={tokens.kicker}>{heading}</span>
-        {editable && draft !== null && (
-          <button
-            type="button"
-            className={styles.textButton}
-            aria-label={resetLabel(proposal.label)}
-            disabled={disabled}
-            onClick={() => onDraftChange?.(null)}
-          >
-            {RESET_WORD}
-          </button>
+        {editable && (
+          // Reset and edit sit apart at the end of the label row, inset from the box's edge, and the
+          // row wraps at a phone's width rather than crowd them (round 2).
+          <span className={styles.headActions}>
+            {draft !== null && (
+              <button
+                type="button"
+                className={styles.textButton}
+                aria-label={resetLabel(proposal.label)}
+                disabled={disabled}
+                onClick={() => onDraftChange?.(null)}
+              >
+                {RESET_WORD}
+              </button>
+            )}
+            <button
+              ref={editButton}
+              type="button"
+              className={`${styles.textButton} ${styles.editButton}`}
+              aria-label={editLabel(proposal.label)}
+              disabled={disabled}
+              onClick={start}
+            >
+              {EDIT_WORD}
+            </button>
+          </span>
         )}
       </span>
       <span className={styles.value}>{valueWords(proposal.field, shown)}</span>
-      {editable && (
-        <button
-          ref={editButton}
-          type="button"
-          className={`${styles.textButton} ${styles.editButton}`}
-          aria-label={editLabel(proposal.label)}
-          disabled={disabled}
-          onClick={start}
-        >
-          {EDIT_WORD}
-        </button>
-      )}
     </div>
   );
 }

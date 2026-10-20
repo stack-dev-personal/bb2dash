@@ -30,7 +30,7 @@ vi.mock('next/link', () => ({
 
 const { DecidableProposal } = await import('@/components/workspace/DecidableProposal');
 const { normalizeProposal } = await import('@/lib/workspace-proposals');
-const { DRAFT_NOTE_EMPTY, DRAFT_SAME_AS_PLANNER } = await import('@/lib/proposal-draft');
+const { DRAFT_NOTE_EMPTY, DRAFT_SAME_AS_PLANNER, EDIT_FIRST_LINE } = await import('@/lib/proposal-draft');
 
 const LABEL = 'ECN 304 Problem Set 4';
 const EDIT = `Edit the proposed value for ${LABEL}`;
@@ -245,6 +245,40 @@ describe('deciding with a draft', () => {
     draftGraded();
     fireEvent.click(screen.getByRole('button', { name: /^Reject/ }));
     await waitFor(() => expect(rpc).toHaveBeenCalledWith('workspace_proposal_decide', { p_id: 7, p_decision: 'reject' }));
+  });
+
+  it('while the box is in edit mode, Approve and Reject wait: a hint says why, and pressing them keeps the edit (round 2)', () => {
+    setup(<DecidableProposal proposal={proposal()} />);
+    fireEvent.click(screen.getByRole('button', { name: EDIT }));
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'graded' } });
+    const approve = screen.getByRole('button', { name: /^Approve/ });
+    const reject = screen.getByRole('button', { name: /^Reject/ });
+    expect(approve.getAttribute('aria-disabled')).toBe('true');
+    expect(reject.getAttribute('aria-disabled')).toBe('true');
+    expect(screen.getByText(EDIT_FIRST_LINE)).toBeTruthy();
+    // The press must not take the focus away from the editor, which would drop the edit.
+    expect(fireEvent.mouseDown(approve)).toBe(false);
+    expect(fireEvent.mouseDown(reject)).toBe(false);
+    fireEvent.click(approve);
+    fireEvent.click(reject);
+    expect(rpc).not.toHaveBeenCalled();
+    expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('graded');
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Enter' });
+    expect(screen.queryByText(EDIT_FIRST_LINE)).toBeNull();
+    expect(screen.getByRole('button', { name: /^Approve/ }).getAttribute('aria-disabled')).not.toBe('true');
+  });
+
+  it('says a refusal of the edit in plain words, without the function’s name (round 2)', async () => {
+    rpc.mockResolvedValue({
+      data: null,
+      error: { code: '22023', message: 'workspace_proposal_decide: an edited value must differ from the planner\'s' },
+    });
+    setup(<DecidableProposal proposal={proposal()} />);
+    draftGraded();
+    fireEvent.click(screen.getByRole('button', { name: /^Approve/ }));
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'That decision was not saved: an edited value must differ from the planner\'s. Try again.',
+    );
   });
 
   it('edit is off while a decision is in flight', async () => {
