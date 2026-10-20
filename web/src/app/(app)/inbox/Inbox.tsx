@@ -17,11 +17,16 @@
  *   * a sticky footer: "N answered" and the one Apply answers button (R3-2)
  *   * `j` / `k` move between cards, `Enter` focuses the answer box
  *
+ * Phase 25b: an `assistant_proposal` item (a planner change the Workspace
+ * assistant proposed) is drawn as the proposal card (`InboxProposal.tsx`),
+ * decided only through `workspace_proposal_decide`, and never given the
+ * controls above; once decided it is archived work, not an answer to apply.
+ *
  * `InboxView` is exported separately from the data-fetching `Inbox` so the
  * tabs and the per-kind resolve payloads can be tested without a client.
  */
 
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { InboxApplyButton } from '@/components/inbox/InboxApplyButton';
 import { MARK_CHAR, MarkedLabel } from '@/components/shell/icons';
@@ -41,6 +46,9 @@ import {
   type ChoiceInput,
 } from '@/lib/queries.inboxChoice';
 import { latestWrite } from '@/components/inbox/inbox-row';
+import { InboxProposalCard, InboxProposalSummary } from '@/components/inbox/InboxProposal';
+import { useProposalsByIds } from '@/lib/queries.workspace-proposals';
+import { proposalIdOfItem, settleProposalItems, type WorkspaceProposal } from '@/lib/workspace-proposals';
 import { UNDO_BLOCKED, useReopenAttentionItem } from '@/lib/queries.inboxReopen';
 import shell from '../Shell.module.css';
 import styles from './Inbox.module.css';
@@ -78,7 +86,8 @@ export default function Inbox() {
   const choose = useResolveChoice();
   const reopen = useReopenAttentionItem();
   const applying = useOpenInboxApplyRequest();
-  const items = useMemo(() => itemsQuery.data ?? [], [itemsQuery.data]);
+  const read = useMemo(() => itemsQuery.data ?? [], [itemsQuery.data]);
+  const { items, renderProposal } = useProposalItems(read);
   const labelIds = useMemo(() => candidateIds(items), [items]);
   const labelsQuery = useSessionLabels(labelIds);
 
@@ -124,8 +133,43 @@ export default function Inbox() {
       // printing ids; the error itself shows on the screen below.
       sessionLabels={labelsQuery.data}
       labelsError={labelsQuery.error ?? null}
+      renderProposal={renderProposal}
     />
   );
+}
+
+/**
+ * Phase 25b: the proposals the `assistant_proposal` items name, read in one select, and the card
+ * each such item is drawn as. A decision on it reads the Inbox and the proposals again
+ * (`useDecideProposal`), so the Workspace's card shows it too.
+ */
+function useProposalItems(read: readonly AttentionItem[]): {
+  items: AttentionItem[];
+  renderProposal: (item: AttentionItem) => ReactNode;
+} {
+  const ids = useMemo(
+    () => read.flatMap((item) => (item.kind === 'assistant_proposal' ? (proposalIdOfItem(item) ?? []) : [])),
+    [read],
+  );
+  const proposals = useProposalsByIds(ids);
+  const byId = useMemo(
+    () => new Map<number, WorkspaceProposal>((proposals.data ?? []).map((row) => [row.id, row])),
+    [proposals.data],
+  );
+  // R2-7: an open item whose proposal is no longer proposed is filed as decided, not as waiting.
+  const items = useMemo(() => settleProposalItems(read, byId), [read, byId]);
+  function renderProposal(item: AttentionItem): ReactNode {
+    const id = proposalIdOfItem(item);
+    return (
+      <InboxProposalCard
+        item={item}
+        proposal={id === null ? undefined : byId.get(id)}
+        loading={id !== null && proposals.isPending}
+        error={proposals.error}
+      />
+    );
+  }
+  return { items, renderProposal };
 }
 
 /* ---------------------------------------------------------------------------
@@ -156,6 +200,11 @@ export interface InboxViewProps {
   sessionLabels?: ReadonlyMap<number, string>;
   /** The session labels could not be read. */
   labelsError?: Error | null;
+  /**
+   * Phase 25b: how an `assistant_proposal` item is drawn (the data component hands in the card with
+   * its decision). Without it the item shows what it alone knows, and never the Inbox's controls.
+   */
+  renderProposal?: (item: AttentionItem) => ReactNode;
 }
 
 export function InboxView({
@@ -174,6 +223,7 @@ export function InboxView({
   undoBlocked = null,
   sessionLabels,
   labelsError = null,
+  renderProposal = (item) => <InboxProposalSummary item={item} />,
 }: InboxViewProps) {
   const [tab, setTab] = useState<InboxTab>(initialTab);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -238,19 +288,23 @@ export function InboxView({
         className={styles.list}
       >
         {!loading && rows.length === 0 && <p className={styles.empty}>{EMPTY_TAB_TEXT[tab]}</p>}
-        {rows.map((item) => (
-          <InboxCard
-            key={item.id}
-            item={item}
-            pending={pendingId === item.id}
-            failure={resolveErrorId === item.id ? resolveError : null}
-            onResolve={onResolve}
-            onChoose={onChoose}
-            onReopen={onReopen}
-            undoBlocked={undoBlocked}
-            sessionLabels={sessionLabels}
-          />
-        ))}
+        {rows.map((item) =>
+          item.kind === 'assistant_proposal' ? (
+            <Fragment key={item.id}>{renderProposal(item)}</Fragment>
+          ) : (
+            <InboxCard
+              key={item.id}
+              item={item}
+              pending={pendingId === item.id}
+              failure={resolveErrorId === item.id ? resolveError : null}
+              onResolve={onResolve}
+              onChoose={onChoose}
+              onReopen={onReopen}
+              undoBlocked={undoBlocked}
+              sessionLabels={sessionLabels}
+            />
+          ),
+        )}
       </div>
 
       <section className={styles.footer} aria-label="Inbox actions">

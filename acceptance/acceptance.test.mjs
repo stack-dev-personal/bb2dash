@@ -1011,3 +1011,123 @@ test('Phase 24: no title of its browser tests is a title of another pack: ACCEPT
   assert.ok(others.length > 0);
   assert.deepEqual(own.filter((title) => others.includes(title)), []);
 });
+
+/* ---------------------------------------------------------------------------------------------
+ * Phase 25's pack: two runners and the planner changes the assistant proposes (brief 119, D and E)
+ * ------------------------------------------------------------------------------------------ */
+
+const PACK_25_STAGES = ['prepare', 'go-live', 'two', 'decide', 'stale', 'restore', 'end-proofs'];
+const PACK_25_DECIDE = ['3 proposal card', '4 approve on the card', '5 reject in the inbox', '6 second decision refused', '7 decided cards draw no value'];
+const PACK_25_TITLES = ['2 two at once', ...PACK_25_DECIDE, '8 stale after a planner edit', '9 planner restored'];
+/** The proposal steps and the word each one's question ends its note with. */
+const PACK_25_PROPOSALS = { 3: 'one', 5: 'two', 8: 'three' };
+/** Ids of the shape `<course>/<kebab-slug>` (DATA_SYNTAX), one holding a word the router counts as an execution verb. */
+const SAMPLE_ASSIGNMENT_IDS = ['IST.323/a1-lab', 'ECN.304/problem-set-4', 'IST.352/project-plan-draft'];
+
+/** The proposal question as `accept25.spec.ts` builds it. */
+function proposeQuestionOf(specText, id, word) {
+  return `${constantOf(specText, 'PROPOSE_HEAD')}${id}${constantOf(specText, 'PROPOSE_MIDDLE')}${word}${constantOf(specText, 'PROPOSE_TAIL')}`;
+}
+
+test('Phase 25: the stages in order; go-live reads the planner and both runners and starts or stops nothing', () => {
+  const { manifest, specText } = loadPack(REPO, '25');
+  assert.deepEqual(manifest.stages.map((stage) => stage.id), PACK_25_STAGES);
+  assert.deepEqual(stageOf(manifest, 'go-live').actions, [
+    { action: 'runner.record' },
+    { action: 'db.proof', with: { name: 'planner-fingerprint' } },
+    { action: 'db.proof', with: { name: 'target-before', save: 'target_before' } },
+    { action: 'workspace.doctorRow' },
+    { action: 'db.proof', with: { name: 'runners-alive' } },
+  ]);
+  // The cut-over brought both runners up; a rebuild of `workspace` alone would leave `workspace-2` on the old image.
+  const named = manifest.stages.flatMap((stage) => (stage.actions ?? []).map((entry) => entry.action));
+  assert.deepEqual([...new Set(named)].sort(), ['db.proof', 'runner.record', 'workspace.doctorRow']);
+  assert.deepEqual(stageOf(manifest, 'two').tests, ['2 two at once']);
+  assert.deepEqual(stageOf(manifest, 'decide').tests, PACK_25_DECIDE);
+  assert.deepEqual(stageOf(manifest, 'stale').tests, ['8 stale after a planner edit']);
+  assert.deepEqual(stageOf(manifest, 'restore').tests, ['9 planner restored']);
+  assert.deepEqual(specTitles(specText), PACK_25_TITLES);
+});
+
+test("Phase 25: step 1 stays a person's, and every step has its owner", () => {
+  const { manifest } = loadPack(REPO, '25');
+  const kinds = Object.fromEntries(manifest.steps.map((step) => [step.id, step.kind]));
+  assert.deepEqual(kinds, { 0: 'host', 1: 'human', 2: 'auto', 3: 'auto', 4: 'auto', 5: 'auto', 6: 'auto', 7: 'auto', 8: 'auto', 9: 'auto', 10: 'host', 11: 'host' });
+});
+
+test("Phase 25: step 2's two md5s are those of the two questions its test types", () => {
+  const { manifest, specText } = loadPack(REPO, '25');
+  const body = testBody(specText, '2 two at once');
+  const [proof] = stepOf(manifest, '2').proofs;
+  assert.equal(proof.name, 'two-at-once');
+  assert.match(body, /\bQUESTION_FIRST\b/);
+  assert.match(body, /\bQUESTION_SECOND\b/);
+  assert.equal(proof.with.first_md5, md5(constantOf(specText, 'QUESTION_FIRST')));
+  assert.equal(proof.with.second_md5, md5(constantOf(specText, 'QUESTION_SECOND')));
+  assert.deepEqual([proof.with.first, proof.with.second, proof.with.since], ['carry:2.first_request_id', 'carry:2.second_request_id', RUN_START]);
+});
+
+test('Phase 25: the proofs rebuild the proposal question the spec types, and each proposal step names its own word and request', () => {
+  const { manifest, proofs, specText } = loadPack(REPO, '25');
+  const sql = proofs['proposal-made'].sql;
+  const head = constantOf(specText, 'PROPOSE_HEAD');
+  const middle = constantOf(specText, 'PROPOSE_MIDDLE');
+  const tail = constantOf(specText, 'PROPOSE_TAIL');
+  const rebuilt = `'${head}' || w.row_id || '${middle}' || $5::text || '${tail}'`;
+  assert.ok(sql.includes(`md5(u.content) = md5(${rebuilt})`), "proposal-made holds the question's md5 to the spec's three parts around the row id and the word");
+  assert.equal(proofs['proposal-made'].params.which, 'enum:one|two|three');
+  const words = /const PROPOSAL_WORDS = \{ first: '([a-z]+)', second: '([a-z]+)', third: '([a-z]+)' \}/.exec(specText);
+  assert.ok(words, 'PROPOSAL_WORDS is the three words');
+  assert.deepEqual(words.slice(1), Object.values(PACK_25_PROPOSALS));
+  for (const [id, word] of Object.entries(PACK_25_PROPOSALS)) {
+    const made = stepOf(manifest, id).proofs.find((proof) => proof.name === 'proposal-made');
+    assert.deepEqual(made.with, {
+      proposal: `carry:${id}.proposal_id`,
+      request: `carry:${id}.request_id`,
+      since: RUN_START,
+      target: 'carry:target_before.target_md5',
+      which: word,
+    });
+  }
+  // The note the run writes is synthetic and says whose it is; the planner's own edit too.
+  assert.match(middle, /Acceptance run 25 proposal $/);
+  assert.match(constantOf(specText, 'PLANNER_EDIT_TEXT'), /^Acceptance run 25 /);
+});
+
+test('Phase 25: every question goes to the middle tier, whatever the assignment id holds (workspace/src/router.ts)', async () => {
+  const { specText } = loadPack(REPO, '25');
+  const { routeTier } = await import('../workspace/src/router.ts');
+  for (const name of ['QUESTION_FIRST', 'QUESTION_SECOND']) assert.equal(routeTier(constantOf(specText, name), null), 'mid', name);
+  for (const id of SAMPLE_ASSIGNMENT_IDS) {
+    for (const word of Object.values(PACK_25_PROPOSALS)) {
+      const question = proposeQuestionOf(specText, id, word);
+      assert.equal(routeTier(question, null), 'mid', question);
+      assert.equal(routeTier(question, 'low'), 'mid', 'a proposal question asked into the conversation keeps the middle tier');
+    }
+  }
+});
+
+test("Phase 25: the run's row is go-live's reading, every proposal is held to it, and the planner is restored against it", () => {
+  const { manifest, proofs } = loadPack(REPO, '25');
+  const pack24 = loadPack(REPO, '24').proofs;
+  assert.deepEqual(stepOf(manifest, '4').proofs, [{ name: 'proposal-applied', with: { proposal: 'carry:3.proposal_id', since: RUN_START, target: 'carry:target_before.target_md5', rest: 'carry:target_before.rest_md5' } }]);
+  assert.deepEqual(stepOf(manifest, '9').proofs, [{ name: 'planner-restored', with: { before: 'carry:target_before.fingerprint', target: 'carry:target_before.target_md5', row: 'carry:target_before.row_md5' } }]);
+  assert.deepEqual(proofs['planner-restored'].params, { before: 'fingerprint', target: 'hex32', row: 'hex32' });
+  // The two readings of the planner leave the run's row out the same way, so they compare.
+  assert.match(proofs['target-before'].sql, /md5\(p\.assignment_id\) is distinct from md5\(t\.assignment_id\)/);
+  assert.match(proofs['planner-restored'].sql, /md5\(p\.assignment_id\) is distinct from \$2::text/);
+  // The browser test picks the row by target-before's rule: graded, no note, first by id.
+  assert.match(proofs['target-before'].sql, /where p\.status = 'graded' and p\.notes is null\s+order by p\.assignment_id\s+limit 1/);
+  assert.match(readText('web/e2e/accept25.lib.ts'), /status=eq\.graded&notes=is\.null&order=assignment_id\.asc&limit=1/);
+  // The run's last archive is step 8's: the cleanup check is its own, over the three conversations.
+  assert.deepEqual(stepOf(manifest, '8').proofs.at(-1), { name: 'conversations-unarchived', with: { since: RUN_START, min_conversations: 3 } });
+  assert.deepEqual(proofs['conversations-unarchived'], pack24['conversations-unarchived']);
+  assert.deepEqual(proofs['planner-fingerprint'], pack24['planner-fingerprint']);
+});
+
+test('Phase 25: no title of its browser tests is a title of another pack', () => {
+  const own = specTitles(readText('web/e2e/accept25.spec.ts'));
+  const others = PACKS.filter((phase) => phase !== '25').flatMap((phase) => specTitles(readText(`web/e2e/accept${phase}.spec.ts`)));
+  assert.ok(others.length > 0);
+  assert.deepEqual(own.filter((title) => others.includes(title)), []);
+});

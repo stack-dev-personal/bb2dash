@@ -51,6 +51,7 @@ import {
 import type { WorkspaceFormat } from '@/lib/queries.workspace-ask';
 import type { WorkspaceSource, WorkspaceTurn as WorkspaceTurnRow } from '@/lib/queries.workspace-sources';
 import { askProblemLine, conversationProblemLine, sourcesProblemLine, stopProblemLine } from '@/lib/workspace-labels';
+import { proposalsProblemLine, type WorkspaceProposal } from '@/lib/workspace-proposals';
 import { MessageList } from './MessageList';
 import { ServiceStatus } from './ServiceStatus';
 import { buildTurns, emptyColumnOf, type LiveStream } from './thread';
@@ -64,12 +65,20 @@ const NONE_STOPPED: ReadonlySet<number> = new Set();
  * the column's not-found line: the database's sentence about the foreign key is
  * never shown.
  */
-function problemLines(failed: { read: unknown; sources: unknown; ask: unknown; stop: unknown }): string[] {
-  const { read, sources, ask, stop } = failed;
+function problemLines(failed: {
+  read: unknown;
+  sources: unknown;
+  proposals: unknown;
+  ask: unknown;
+  stop: unknown;
+}): string[] {
+  const { read, sources, proposals, ask, stop } = failed;
   const lines: string[] = [];
   if (read) lines.push(conversationProblemLine(workspaceErrorReason(read)));
   // The conversation's sources are read once, so a failure is said once (round 2, R2-8).
   if (sources) lines.push(sourcesProblemLine(workspaceErrorReason(sources)));
+  // So are its proposed planner changes (Phase 25b).
+  if (proposals) lines.push(proposalsProblemLine(proposals));
   if (ask && !isMissingConversation(ask)) lines.push(askProblemLine(workspaceErrorReason(ask)));
   if (stop) lines.push(stopProblemLine(workspaceErrorReason(stop)));
   return lines;
@@ -135,6 +144,10 @@ export interface ThreadProps {
   sources: ReadonlyMap<number, readonly WorkspaceSource[]>;
   /** That read failed: said once, above the column. */
   sourcesError: unknown;
+  /** Each request's proposed planner changes, read once for the conversation (Phase 25b); absent reads as none. */
+  proposals?: ReadonlyMap<number, readonly WorkspaceProposal[]>;
+  /** That read failed: said once, above the column. */
+  proposalsError?: unknown;
   now: number;
   /** A chip or a sources row was pressed: open the panel's Sources tab at that request. */
   onOpenSources: (requestId: number, ord: number | null) => void;
@@ -167,6 +180,7 @@ export function Thread(props: ThreadProps) {
   const problems = problemLines({
     read: props.readError,
     sources: props.sourcesError,
+    proposals: props.proposalsError,
     ask: askError,
     stop: stopper.error,
   });
@@ -184,6 +198,7 @@ export function Thread(props: ThreadProps) {
         askedQuestionId={askedQuestionId}
         onOpenSources={props.onOpenSources}
         sources={props.sources}
+        proposals={props.proposals}
       />
       <div className={styles.dock} data-composer-dock>
         <Composer

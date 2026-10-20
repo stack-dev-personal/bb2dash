@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { HEARTBEAT_MS } from '../../src/config.js';
+import { HEARTBEAT_MS, MAX_OPEN_CLAIMS } from '../../src/config.js';
 import {
   APPLICATION_NAME,
   PG_CLIENT_OPTIONS,
@@ -44,11 +44,13 @@ const CLAIM_ROW = {
 };
 
 describe('the runner calls', () => {
-  it('claims under the runner name through workspace_claim_v2 and reads the row', async () => {
+  it('claims under the runner name through workspace_claim_v3 with the cap of two, and reads the row', async () => {
     const { query, sent } = fakeQuery([CLAIM_ROW]);
     const claim = await createRpc(query).claim('workspace@test');
-    expect(sent[0]?.sql).toContain('public.workspace_claim_v2($1)');
-    expect(sent[0]?.params).toEqual(['workspace@test']);
+    expect(MAX_OPEN_CLAIMS).toBe(2);
+    expect(sent[0]?.sql).toContain('public.workspace_claim_v3($1, $2)');
+    expect(sent[0]?.sql).not.toContain('workspace_claim_v2');
+    expect(sent[0]?.params).toEqual(['workspace@test', MAX_OPEN_CLAIMS]);
     expect(claim).toEqual({
       requestId: '41',
       conversationId: CONVERSATION_ID,
@@ -240,8 +242,24 @@ describe('the runner calls', () => {
     expect(sent[0]?.params).toEqual(['workspace@test']);
   });
 
+  it('files a proposal through workspace_propose with its own request id and runner name, the value as a JSON string', async () => {
+    const { query, sent } = fakeQuery([{ proposal_id: '17', label: 'Problem Set 4', old_value: null, new_value: 'submitted' }]);
+    const row = await createRpc(query).propose('41', 'workspace', {
+      target: 'assignment_progress', row_id: 'ECN.304/ps-4', field: 'status', value: 'submitted', reason: 'He turned it in.',
+    });
+    expect(sent[0]?.sql).toContain('from public.workspace_propose($1::bigint, $2, $3, $4, $5, $6::jsonb, $7)');
+    expect(sent[0]?.params).toEqual(['41', 'workspace', 'assignment_progress', 'ECN.304/ps-4', 'status', '"submitted"', 'He turned it in.']);
+    expect(row).toEqual({ proposal_id: '17', label: 'Problem Set 4', old_value: null, new_value: 'submitted' });
+  });
+
+  it('refuses a proposal row it cannot read', async () => {
+    const input = { target: 'reading_progress', row_id: '314', field: 'notes', value: 'n', reason: 'r' } as const;
+    await expect(createRpc(fakeQuery([]).query).propose('41', 'w', input)).rejects.toThrow(/no row/);
+    await expect(createRpc(fakeQuery([{ proposal_id: null, label: 'x' }]).query).propose('41', 'w', input)).rejects.toThrow(/no row/);
+  });
+
   it('touches no table: every statement is one of the eleven functions', async () => {
-    const { query, sent } = fakeQuery([CLAIM_ROW]);
+    const { query, sent } = fakeQuery([{ ...CLAIM_ROW, proposal_id: '1', label: 'x', old_value: null, new_value: 'y' }]);
     const rpc = createRpc(query);
     await rpc.claim('w');
     await rpc.begin('41', 'low', 'claude-cli', 'haiku');
@@ -253,9 +271,10 @@ describe('the runner calls', () => {
     await rpc.plannerFeed('41', 'w', null, null);
     await rpc.jobClaim('w', ['rolling']);
     await rpc.jobFinish('w', { conversationId: CONVERSATION_ID, kind: 'rolling', outcome: 'released', summary: null, through: null });
-    expect(sent).toHaveLength(10);
+    await rpc.propose('41', 'w', { target: 'assignment_progress', row_id: 'a', field: 'notes', value: 'y', reason: 'r' });
+    expect(sent).toHaveLength(11);
     for (const { sql } of sent) {
-      expect(sql).toMatch(/public\.workspace_(claim_v2|begin|stream|finish|heartbeat|turn_context|turn_put|planner_feed|job_claim|job_finish)\(/);
+      expect(sql).toMatch(/public\.workspace_(claim_v3|begin|stream|finish|heartbeat|turn_context|turn_put|planner_feed|job_claim|job_finish|propose)\(/);
       expect(sql).not.toMatch(/\b(insert|update|delete)\b/i);
       expect(sql).not.toMatch(/\bfrom\s+(public\.)?(workspace_messages|workspace_requests|assignment_progress|reading_progress)/i);
     }

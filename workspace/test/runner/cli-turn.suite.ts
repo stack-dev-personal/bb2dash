@@ -90,7 +90,7 @@ const initLine = (overrides: Line = {}): Line => ({
   subtype: 'init',
   session_id: STORED_SESSION_ID,
   tools: [...ALLOWED_TOOLS],
-  mcp_servers: [{ name: 'bb2dash', status: 'connected' }],
+  mcp_servers: [{ name: 'bb2dash', status: 'connected' }, { name: 'planner', status: 'connected' }],
   model: 'claude-haiku-4-5-20251001',
   permissionMode: 'dontAsk',
   apiKeySource: 'none',

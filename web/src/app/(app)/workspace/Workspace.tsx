@@ -78,6 +78,8 @@ import {
   type WorkspaceRequestOptions,
 } from '@/lib/queries.workspace-ask';
 import { sourcesByRequest, useWorkspaceSourcesFor, useWorkspaceTurns } from '@/lib/queries.workspace-sources';
+import { proposalKeys, useConversationProposals } from '@/lib/queries.workspace-proposals';
+import { proposalsByRequest, type WorkspaceProposal } from '@/lib/workspace-proposals';
 import { useHydrated } from '@/lib/use-hydrated';
 import { useNow } from '@/lib/use-now';
 import { useWorkspaceStream, type WorkspaceStreamView } from '@/lib/use-workspace-stream';
@@ -102,6 +104,7 @@ function ofRequests<T extends { request_id: number }>(rows: readonly T[] | undef
 }
 const NO_FORMATS: ReadonlyMap<number, WorkspaceFormat> = new Map();
 const NO_SOURCE_ROWS: ReadonlyMap<number, readonly WorkspaceSource[]> = new Map();
+const NO_PROPOSAL_ROWS: ReadonlyMap<number, readonly WorkspaceProposal[]> = new Map();
 
 /* ---------------------------------------------------------------------------
  * The rows of one conversation, and its channel
@@ -111,7 +114,8 @@ const NO_SOURCE_ROWS: ReadonlyMap<number, readonly WorkspaceSource[]> = new Map(
  * A request that stops being the open one has its stored row: `workspace_finish()`
  * commits the request and the message together. So the messages are read once at
  * that moment, whatever told the page (the `done` broadcast, a poll, a refetch on
- * focus).
+ * focus). The conversation's proposed planner changes are read again at the same moment: the
+ * runner files them while it answers, and the cards show under the finished answer (Phase 25b).
  */
 function useStoredRowOnClose(conversationId: string | null, openRequestId: number | null): void {
   const queryClient = useQueryClient();
@@ -120,6 +124,7 @@ function useStoredRowOnClose(conversationId: string | null, openRequestId: numbe
     if (conversationId === null || openRequestId === null) return undefined;
     return () => {
       void queryClient.invalidateQueries({ queryKey: workspaceKeys.messages(conversationId) });
+      void queryClient.invalidateQueries({ queryKey: proposalKeys.conversation(conversationId) });
     };
   }, [conversationId, openRequestId, queryClient]);
 }
@@ -173,6 +178,11 @@ function useConversation(conversationId: string | null, hydrated: boolean) {
     () => formatsOf(ofRequests(options.data, requestIds) ?? NO_OPTIONS),
     [options.data, requestIds],
   );
+  const proposals = useConversationProposals(conversationId);
+  const proposalRows = useMemo(
+    () => proposalsByRequest(ofRequests(proposals.data, requestIds) ?? []),
+    [proposals.data, requestIds],
+  );
 
   // The newest request is followed until its stored answer has landed.
   const followed = liveRequestOf(requestRows, messageRows);
@@ -192,6 +202,8 @@ function useConversation(conversationId: string | null, hydrated: boolean) {
     turnRows: hydrated ? turnRows : undefined,
     sources: hydrated ? sourceRows : NO_SOURCE_ROWS,
     sourcesError: hydrated ? sources.error : null,
+    proposals: hydrated ? proposalRows : NO_PROPOSAL_ROWS,
+    proposalsError: hydrated ? proposals.error : null,
     formats: hydrated ? formats : NO_FORMATS,
     // Until both have answered, an id with no rows is still being read, not "not found".
     loaded: hydrated && requests.data !== undefined && messages.data !== undefined,
@@ -268,6 +280,8 @@ function ThreadOf(props: { conversationId: string; conversation: Conversation; n
       turnRows={conversation.turnRows}
       sources={conversation.sources}
       sourcesError={conversation.sourcesError}
+      proposals={conversation.proposals}
+      proposalsError={conversation.proposalsError}
       formats={conversation.formats}
       loaded={conversation.loaded}
       readError={conversation.readError}

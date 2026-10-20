@@ -1,7 +1,8 @@
 /**
  * The MCP configs the CLI is started with (`--strict-mcp-config --mcp-config <file>`; brief 109,
  * Argv): an answering turn gets its own file, `/run/workspace/mcp-<request id>.json`, mode 0600,
- * with exactly one server, the materials one, and the turn's limits in its `env`; the file is removed
+ * with exactly two servers: the materials one, with the turn's limits in its `env`, and (Phase 25b) the
+ * planner tool server, with the turn's socket and its limit of five proposals; the file is removed
  * after the turn. A planning, summary or rolling turn gets `/run/workspace/mcp-none.json`, which
  * names no server. Never a key, a token or a DSN: the materials server reads its key from the file
  * it is named. The paths are the seam with the image (`test/mcp-config.test.ts` pins them).
@@ -13,6 +14,8 @@
 import fs from 'node:fs';
 
 import { MATERIALS_ENV, PATHS, proxyEnv } from './config.js';
+import { proposeSocketPath } from './propose/channel.js';
+import { PROPOSALS_PER_TURN, PROPOSE_LIMIT_ENV, PROPOSE_SOCKET_ENV } from './propose/protocol.js';
 
 export const MCP_CONFIG_MODE = 0o600;
 
@@ -29,7 +32,7 @@ export interface McpServerEntry {
 }
 
 export interface McpConfig {
-  readonly mcpServers: { readonly bb2dash?: McpServerEntry };
+  readonly mcpServers: { readonly bb2dash?: McpServerEntry; readonly planner?: McpServerEntry };
 }
 
 /** What the materials server is told to enforce on this turn. */
@@ -54,9 +57,15 @@ export function buildNoServerConfig(): McpConfig {
 
 /**
  * The answering turn's config: the materials server, started by path, with the turn's limits and the
- * runner's proxy settings (Phase 25a: its fetch reaches the project host through the egress proxy only).
+ * runner's proxy settings (Phase 25a: its fetch reaches the project host through the egress proxy only);
+ * and the planner tool server (Phase 25b), which makes no network call and holds no credential: its env
+ * is the turn's socket and the limit, nothing else.
  */
-export function buildMcpConfig(limits: TurnLimits, env: Readonly<Record<string, string | undefined>> = process.env): McpConfig {
+export function buildMcpConfig(
+  limits: TurnLimits,
+  proposeSocket: string,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): McpConfig {
   const scope: Record<string, string> = limits.courses === null || limits.courses.length === 0 ? {} : { BB2DASH_COURSES: limits.courses.join(',') };
   return {
     mcpServers: {
@@ -71,6 +80,12 @@ export function buildMcpConfig(limits: TurnLimits, env: Readonly<Record<string, 
           BB2DASH_MAX_READS: String(limits.maxReads),
           ...scope,
         },
+      },
+      // Planner proposals: propose_planner_change. The runner files them; this server only forwards.
+      planner: {
+        command: 'node',
+        args: [PATHS.plannerServer],
+        env: { [PROPOSE_SOCKET_ENV]: proposeSocket, [PROPOSE_LIMIT_ENV]: String(PROPOSALS_PER_TURN) },
       },
     },
   };
@@ -106,7 +121,7 @@ export function writeNoServerConfig(file: string = PATHS.mcpNone, fileSystem: Mc
 /** An answering turn's own file; returns its path. */
 export function writeRequestConfig(requestId: string, limits: TurnLimits, runDir: string = PATHS.runDir, fileSystem: McpConfigFs = fs): string {
   const file = requestConfigPath(requestId, runDir);
-  writeConfigFile(file, buildMcpConfig(limits), fileSystem);
+  writeConfigFile(file, buildMcpConfig(limits, proposeSocketPath(requestId, runDir)), fileSystem);
   return file;
 }
 

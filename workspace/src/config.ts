@@ -23,6 +23,8 @@ export const PATHS = Object.freeze({
   /** Touched after every successful heartbeat; the healthcheck reads its age. */
   aliveFile: '/run/workspace/alive',
   settings: '/app/workspace/claude/settings.json',
+  /** The planner tool server (Phase 25b): credential-free, started by the CLI for an answering turn. */
+  plannerServer: '/app/workspace/dist/propose/planner-server.js',
   systemPrompt: '/app/workspace/prompts/system.md',
   /** The folder of the prompt files: system, the two format rules, plan, summary and rolling. */
   promptsDir: '/app/workspace/prompts',
@@ -63,8 +65,22 @@ export const DB_CA_FILE_ENV = 'WORKSPACE_DB_CA_FILE';
 
 /** How often the runner asks for the next queued request. */
 export const POLL_INTERVAL_MS = 2000;
-/** One turn at a time: the plan's limits are shared with the owner's own sessions. */
+/** One turn at a time per runner: the plan's limits are shared with the owner's own sessions. */
 export const TURN_CONCURRENCY = 1;
+/**
+ * At most this many requests are claimed at once ACROSS runners (Phase 25b, Stack's answer 5: two
+ * answers at once, cap 2): `workspace_claim_v3`'s p_max_open (migration 202). Each runner still
+ * answers one turn at a time (TURN_CONCURRENCY), so two runners give two answers at once.
+ */
+export const MAX_OPEN_CLAIMS = 2;
+/**
+ * Names the runner (Phase 25b): compose sets it per service as `<project>-<service>`
+ * (`bb2dash-workspace`, `bb2dash-workspace-2` live), so the name survives a recreated container,
+ * whose hostname is new, and a test project's runner never shares a live one (review R2-2). The
+ * database closes a request still claimed under the caller's own name as its dead turn, so each
+ * runner's name must be its own and stable. Unset or empty: the hostname, as before.
+ */
+export const RUNNER_NAME_ENV = 'WORKSPACE_RUNNER_NAME';
 /** Answer text is sent to the page in flushes this far apart. */
 export const STREAM_FLUSH_MS = 250;
 /** With no text flushed for this long, the runner asks whether the request is still claimed. */
@@ -158,6 +174,12 @@ const withoutMark = (text: string): string => (text.startsWith(BYTE_ORDER_MARK) 
 /** Dollars with at most two decimals: the flag is written with two, so a third would reach the CLI rounded. */
 const BUDGET_SHAPE = /^\d+(\.\d{1,2})?$/;
 const RUNNER_NAME_PREFIX = 'workspace@';
+/**
+ * A runner name: 1 to 63 lowercase letters, digits and hyphens, a letter or digit at each end (a DNS
+ * label's shape). Compose gives `<project>-<service>` (review R2-2): `bb2dash-workspace` live, the test
+ * project's own name first in a test project, so a test runner never claims under a live name.
+ */
+const RUNNER_NAME_SHAPE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const DSN_SECRET_NAME = 'workspace_runner_db_url';
 const TOKEN_SECRET_NAME = 'claude_oauth_token';
 
@@ -226,6 +248,24 @@ export function parseTurnBudget(raw: string | undefined): number {
     throw new ConfigError(`${TURN_BUDGET_ENV} must be an amount from ${range} with at most two decimals`);
   }
   return dollars;
+}
+
+/**
+ * `WORKSPACE_RUNNER_NAME`, trimmed: refused unless it has a runner name's shape. The message names
+ * the variable and the rule, never the value.
+ */
+export function parseRunnerName(raw: string): string {
+  const name = raw.trim();
+  if (!RUNNER_NAME_SHAPE.test(name)) {
+    throw new ConfigError(`${RUNNER_NAME_ENV} must be 1 to 63 lowercase letters, digits and hyphens, with a letter or digit at each end`);
+  }
+  return name;
+}
+
+/** The name the runner claims and beats under: WORKSPACE_RUNNER_NAME when it is set and not empty, else the hostname. */
+function runnerNameOf(env: Env, hostname: string): string {
+  const raw = env[RUNNER_NAME_ENV] ?? '';
+  return `${RUNNER_NAME_PREFIX}${raw.trim() === '' ? hostname : parseRunnerName(raw)}`;
 }
 
 /**
@@ -315,7 +355,8 @@ export interface ConfigSource {
 export function loadConfig(source: ConfigSource): RunnerConfig {
   assertSubscriptionEnv(source.env);
   const budgetUsd = parseTurnBudget(source.env[TURN_BUDGET_ENV]);
+  const runnerName = runnerNameOf(source.env, source.hostname);
   const dbUrl = assertRunnerDsn(requireSecret(PATHS.runnerDbUrlSecret, DSN_SECRET_NAME, source.readFile));
   const dbCa = readDbCa(source.env, source.readFile);
-  return { dbUrl, dbCa, budgetUsd, runnerName: `${RUNNER_NAME_PREFIX}${source.hostname}` };
+  return { dbUrl, dbCa, budgetUsd, runnerName };
 }

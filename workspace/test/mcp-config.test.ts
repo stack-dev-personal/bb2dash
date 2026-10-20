@@ -66,20 +66,37 @@ describe('the in-image layout (the seam with the image)', () => {
     expect(tsconfig.compilerOptions.rootDir).toBe('src');
     expect(tsconfig.compilerOptions.outDir).toBe('dist');
     expect(tsconfig.include).toEqual(['src/**/*.ts']);
-    for (const source of ['runner.ts', 'healthcheck.ts', 'search-probe.ts', path.join('hooks', 'tool-gate.ts')]) {
+    for (const source of ['runner.ts', 'healthcheck.ts', 'search-probe.ts', path.join('hooks', 'tool-gate.ts'), path.join('propose', 'planner-server.ts')]) {
       expect(fs.existsSync(path.resolve(HERE, '..', 'src', source)), source).toBe(true);
     }
   });
 });
 
+const SOCKET = '/run/workspace/propose-41.sock';
+
 describe('the answering turn MCP config', () => {
   const limits = turnLimits(true, ['BIO.110', 'BIO.110.lab']);
-  const config = buildMcpConfig(limits, {});
+  const config = buildMcpConfig(limits, SOCKET, {});
 
-  it('holds exactly one server, bb2dash: the notes server is gone', () => {
+  it('holds exactly two servers, bb2dash and planner: the notes server is gone', () => {
     expect(Object.keys(config)).toEqual(['mcpServers']);
-    expect(Object.keys(config.mcpServers)).toEqual(['bb2dash']);
+    expect(Object.keys(config.mcpServers)).toEqual(['bb2dash', 'planner']);
     expect(JSON.stringify(config)).not.toContain('rag');
+  });
+
+  it('starts the planner tool server by path with the turn socket and the limit of 5, and nothing else in its env', () => {
+    expect(PATHS.plannerServer).toBe('/app/workspace/dist/propose/planner-server.js');
+    expect(config.mcpServers.planner).toEqual({
+      command: 'node',
+      args: ['/app/workspace/dist/propose/planner-server.js'],
+      env: { WORKSPACE_PROPOSE_SOCKET: '/run/workspace/propose-41.sock', WORKSPACE_PROPOSE_LIMIT: '5' },
+    });
+    const proxied = buildMcpConfig(limits, SOCKET, { HTTPS_PROXY: 'http://egress:3128', NODE_USE_ENV_PROXY: '1' });
+    expect(proxied.mcpServers.planner?.env).toEqual(config.mcpServers.planner?.env);
+  });
+
+  it('names the planner entry file among the ones the image builds', () => {
+    expect(fs.existsSync(path.resolve(HERE, '..', 'src', 'propose', 'planner-server.ts'))).toBe(true);
   });
 
   it('starts the materials server by path, its key named by file, with the turn limits in its env', () => {
@@ -103,7 +120,7 @@ describe('the answering turn MCP config', () => {
 
   it('names no course when the request has no scope', () => {
     for (const courses of [null, []]) {
-      const env = buildMcpConfig(turnLimits(true, courses)).mcpServers.bb2dash?.env ?? {};
+      const env = buildMcpConfig(turnLimits(true, courses), SOCKET).mcpServers.bb2dash?.env ?? {};
       expect('BB2DASH_COURSES' in env).toBe(false);
     }
   });
@@ -153,7 +170,7 @@ describe('a request config file', () => {
     const file = writeRequestConfig('77', turnLimits(false, ['MAT.221']), dir);
     expect(file).toBe(`${dir}/mcp-77.json`);
     const written = JSON.parse(fs.readFileSync(file, 'utf8')) as ReturnType<typeof buildMcpConfig>;
-    expect(written).toEqual(buildMcpConfig(turnLimits(false, ['MAT.221'])));
+    expect(written).toEqual(buildMcpConfig(turnLimits(false, ['MAT.221']), `${dir}/propose-77.sock`));
     if (process.platform !== 'win32') expect(fs.statSync(file).mode & 0o777).toBe(0o600);
     removeRequestConfig(file);
     expect(fs.existsSync(file)).toBe(false);
@@ -171,11 +188,24 @@ describe('a request config file', () => {
       { what: 'chmod', file: '/run/workspace/mcp-9.json', mode: 0o600 },
     ]);
   });
+
+  it('names the request\'s own socket for the planner server', () => {
+    let text = '';
+    writeRequestConfig('9', turnLimits(true, null), '/run/workspace', {
+      writeFileSync: (_file, written) => {
+        text = written;
+      },
+      chmodSync: () => undefined,
+    });
+    expect((JSON.parse(text) as { mcpServers: { planner: { env: Record<string, string> } } }).mcpServers.planner.env.WORKSPACE_PROPOSE_SOCKET).toBe(
+      '/run/workspace/propose-9.sock',
+    );
+  });
 });
 
 describe("the materials server's proxy settings (Phase 25a)", () => {
   it("carries the runner's HTTPS_PROXY, NO_PROXY and NODE_USE_ENV_PROXY, and nothing else of its env", () => {
-    const env = buildMcpConfig(turnLimits(false, null), {
+    const env = buildMcpConfig(turnLimits(false, null), SOCKET, {
       HTTPS_PROXY: 'http://egress:3128',
       NO_PROXY: 'localhost,127.0.0.1',
       NODE_USE_ENV_PROXY: '1',
@@ -194,7 +224,7 @@ describe("the materials server's proxy settings (Phase 25a)", () => {
   });
 
   it('leaves an empty setting out', () => {
-    const env = buildMcpConfig(turnLimits(false, null), { HTTPS_PROXY: '', NODE_USE_ENV_PROXY: '1' }).mcpServers.bb2dash?.env ?? {};
+    const env = buildMcpConfig(turnLimits(false, null), SOCKET, { HTTPS_PROXY: '', NODE_USE_ENV_PROXY: '1' }).mcpServers.bb2dash?.env ?? {};
     expect('HTTPS_PROXY' in env).toBe(false);
     expect(env.NODE_USE_ENV_PROXY).toBe('1');
   });
