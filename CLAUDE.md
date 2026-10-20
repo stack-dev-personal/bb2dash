@@ -99,7 +99,9 @@ Supabase project: `goultdzqcavefcgnifdy` (us-east-1, Postgres 17). Full access v
   proposal is a `workspace_proposals` row (203) and an Inbox item of kind `assistant_proposal` (205), kept out
   of the apply queue, `/inbox-apply` and the decision filing. Stack decides on the card under the answer or in
   the Inbox; both call `workspace_proposal_decide` (206, SECURITY INVOKER, as Stack under his row security),
-  which re-reads the row and writes it, or marks the proposal `stale`; a proposal unanswered for 7 days expires
+  which re-reads the row and writes it, or marks the proposal `stale`; he may edit the proposed value before
+  approving (`p_value`, checked by `workspace_proposal_value_check`; what was written is `approved_value`, beside
+  the assistant's `new_value`); a proposal unanswered for 7 days expires
   (a sweep every five minutes). No notes store is read. The runner's login executes fourteen SECURITY DEFINER functions (the
   twelfth, 207 from Phase 25a, returns only eleven search timings, for the doctor's index row; the thirteenth,
   `workspace_claim_v3` (202); the fourteenth, `workspace_propose` (204)) and holds no table grant; through them,

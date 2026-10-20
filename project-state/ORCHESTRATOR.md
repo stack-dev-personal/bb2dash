@@ -266,8 +266,8 @@ Learned in the Phase 23 follow-ups (2026-10-09; each from `verification/110a_PHA
 ## 4. Open items that are Stack's, not the PM's
 
 * **Phase 25b, the assistant (built and reviewed 2026-10-20; PR open, base `main`).** Yours, in order:
-  1. **The look**: the card shots in `docs/planning/sprint-2/walks/walk-25b/` (open with old and new values, approved, stale; Workspace and Inbox; dark and light; 1280 and 390 px; demo data). The branch preview has no proposal rows before the cut-over.
-  2. **The merge words** for the bb2dash PR and the bb2dash-stack doctor PR (`feat/phase25b-w103-doctor`). Not inside Nov 30 to Dec 13.
+  1. ~~**The look**~~ Done 2026-10-20 on two review pages: round 1 asked for the edit (W-106), round 2 "looks good. merge." (119a).
+  2. ~~**The merge words**~~ Given 2026-10-20 ("merge."): #128, then bb2dash-stack #10.
   3. **The cut-over word**: 202 to 206 applied in order, byte-identical; `workspace` rebuilt alone, then `workspace-2` started alone, never during a turn or a sync; `just doctor` shows two runners (STATUS "Phase 25b").
   4. `just accept 25` from `main` after it; step 1 (usage) is yours. The run proposes on one graded assignment with no note, approves, rejects, makes one stale and clears the note again, proving the planner is as go-live read it.
   5. **Defaults you may overturn** (119a, "PM rulings, 25b" and "Review round 2"): E's page built while D was built; expiry also swept every five minutes; `applied` for an approval that wrote; the feed carries item ids; the tool offers the six statuses the app's menus offer; the owner may PATCH his own proposal's state (R2-6); a proposal filed during a sync fold counts in that fold's raised items (R2-1).

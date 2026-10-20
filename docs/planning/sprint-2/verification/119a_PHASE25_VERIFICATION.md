@@ -200,3 +200,24 @@ for manual reviews (his global instructions and the PM's memory).
 | E-5 | 203, 204, 205 (the view) and 206 are amended in place, no new number | none of 202–206 is on prod; the apply at the cut-over stays byte-identical to the files as merged |
 
 Built by W-106 (Opus) on `feat/phase25b-edit-proposed`; its result, the reviews and the walk of the new shots follow.
+
+**W-106 (Opus), the edit** (`feat/phase25b-edit-proposed`, c36acb6f and cf4f7693, round 2 d775808e and 70784fbe, PM
+7d6bcba3): 203 `approved_value` (a shape check, set exactly when `applied`, fixed once set by a trigger, 55000);
+204's per-field check moved into `workspace_proposal_value_check` (INVOKER, `authenticated` only: inside 204, a
+DEFINER, the call is checked against the definer, so the runner's grant was dropped; the runner still executes
+fourteen SECURITY DEFINER functions); 205's view carries the column; 206 takes `p_value jsonb default null` (refused on
+a reject; the stale check still against `old_value`; the resolution gains `edited`). Web: `ProposedValue.tsx`,
+`lib/proposal-draft.ts`; Approve and Reject `aria-disabled` while a box is open.
+
+| check | result |
+|---|---|
+| review (Opus, read-only) | input safety OK (no dynamic SQL; field and row from the locked proposal), privileges OK; MEDIUM Approve during an open edit discarded it and wrote the old value: fixed (round 2); LOW `approved_value` rewritable by the owner: trigger; LOW comment on the runner grant: grant dropped; LOW function prefix in the card's message: stripped; LOW two test gaps: added |
+| SQL | the five 25b units on PGlite; rolled-back prod dry run of 202–206 with the files fetched at d775808e (SHA-256 matched), every unit PASS; prod unchanged afterwards |
+| web | 4024 tests, typecheck, lint, build, token audit |
+| acceptance + `accept-proofs-db25` | 77 |
+| walk box | run `20261020T163201Z` 4/4 (no hover shot: PM asked for 12–14); `20261020T165012Z` 2 of 4, the 390 runs: Chromium's `setEmulatedMedia` ignores `hover`; the PM turned on touch emulation (7d6bcba3); `20261020T165210Z` 4/4, 48 shots |
+| Stack | round 2 review page; "looks good. merge." (2026-10-20) |
+
+Merged into the phase branch: 075f96bc.
+
+Gates on the phase branch at 075f96bc (W-106 merged): web 4024, typecheck, build; workspace 1090; acceptance and scripts 555, 0 failed. Merged to `main` on Stack's "merge." (2026-10-20).
