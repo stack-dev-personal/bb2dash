@@ -2,7 +2,7 @@
  * The runner's database side: the `workspace_runner` functions (migration 142's four, five of
  * migration 196: `workspace_turn_context`, `workspace_turn_put`, `workspace_planner_feed`,
  * `workspace_job_claim` and `workspace_job_finish`, and migration 202's `workspace_claim_v3`, which
- * took the place of 196's `workspace_claim_v2`), and nothing else. The
+ * took the place of 196's `workspace_claim_v2`, and 204's `workspace_propose`), and nothing else. The
  * role holds no table privilege, so every statement below is one of them. Their shapes are frozen in
  * `test/fixtures/contract24`.
  *
@@ -16,6 +16,7 @@ import pg from 'pg';
 
 import { MAX_OPEN_CLAIMS } from './config.js';
 import { messageOf, type ErrorCode } from './errors.js';
+import type { ProposalRow, ProposeInput } from './propose/protocol.js';
 import type { ProviderId, StoredToolCall } from './providers/types.js';
 import type { Tier } from './tiers.js';
 
@@ -119,6 +120,8 @@ export interface WorkspaceRpc {
   stream(requestId: string, seq: number, delta: string): Promise<boolean>;
   finish(args: FinishArgs): Promise<void>;
   heartbeat(runner: string): Promise<void>;
+  /** `workspace_propose` (204): one planner proposal for the runner's own claimed request; the row it filed. */
+  propose(requestId: string, runner: string, input: ProposeInput): Promise<ProposalRow>;
 }
 
 const REQUEST_ID_SHAPE = /^[1-9][0-9]{0,18}$/;
@@ -249,6 +252,18 @@ export function createRpc(query: QueryFn): WorkspaceRpc {
     },
     async heartbeat(runner) {
       await query('select public.workspace_heartbeat($1)', [runner]);
+    },
+    async propose(requestId, runner, input) {
+      const result = await query(
+        'select proposal_id::text as proposal_id, label, old_value, new_value ' +
+          'from public.workspace_propose($1::bigint, $2, $3, $4, $5, $6::jsonb, $7)',
+        [requestId, runner, input.target, input.row_id, input.field, JSON.stringify(input.value), input.reason],
+      );
+      const row = result.rows[0];
+      if (!row || typeof row.proposal_id !== 'string' || typeof row.label !== 'string') {
+        throw new Error('workspace_propose: no row came back');
+      }
+      return { proposal_id: row.proposal_id, label: row.label, old_value: row.old_value ?? null, new_value: row.new_value ?? null };
     },
   };
 }

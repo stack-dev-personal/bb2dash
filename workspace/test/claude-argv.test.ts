@@ -31,7 +31,7 @@ const PROMPT = 'Context for one question.\n\nQuestion:\n\nWhat does the IST.323 
 const BARE_FLAG = `--${'bare'}`;
 const REQUEST_CONFIG = '/run/workspace/mcp-41.json';
 
-const ANSWER_TOOLS = ['mcp__bb2dash__search_materials', 'mcp__bb2dash__get_material_text'];
+const ANSWER_TOOLS = ['mcp__bb2dash__search_materials', 'mcp__bb2dash__get_material_text', 'mcp__planner__propose_planner_change'];
 
 /** The argv of an answering turn, element for element (brief 109, Argv, against claude-cli.ts). */
 function answerArgv(prompt: string, budget = '0.95'): string[] {

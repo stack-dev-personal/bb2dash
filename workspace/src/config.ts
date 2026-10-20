@@ -23,6 +23,8 @@ export const PATHS = Object.freeze({
   /** Touched after every successful heartbeat; the healthcheck reads its age. */
   aliveFile: '/run/workspace/alive',
   settings: '/app/workspace/claude/settings.json',
+  /** The planner tool server (Phase 25b): credential-free, started by the CLI for an answering turn. */
+  plannerServer: '/app/workspace/dist/propose/planner-server.js',
   systemPrompt: '/app/workspace/prompts/system.md',
   /** The folder of the prompt files: system, the two format rules, plan, summary and rolling. */
   promptsDir: '/app/workspace/prompts',

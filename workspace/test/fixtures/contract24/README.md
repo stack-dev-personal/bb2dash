@@ -219,7 +219,8 @@ always there. A work row's kind is `A` or `R`. A due time is New York wall clock
 `YYYY-MM-DD HH:MM`; a row with no due time shows its date; an undated row shows `-`. A date seen is
 the New York date. A null is `-`, true and false are `Y` and `N`, a number is printed as the jsonb
 holds it. Every value is one line; ` | ` inside a value is written ` / `; a title or a name is cut
-to 120 characters.
+to 120 characters. Since Phase 25b a work row also carries its `item_id` (`id`, before the title), so the
+assistant can name the row it proposes a planner change for (`propose_planner_change`, migration 204).
 
 ## The batch child
 

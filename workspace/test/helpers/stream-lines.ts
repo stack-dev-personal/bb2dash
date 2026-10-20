@@ -39,7 +39,10 @@ export const initLine = (overrides: Line = {}): Line => ({
   subtype: 'init',
   session_id: SESSION,
   tools: [...ALLOWED_TOOLS],
-  mcp_servers: [{ name: 'bb2dash', status: 'connected', source: 'dynamic' }],
+  mcp_servers: [
+    { name: 'bb2dash', status: 'connected', source: 'dynamic' },
+    { name: 'planner', status: 'connected', source: 'dynamic' },
+  ],
   model: 'claude-haiku-4-5-20251001',
   permissionMode: 'dontAsk',
   apiKeySource: 'none',

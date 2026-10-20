@@ -55,11 +55,17 @@ interface Recordings {
 const recordings = readJson<Recordings>('recordings.json');
 const RECORDED = Object.keys(recordings.fixtures);
 
-/** A recorded init line as an answering turn starts now: the notes server is not one of its servers. */
+/**
+ * A recorded init line as an answering turn starts now: the notes server is not one of its servers,
+ * and the planner tool server (Phase 25b), which the recordings predate, is, with its one tool.
+ */
 const withoutNotesServer = (init: InitFacts): InitFacts => ({
   ...init,
-  mcpServers: init.mcpServers.filter((server) => server.name !== 'rag'),
-  tools: init.tools.filter((tool) => !tool.startsWith('mcp__rag__')),
+  mcpServers: [
+    ...init.mcpServers.filter((server) => server.name !== 'rag' && server.name !== 'planner'),
+    { name: 'planner', status: 'connected' },
+  ],
+  tools: [...init.tools.filter((tool) => !tool.startsWith('mcp__rag__') && !tool.startsWith('mcp__planner__')), 'mcp__planner__propose_planner_change'],
 });
 
 describe('the recorded fixtures as files', () => {
@@ -131,12 +137,12 @@ describe('claude-stream-lookup.jsonl', () => {
     // The recording was made in Phase 21, with the notes server too.
     expect(init?.mcpServers.map((server) => server.name).sort()).toEqual(['bb2dash', 'rag']);
     expect(init?.mcpServers.every((server) => server.status === 'connected')).toBe(true);
-    for (const tool of ALLOWED_TOOLS) expect(init?.tools).toContain(tool);
+    for (const tool of ALLOWED_TOOLS.filter((name) => name.startsWith('mcp__bb2dash__'))) expect(init?.tools).toContain(tool);
     expect(init?.tools).not.toContain('ToolSearch');
     expect(init?.model).toBe('claude-haiku-4-5-20251001');
     expect(isUuidShaped(init?.sessionId)).toBe(true);
     expect(checkInit(withoutNotesServer(init!))).toEqual([]);
-    expect(checkInit(init!)).toEqual([expect.stringMatching(/not exactly bb2dash/)]);
+    expect(checkInit(init!)).toEqual([expect.stringMatching(/not exactly bb2dash/), expect.stringMatching(/propose_planner_change/)]);
     expect(summary.init).toEqual(withoutNotesServer(init!));
   });
 

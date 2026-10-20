@@ -114,6 +114,7 @@ export function turnHarness(turn: CliTurn, overrides: Partial<TurnDeps> = {}): T
     readPrompt: fakeReadPrompt,
     newMarker: () => '0123456789abcdef',
     mcpFiles: { write: (requestId) => `/run/workspace/mcp-${requestId}.json`, remove: () => undefined },
+    proposalSockets: { open: async () => ({ close: async () => undefined }) },
     ...overrides,
   };
   return { fake, logs, deps, clock, search };
@@ -145,6 +146,7 @@ export function loopHarness(turn: CliTurn): LoopHarness {
     readPrompt: fakeReadPrompt,
     newMarker: () => '0123456789abcdef',
     mcpFiles: { write: (requestId) => `/run/workspace/mcp-${requestId}.json`, remove: () => undefined },
+    proposalSockets: { open: async () => ({ close: async () => undefined }) },
     touchAlive: () => touches.push(clock.now()),
   };
   return { fake, logs, touches, deps, clock };

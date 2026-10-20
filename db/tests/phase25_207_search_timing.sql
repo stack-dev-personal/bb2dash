@@ -7,8 +7,8 @@
 --   1. who may call: workspace_runner may; public, anon, authenticated, service_role, sync_runner,
 --      inbox_apply_runner and workspace_ingest_runner may not
 --   2. the call, as workspace_runner: exactly eleven numbers, none null, none negative
---   3. the fence still stands: workspace_runner executes exactly thirteen SECURITY DEFINER functions
---      (twelve until 202 added workspace_claim_v3) and holds no table, view, column or sequence
+--   3. the fence still stands: workspace_runner executes exactly fourteen SECURITY DEFINER functions
+--      (thirteen until 204 added workspace_propose) and holds no table, view, column or sequence
 --      privilege in public
 --
 -- The call is made under `set local role workspace_runner` (142's membership), the way the probe
@@ -58,8 +58,8 @@ begin
    where has_function_privilege(w.who::name, f, 'execute');
   if v_got is not null then v_fail := v_fail || format('executable beyond workspace_runner: %s', v_got); end if;
 
-  -- 3. The fence: the thirteen since 202 added workspace_claim_v3 (RED against prod until 202 is
-  --    applied, 25b's cut-over), and no relation privilege.
+  -- 3. The fence: the fourteen since 202 added workspace_claim_v3 and 204 workspace_propose (RED against
+  --    prod until 202 and 204 are applied, 25b's cut-over), and no relation privilege.
   select string_agg(p.proname, ',' order by p.proname collate "C") into v_got
     from pg_proc p
    where p.pronamespace = 'public'::regnamespace and p.prosecdef
@@ -67,7 +67,7 @@ begin
   if v_got is distinct from
      'workspace_begin,workspace_claim,workspace_claim_v2,workspace_claim_v3,workspace_finish,'
      'workspace_heartbeat,workspace_job_claim,workspace_job_finish,workspace_planner_feed,'
-     'workspace_search_timing,workspace_stream,workspace_turn_context,workspace_turn_put' then
+     'workspace_propose,workspace_search_timing,workspace_stream,workspace_turn_context,workspace_turn_put' then
     v_fail := v_fail || format('workspace_runner executes the SECURITY DEFINER functions [%s]', v_got);
   end if;
   select string_agg(c.relname, ', ' order by c.relname collate "C") into v_got

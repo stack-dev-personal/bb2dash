@@ -394,6 +394,47 @@ describe('the context and the answering turn files', () => {
     expect(fake.finishes).toHaveLength(1);
   });
 
+  it('opens the proposal socket before the config and closes it after the turn, even when the turn throws (Phase 25b)', async () => {
+    const events: string[] = [];
+    const provider = byKind({
+      answer: async function* () {
+        events.push('answering');
+        throw new Error('the provider failed');
+      },
+    });
+    const { deps } = turnHarness(provider.turn, {
+      mcpFiles: { write: (id) => { events.push(`write ${id}`); return `/run/workspace/mcp-${id}.json`; }, remove: () => { events.push('remove'); } },
+      proposalSockets: {
+        open: async (id) => {
+          events.push(`open ${id}`);
+          return { close: async () => { events.push('close'); } };
+        },
+      },
+    });
+    expect(await finished(startTurn(deps, claimOf()))).toEqual({ state: 'failed', errorCode: 'cli_error' });
+    expect(events).toEqual(['open 41', 'write 41', 'answering', 'remove', 'close']);
+  });
+
+  it('opens no socket for a turn that never answers, and closes it when the config cannot be written', async () => {
+    const opened: string[] = [];
+    const sockets = { open: async (id: string) => { opened.push(id); return { close: async () => { opened.push(`close ${id}`); } }; } };
+    const refused = turnHarness(byKind().turn, { proposalSockets: sockets });
+    refused.fake.failBegin();
+    await finished(startTurn(refused.deps, claimOf()));
+    expect(opened).toEqual([]);
+    const noConfig = turnHarness(byKind().turn, { proposalSockets: sockets, mcpFiles: { write: () => { throw new Error('EACCES'); }, remove: () => undefined } });
+    expect(await finished(startTurn(noConfig.deps, claimOf()))).toEqual({ state: 'failed', errorCode: 'cli_error' });
+    expect(opened).toEqual(['41', 'close 41']);
+  });
+
+  it('closes the request as cli_error, with no answering turn, when the proposal socket cannot be opened', async () => {
+    const provider = byKind();
+    const { deps, logs } = turnHarness(provider.turn, { proposalSockets: { open: async () => { throw new Error('EADDRINUSE'); } } });
+    expect(await finished(startTurn(deps, claimOf()))).toEqual({ state: 'failed', errorCode: 'cli_error' });
+    expect(kindsOf(provider.inputs)).not.toContain('answer');
+    expect(logs.some((line) => line.includes('the proposal socket could not be opened'))).toBe(true);
+  });
+
   it('closes the request as cli_error when the config file cannot be written', async () => {
     const provider = byKind();
     const { fake, deps } = turnHarness(provider.turn, { mcpFiles: { write: () => { throw new Error('EACCES'); }, remove: () => undefined } });
