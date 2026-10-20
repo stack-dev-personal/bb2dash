@@ -100,7 +100,7 @@ Supabase project: `goultdzqcavefcgnifdy` (us-east-1, Postgres 17). Full access v
   of the apply queue, `/inbox-apply` and the decision filing. Stack decides on the card under the answer or in
   the Inbox; both call `workspace_proposal_decide` (206, SECURITY INVOKER, as Stack under his row security),
   which re-reads the row and writes it, or marks the proposal `stale`; a proposal unanswered for 7 days expires
-  (hourly sweep). No notes store is read. The runner's login executes fourteen SECURITY DEFINER functions (the
+  (a sweep every five minutes). No notes store is read. The runner's login executes fourteen SECURITY DEFINER functions (the
   twelfth, 207 from Phase 25a, returns only eleven search timings, for the doctor's index row; the thirteenth,
   `workspace_claim_v3` (202); the fourteenth, `workspace_propose` (204)) and holds no table grant; through them,
   for a request or a job it holds, it reads the conversation, the course list, attached files' names and the

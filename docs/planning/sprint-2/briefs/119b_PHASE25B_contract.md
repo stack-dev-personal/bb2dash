@@ -65,7 +65,7 @@ request_id, reason}`, `workspace_proposal_id = id`. Returns the row the tool sho
   `attention_item_id` and `attention_state` from the joined Inbox item.
 * `workspace_proposals_expire()` SECURITY DEFINER, granted to no client role: writes `expired` on every
   `proposed` row past `expires_at` and resolves its Inbox item (`resolution = {outcome: 'expired',
-  proposal_id}`); called hourly by a `pg_cron` job `bb2dash-proposals-expire` (PM default, so the Inbox
+  proposal_id}`); called every five minutes by a `pg_cron` job (hourly before R2-7, 119a) `bb2dash-proposals-expire` (PM default, so the Inbox
   count and Home never count an expired proposal as waiting).
 
 ## 206 `workspace_proposal_decide`

@@ -108,7 +108,7 @@ Ten turns in five pairs, no error, no limit message, no rate-limit text on stder
 | 2026-10-19 | E's names, signatures and columns are frozen in `../briefs/119b_PHASE25B_contract.md` before E's streams are cut | two streams (database and tool; page) build against one contract |
 | 2026-10-19 | the brief's `v_inbox_feedback` means every reader of answered Inbox items on the apply side: prod has no view of that name; `v_inbox_queue`, `v_sync_status` and the functions 119b lists leave `assistant_proposal` out | read on prod 2026-10-19 |
 | 2026-10-19 | an approval that writes stores `applied`; `approved` stays in the check, unused in v1 | 206 decides and writes in one transaction, so nothing is ever approved and not yet written |
-| 2026-10-19 | expiry is also swept hourly (`workspace_proposals_expire()`, a `pg_cron` job), besides the view and the decide call | the Inbox count and Home read `attention_items`, not the view; without the sweep an expired proposal would count as waiting |
+| 2026-10-19 | expiry is also swept (hourly; every five minutes since R2-7) (`workspace_proposals_expire()`, a `pg_cron` job), besides the view and the decide call | the Inbox count and Home read `attention_items`, not the view; without the sweep an expired proposal would count as waiting |
 | 2026-10-19 | the tool is served by a credential-free MCP server in `workspace/`; the runner makes the call to 204 on its own login over a per-turn socket | 204 is `workspace_runner`'s only (brief: "the runner inserts only through 204"); the materials server holds the service key and must not be the writer |
 | 2026-10-19 | E's page stream (web/ only) starts while D builds; E's database and tool stream waits for D's merge into the phase branch | Stack's order exists because D and E both touch `workspace/` and `compose.yaml` and the pinned function lists; `web/` touches neither |
 
@@ -156,3 +156,26 @@ cards as text nodes). Its three observations under 8: 204 does not hold a propos
 | R2-7 | a proposal past `expires_at` stays in "Needs you" until the hourly sweep | MEDIUM | W-104b: the Inbox files it by the proposal's state; W-104a: the sweep runs every five minutes |
 | R2-8 | the Inbox finds the proposal through `suggested.proposal_id`, not the checked column | LOW | W-104b: `workspace_proposal_id` |
 | R2-9 | the tool's status labels are a copy of the enum | LOW | W-104a: a unit holds the copy to `web/src/lib/progress-status.ts` |
+
+### Round 3 fixed (2026-10-20)
+
+| finding | fix | proof |
+|---|---|---|
+| R2-1 | W-104a 44a15163: 205 leaves `run_transform` alone; its audit row says so | rolled-back prod dry run of 202–206 at 42ed560c: `run_transform` untouched |
+| R2-2 | W-103 e71daa33, bb2dash-stack 202031d: names are `${COMPOSE_PROJECT_NAME}-workspace[-2]` (live `workspace@bb2dash-workspace`, `-2`); a test project's `-p` gives it its own | PM rendered both: `bb2dash-workspace[-2]` and `bb2dash-wt25b-workspace[-2]`; docker 110 |
+| R2-3 | W-104b e3e92aaa: a decision also refreshes the planner caches | web 3991 |
+| R2-4 | W-104a 5f3e3f16: no row and `not_started` are one status in 206 | unit on both tables |
+| R2-5 | W-104a e58a93d4: five filed, ten calls | workspace 1090 |
+| R2-7 | W-104a 44a15163 (sweep every five minutes); W-104b 6ae7a8b3 (an expired or decided item is filed as decided) | units |
+| R2-8 | W-104b eeb2865a, 7ef594ad: the Inbox reads `workspace_proposal_id` (a 42703 before 205 retries once without it) | units; walk box run 20261020T053004Z 4/4 |
+| R2-9 | W-104a 42ed560c: the tool offers web's six statuses, a unit reads web's file | unit |
+
+Merged: 0adc5579 (W-104a), 9117faf7 (W-104b), d47fcd43 (W-103). **Second look at the fix round** (an Opus reviewer,
+`3d00a270..d47fcd43` and bb2dash-stack `b0d23d7..`): no defect. It noted that 200–214 have never replayed in strict
+name order (202 needs 207; 207's guard expects twelve functions), so 205's comment about a name-order replay is about
+a replay that cannot happen; prod's order (207, 210–214, then 202–206) is the one that holds. And 119b still said
+"hourly" (fixed with CLAUDE.md, DECISIONS and this file).
+
+Gates on the phase branch at d47fcd43: web 3991, typecheck, build; workspace 1090, typecheck; mcp-server 143; sync
+207; apply 177; workspace-ingest 120; scripts 378; acceptance 64; docker 110 (after `npm run build` in `apply` and
+`workspace`: the gate tests run the built hooks).
