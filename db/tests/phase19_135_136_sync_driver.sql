@@ -326,8 +326,9 @@ begin
 
   select string_agg(stage, ',' order by stage) into v_stages
     from sync_stage_runs where sync_run_id = v_a.sync_run_id;
-  if v_stages is distinct from 'announcements,assignments,attempts,content,courses,files,gaps,gradebook,history' then
-    raise exception 'FAIL the fold wrote stages %, expected the nine with history',
+  -- 'bind' since Phase 26's 212 (bind_announcement_rows runs before stage_assignments).
+  if v_stages is distinct from 'announcements,assignments,attempts,bind,content,courses,files,gaps,gradebook,history' then
+    raise exception 'FAIL the fold wrote stages %, expected the ten with bind and history',
       coalesce(v_stages, '(none)');
   end if;
   if (select status from sync_stage_runs where sync_run_id = v_a.sync_run_id and stage = 'history')

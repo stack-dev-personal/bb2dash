@@ -80,12 +80,15 @@ begin
       into v_got
       from pg_attribute a
      where a.attrelid = to_regclass('public.' || r.rel) and a.attnum > 0 and not a.attisdropped;
-    -- Migration 143 adds one column after the view's four, and unit 143 holds the five. This
-    -- unit runs on both sides of that apply, so it accepts 140's four alone or followed by that
-    -- one column, and nothing else.
+    -- Migration 143 adds one column after the view's four, and unit 143 holds the five; 202 adds
+    -- two more after those, and unit 202 holds the seven. This unit runs on both sides of each
+    -- apply, so it accepts 140's four alone, followed by 143's column, or followed by 143's and
+    -- 202's, and nothing else.
     if v_got is distinct from r.want
        and not (r.rel = 'v_workspace_status'
-                and v_got is not distinct from r.want || ', polled_age_seconds integer') then
+                and (v_got is not distinct from r.want || ', polled_age_seconds integer'
+                     or v_got is not distinct from r.want || ', polled_age_seconds integer, '
+                                                   || 'runners_alive integer, alive_runners text[]')) then
       v_fail := v_fail || format('%s columns are [%s]', r.rel, v_got);
     end if;
   end loop;

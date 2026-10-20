@@ -20,9 +20,12 @@ export const INBOX_TABS: readonly { id: InboxTab; label: string }[] = [
   { id: 'archived', label: 'Archived' },
 ];
 
-export function tabOf(item: Pick<AttentionItem, 'state'>): InboxTab {
+export function tabOf(item: Pick<AttentionItem, 'state'> & Partial<Pick<AttentionItem, 'kind'>>): InboxTab {
   if (item.state === 'open') return 'needs_you';
   if (item.state === 'archived') return 'archived';
+  // A decided proposal (Phase 25b) is finished work: 206 wrote it, and nothing applies it later.
+  // It is not in `v_inbox_queue`, so it never counts as answered-not-applied.
+  if (item.kind === 'assistant_proposal') return 'archived';
   return 'answered';
 }
 

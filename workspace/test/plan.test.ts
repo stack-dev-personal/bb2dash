@@ -211,7 +211,9 @@ describe('the planning input', () => {
     expect(input).toContain('BIO.110: Intro Biology');
     expect(input).toContain('Scope: BIO.110, BIO.110.lab');
     expect(input).toContain('Attached files (titles only): Week 5 slides.pptx; lab-notes.pdf');
-    expect(input).toContain('Today: 2026-10-08');
+    expect(input).toContain('Today: 2026-10-08 (Thursday)');
+    expect(planInput(facts({ today: '' }))).toContain('Today: \n');
+    expect(planInput(facts({ today: '2026-02-30' }))).toContain('Today: 2026-02-30\n');
     expect(input).toContain('Query limit: 4');
     expect(planInput(facts({ deep: true }))).toContain('Query limit: 6');
     expect(input.startsWith('/')).toBe(false);

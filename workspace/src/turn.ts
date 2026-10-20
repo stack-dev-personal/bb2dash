@@ -42,6 +42,7 @@ import type { Claim, FinishArgs, WorkspaceRpc } from './db.js';
 import { errorCodeFor, messageOf, type ErrorCode } from './errors.js';
 import { removeRequestConfig, writeRequestConfig, type TurnLimits } from './mcp-config.js';
 import { prepareTurn, type PrepareDeps, type Ready } from './prepare.js';
+import { realProposalSockets, type ProposalSockets, type ProposeChannel } from './propose/channel.js';
 import type { ReadPrompt } from './prompts.js';
 import type { Providers } from './providers/index.js';
 import type { Provider, ResultEvent, StoredToolCall, TurnInput } from './providers/types.js';
@@ -76,6 +77,11 @@ export interface TurnDeps {
   readonly newMarker?: () => string;
   /** The answering turn's own MCP config file: written before the turn and removed after it. */
   readonly mcpFiles?: McpFiles;
+  /**
+   * The answering turn's proposal socket (Phase 25b): opened before the config is written, closed after
+   * the turn whatever ended it. The real one answers with `workspace_propose` on `rpc`, as `runnerName`.
+   */
+  readonly proposalSockets?: ProposalSockets;
 }
 
 /** The two file calls around an answering turn's MCP config. */
@@ -402,8 +408,34 @@ export function startTurn(deps: TurnDeps, claim: Claim): TurnHandle {
     }
   }
 
-  /** The answering turn, with its own MCP config file for as long as it runs. */
+  /** Close the turn's proposal socket; a failure is logged, never thrown. */
+  async function closeSocket(socket: ProposeChannel): Promise<void> {
+    try {
+      await socket.close();
+    } catch (error) {
+      log(`the proposal socket could not be closed: ${messageOf(error)}`);
+    }
+  }
+
+  /** The answering turn, with its own proposal socket and MCP config file for as long as it runs. */
   async function answer(ready: Ready, model: string, provider: Provider, streamer: Streamer): Promise<Collected> {
+    const sockets = deps.proposalSockets ?? realProposalSockets((...args) => deps.rpc.propose(...args), deps.runnerName, log);
+    let socket: ProposeChannel;
+    try {
+      socket = await sockets.open(claim.requestId);
+    } catch (error) {
+      log(`the proposal socket could not be opened: ${messageOf(error)}`);
+      return { content: '', calls: [], result: null, thrown: { error } };
+    }
+    try {
+      return await answerWithSocket(ready, model, provider, streamer);
+    } finally {
+      await closeSocket(socket);
+    }
+  }
+
+  /** The answering turn proper: its MCP config file is written before it and removed after it. */
+  async function answerWithSocket(ready: Ready, model: string, provider: Provider, streamer: Streamer): Promise<Collected> {
     const mcpFiles = deps.mcpFiles ?? realMcpFiles;
     let file: string;
     try {

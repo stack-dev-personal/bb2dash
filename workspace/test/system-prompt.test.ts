@@ -27,8 +27,17 @@ function sentenceWith(...parts: RegExp[]): string | undefined {
 }
 
 describe('prompts/system.md, one sentence per rule', () => {
-  it('says the assistant is read-only', () => {
-    expect(sentenceWith(/read-only/, /nothing you do can change/)).toBeDefined();
+  it('says the assistant proposes and never writes (Phase 25b)', () => {
+    expect(sentenceWith(/You never write/, /propose a change to his planner/, /he approves or rejects himself/)).toBeDefined();
+    expect(sentenceWith(/Nothing you do changes his planner, his progress, his grades or any stored fact/, /never say that you changed/)).toBeDefined();
+    expect(raw).not.toMatch(/read-only/);
+  });
+
+  it('lets the assistant propose at most five planner changes, when asked, and never call one done', () => {
+    expect(sentenceWith(/propose_planner_change proposes one change to his planner/)).toBeDefined();
+    expect(sentenceWith(/only when he asks for a change or clearly wants one/, /at most five times in one answer/)).toBeDefined();
+    expect(sentenceWith(/id column/, /YYYY-MM-DD/, /whole new note/)).toBeDefined();
+    expect(sentenceWith(/A proposal changes nothing/, /under this answer or in his Inbox/, /never that it is done/)).toBeDefined();
   });
 
   it('asks for the file behind each fact', () => {
@@ -43,6 +52,11 @@ describe('prompts/system.md, one sentence per rule', () => {
   it('has speaker notes labelled as speaker notes', () => {
     expect(sentenceWith(/\[notes\] marker/, /speaker notes/)).toBeDefined();
     expect(sentenceWith(/label it as speaker notes/)).toBeDefined();
+  });
+
+  it('takes a weekday from the planner block or the line with today, and never works one out', () => {
+    expect(sentenceWith(/write every date with its weekday: take a weekday only from them/, /never work one out yourself/)).toBeDefined();
+    expect(sentenceWith(/When neither gives the weekday, write the date alone\./)).toBeDefined();
   });
 
   it('sends grades to the Grades screen', () => {
@@ -84,8 +98,9 @@ describe('prompts/system.md, one sentence per rule', () => {
 });
 
 describe('prompts/system.md, as a file', () => {
-  it('names the two tools the assistant has and no other tool', () => {
-    expect(ALLOWED_TOOLS).toHaveLength(2);
+  it('names the three tools the assistant has and no other tool', () => {
+    expect(ALLOWED_TOOLS).toHaveLength(3);
+    expect(sentenceWith(/^You have three tools\.$/)).toBeDefined();
     for (const tool of ALLOWED_TOOLS) expect(raw).toContain(tool.slice(tool.lastIndexOf('__') + 2));
     expect(raw).not.toMatch(/get_document|Bash|WebFetch|WebSearch|list_courses/);
   });

@@ -63,13 +63,19 @@ export const NOT_QUARANTINED_FILTER = 'scope.is.null,scope.neq.unregistered';
  * Row types (hand-declared from the frozen contract — see header)
  * ------------------------------------------------------------------------ */
 
-/** `attention_items.kind` — migration 031's check constraint, in Inbox order. */
+/**
+ * `attention_items.kind` — migration 031's check constraint, in Inbox order, and since 205
+ * (Phase 25b) `assistant_proposal`: a planner change the Workspace assistant proposed. That kind is
+ * answered only through `workspace_proposal_decide` (`queries.workspace-proposals.ts`), never by
+ * this module's resolve, and the apply side never sees it.
+ */
 export type AttentionKind =
   | 'conflict'
   | 'stack_must_confirm'
   | 'missing'
   | 'deadline'
-  | 'data_gap';
+  | 'data_gap'
+  | 'assistant_proposal';
 
 /**
  * `attention_items.state`.
@@ -130,6 +136,8 @@ export interface AttentionItem {
   archived_by?: string | null;
   /** 090 — the worker's own record of what it did. jsonb: trust no inner shape. */
   decision?: Record<string, unknown> | null;
+  /** 205 — an `assistant_proposal` item's proposal (checked FK, unique); null on every other kind. */
+  workspace_proposal_id?: number | null;
 }
 
 /** One row of `agent_requests` (migration 032). */
@@ -209,6 +217,7 @@ export const ATTENTION_KIND_ORDER: readonly AttentionKind[] = [
   'missing',
   'deadline',
   'data_gap',
+  'assistant_proposal',
 ] as const;
 
 /** Human labels. "needs input" is the Home row's word for stack_must_confirm. */
@@ -218,6 +227,7 @@ export const ATTENTION_KIND_LABEL: Record<AttentionKind, string> = {
   missing: 'missing',
   deadline: 'deadline',
   data_gap: 'data gap',
+  assistant_proposal: 'proposal',
 };
 
 /** Longer headings for the Inbox groups. */
@@ -227,6 +237,7 @@ export const ATTENTION_KIND_HEADING: Record<AttentionKind, string> = {
   missing: 'Missing',
   deadline: 'Deadlines',
   data_gap: 'Data gaps',
+  assistant_proposal: 'Proposed planner changes',
 };
 
 /** The four counts the Home needs-attention row shows (GUI decision 5a). */
@@ -1070,6 +1081,25 @@ const ATTENTION_COLUMNS =
   'archived_at, archived_by, decision';
 
 /**
+ * 205 (Phase 25b, R2-8): the checked link from an `assistant_proposal` item to its proposal. Vercel
+ * deploys on merge and 205 goes on at the cut-over, so for that window the column is not there
+ * (Postgres 42703) and the read is made once more without it: no proposal item exists before 205.
+ */
+const PROPOSAL_LINK_COLUMN = 'workspace_proposal_id';
+const UNDEFINED_COLUMN = '42703';
+let proposalLinkMissingLogged = false;
+
+function isUndefinedColumn(error: unknown): boolean {
+  return error !== null && typeof error === 'object' && (error as { code?: unknown }).code === UNDEFINED_COLUMN;
+}
+
+async function readAttentionItems(columns: string, state?: AttentionState) {
+  let query = untypedClient().from('attention_items').select(columns);
+  if (state) query = query.eq('state', state);
+  return query.order('raised_at', { ascending: false }).order('id', { ascending: false });
+}
+
+/**
  * `attention_items`. Pass a state to scope the list (the Home row wants only
  * `open`); the Inbox reads them all so it can show answered and dismissed rows.
  */
@@ -1077,12 +1107,14 @@ export function attentionItemsOptions(state?: AttentionState) {
   return queryOptions({
     queryKey: syncKeys.attention(state),
     queryFn: async (): Promise<AttentionItem[]> => {
-      const supabase = untypedClient();
-      let query = supabase.from('attention_items').select(ATTENTION_COLUMNS);
-      if (state) query = query.eq('state', state);
-      const { data, error } = await query
-        .order('raised_at', { ascending: false })
-        .order('id', { ascending: false });
+      let { data, error } = await readAttentionItems(`${ATTENTION_COLUMNS}, ${PROPOSAL_LINK_COLUMN}`, state);
+      if (error && isUndefinedColumn(error)) {
+        if (!proposalLinkMissingLogged) {
+          proposalLinkMissingLogged = true;
+          console.warn(`attention_items.${PROPOSAL_LINK_COLUMN} is not on the database yet; reading without it`, error);
+        }
+        ({ data, error } = await readAttentionItems(ATTENTION_COLUMNS, state));
+      }
       if (error) throw error;
       return (data ?? []) as unknown as AttentionItem[];
     },

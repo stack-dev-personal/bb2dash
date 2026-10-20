@@ -29,8 +29,8 @@ import type { StoredToolCall, TurnKind } from './providers/types.js';
 /** `apiKeySource` on the init line when no API key is in use: a `/login` session or an OAuth token in the environment. */
 export const OAUTH_CREDENTIAL_SOURCE = 'none';
 export const REQUIRED_PERMISSION_MODE = 'dontAsk';
-/** An answering turn's one server; a planning, summary or rolling turn has none. */
-export const REQUIRED_MCP_SERVERS = ['bb2dash'] as const;
+/** An answering turn's two servers (the planner one since Phase 25b); a planning, summary or rolling turn has none. */
+export const REQUIRED_MCP_SERVERS = ['bb2dash', 'planner'] as const;
 const MCP_TOOL_PREFIX = 'mcp__';
 
 const MCP_CONNECTED = 'connected';

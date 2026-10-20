@@ -18,6 +18,9 @@
  * opens the panel's Sources tab at that answer, absent when it has none; then
  * the fixed line `thread.ts` gives (R-1), then the state's own line. The tool
  * names an answer used are no longer printed: the Sources tab holds them.
+ * Last, since Phase 25b, one card per planner change the answer's request
+ * proposed (`DecidableProposal.tsx`), Approve / Reject while open, the outcome
+ * once decided.
  *
  * NEVER SHOWN: a tool's result, the stored `query`, a cost, a timing or a
  * similarity (the query layer does not read them).
@@ -38,6 +41,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useRef } from 'react';
 import type { WorkspaceSource } from '@/lib/queries.workspace-sources';
+import type { WorkspaceProposal } from '@/lib/workspace-proposals';
 import {
   ANSWER_ROLE_LABEL,
   COLUMN_LOADING_LINE,
@@ -49,6 +53,7 @@ import {
   sourcesCountLine,
 } from '@/lib/workspace-labels';
 import { AnswerBody } from './AnswerBody';
+import { AnswerProposals } from './DecidableProposal';
 import { TierBadge } from './TierBadge';
 import { conversationHref } from './route';
 import { answerBlocks, type EmptyColumn, type TurnState, type WorkspaceTurn } from './thread';
@@ -147,21 +152,31 @@ type SourcesByRequest = ReadonlyMap<number, readonly WorkspaceSource[]>;
 
 const NO_SOURCE_MAP: SourcesByRequest = new Map();
 
+/** Each request's proposed planner changes (Phase 25b, E), read once for the conversation. */
+type ProposalsByRequest = ReadonlyMap<number, readonly WorkspaceProposal[]>;
+
+const NO_PROPOSAL_MAP: ProposalsByRequest = new Map();
+const NO_PROPOSALS: never[] = [];
+
 interface AnswerProps {
   turn: WorkspaceTurn;
   sources: SourcesByRequest;
+  proposals: ProposalsByRequest;
   onOpenSources: (requestId: number, ord: number | null) => void;
 }
 
-function Answer({ turn, sources, onOpenSources }: AnswerProps) {
+function Answer({ turn, sources, proposals, onOpenSources }: AnswerProps) {
   const requestId = finishedRequestOf(turn);
   const rows = requestId === null ? NO_SOURCES : (sources.get(requestId) ?? NO_SOURCES);
+  // A finished answer's proposals only: the runner files them while it writes (119b, "The page").
+  const proposed = requestId === null ? NO_PROPOSALS : (proposals.get(requestId) ?? NO_PROPOSALS);
   // Parsed when its text or format changes, not on every render of the column: a delta re-renders
   // every turn, and only the live one has new text (round 2, R2-9).
   const blocks = useMemo(() => answerBlocks(turn.text, turn.format), [turn.text, turn.format]);
   const tier = turn.answer?.tier ?? null;
   const lines = [turn.retrievalLine, turn.line].filter((line): line is string => line !== null);
-  if (tier === null && turn.text === '' && lines.length === 0 && rows.length === 0) return null;
+  const nothing = turn.text === '' && lines.length === 0 && rows.length === 0 && proposed.length === 0;
+  if (tier === null && nothing) return null;
   // A line with no text beside it is a status, not an answer: a screen reader is not
   // told "The assistant answered" before "Waiting for the Workspace service".
   const statusOnly = turn.text === '' && lines.length > 0;
@@ -188,6 +203,7 @@ function Answer({ turn, sources, onOpenSources }: AnswerProps) {
           {line}
         </p>
       ))}
+      <AnswerProposals proposals={proposed} />
     </div>
   );
 }
@@ -195,6 +211,7 @@ function Answer({ turn, sources, onOpenSources }: AnswerProps) {
 function Turns(props: {
   turns: readonly WorkspaceTurn[];
   sources: SourcesByRequest;
+  proposals: ProposalsByRequest;
   onOpenSources: (requestId: number, ord: number | null) => void;
 }) {
   return (
@@ -213,7 +230,12 @@ function Turns(props: {
               <p className={styles.text}>{turn.question.content}</p>
             </div>
           )}
-          <Answer turn={turn} sources={props.sources} onOpenSources={props.onOpenSources} />
+          <Answer
+            turn={turn}
+            sources={props.sources}
+            proposals={props.proposals}
+            onOpenSources={props.onOpenSources}
+          />
         </li>
       ))}
     </ol>
@@ -250,12 +272,15 @@ export interface MessageListProps {
   onOpenSources?: (requestId: number, ord: number | null) => void;
   /** Each request's source rows, read once for the conversation; a finished turn shows its own. */
   sources?: SourcesByRequest;
+  /** Each request's proposed planner changes; a finished turn shows its own cards (Phase 25b). */
+  proposals?: ProposalsByRequest;
 }
 
 const NOWHERE = (): void => undefined;
 
 export function MessageList(props: MessageListProps) {
-  const { turns, empty, askedQuestionId = null, onOpenSources = NOWHERE, sources = NO_SOURCE_MAP } = props;
+  const { turns, empty, askedQuestionId = null, onOpenSources = NOWHERE } = props;
+  const { sources = NO_SOURCE_MAP, proposals = NO_PROPOSAL_MAP } = props;
   // The reader's own question, from the commit in which it is one of the turns.
   const ownQuestion =
     askedQuestionId !== null && turns.some((turn) => turn.question?.id === askedQuestionId)
@@ -266,7 +291,7 @@ export function MessageList(props: MessageListProps) {
   return (
     <div ref={box} className={styles.column} onScroll={noteScroll}>
       {empty === null ? (
-        <Turns turns={turns} sources={sources} onOpenSources={onOpenSources} />
+        <Turns turns={turns} sources={sources} proposals={proposals} onOpenSources={onOpenSources} />
       ) : (
         <EmptyLine state={empty} />
       )}

@@ -219,7 +219,14 @@ always there. A work row's kind is `A` or `R`. A due time is New York wall clock
 `YYYY-MM-DD HH:MM`; a row with no due time shows its date; an undated row shows `-`. A date seen is
 the New York date. A null is `-`, true and false are `Y` and `N`, a number is printed as the jsonb
 holds it. Every value is one line; ` | ` inside a value is written ` / `; a title or a name is cut
-to 120 characters.
+to 120 characters. Since Phase 25b a work row also carries its `item_id` (`id`, before the title), so the
+assistant can name the row it proposes a planner change for (`propose_planner_change`, migration 204).
+Since the weekday fix (brief 111, amendment (g)) every date carries its weekday, three English letters
+after the date: a due time is `YYYY-MM-DD Ddd HH:MM` (the weekday of its New York date), a due date
+`YYYY-MM-DD Ddd` (the weekday of that calendar date, never shifted by a time zone), a date seen
+`YYYY-MM-DD Ddd`, and the window's two dates the same. The first line also names today on the New
+York clock in words, `(today is Thursday, October 8, 2026)`, from the time the feed was read. A value
+that is not a date stays as it is.
 
 ## The batch child
 
