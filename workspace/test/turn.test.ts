@@ -77,7 +77,7 @@ describe('the stages of a turn', () => {
     expect(plan?.prompt).toContain(claimOf().prompt);
     expect(answer).toMatchObject({ model: 'sonnet', budgetUsd: 0.95, mcpConfig: '/run/workspace/mcp-41.json' });
     expect(answer?.prompt).toContain('[M9001]');
-    expect(answer?.prompt).toContain('Planner and grades, read 2026-10-08 14:05 New York time.');
+    expect(answer?.prompt).toContain('Planner and grades, read 2026-10-08 Thu 14:05 New York time (today is Thursday, October 8, 2026).');
     expect(search.requests[0]?.plan.queries[0]?.q).toBe('membrane transport');
 
     expect(fake.puts[0]).toMatchObject({ requestId: '41', runner: 'workspace@test' });
