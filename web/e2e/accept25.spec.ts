@@ -138,35 +138,48 @@ function proposalOfStep(step: string): number {
   return stepId({}, process.env['ACCEPT_OUT'] ?? null, process.env['ACCEPT_IN'], step, 'proposal_id');
 }
 
+interface Proposed {
+  /** The answer's turn, found by its request id, so it is found again after the conversation is reopened. */
+  turn: Locator;
+  /** The first card under the answer (there should be exactly one). */
+  card: Locator;
+  /** How many cards stand under the answer. */
+  cards: number;
+}
+
 /**
  * Asks one proposal question into a conversation (null starts one), waits for the stored answer and
- * its one card, and records both. The card must be open and draw the value read and the value
- * proposed. Returns the turn and the card.
+ * its card, and records both. Nothing is asserted here: the step takes its pictures first, then
+ * calls `expectProposed`.
  */
-async function askForProposal(
-  page: Page,
-  rec: Recorder,
-  conversation: string | null,
-  question: string,
-): Promise<{ turn: Locator; card: Locator; proposalId: number; conversation: string }> {
+async function askForProposal(page: Page, rec: Recorder, conversation: string | null, question: string): Promise<Proposed> {
   const asked = await askInto(page, rec, conversation, question);
   const opened = conversationOf(page);
   const requestId = await requestIdOf(asked);
   rec.note({ closed_at: await waitClosed(asked) });
   await page.waitForTimeout(STORED_SETTLE_MS);
   rec.note(turnFacts(await readTurn(asked)));
-  // By its request id, so the same turn is found after the conversation is opened again.
-  const shown = turnOfRequest(page, requestId);
-  const cards = await waitForCards(page, shown, conversationPath(opened));
+  const turn = turnOfRequest(page, requestId);
+  const cards = await waitForCards(page, turn, conversationPath(opened));
+  const card = cardsOfTurn(turn).first();
   rec.note({ cards_under_answer: cards });
-  await expect(shown).toHaveAttribute('data-turn', 'done');
-  await expect(shown.locator('[data-tier]')).toHaveText(BADGE_MID);
-  await expect(shown.locator('[data-turn-line]')).toHaveCount(0);
-  expect(cards, 'one card stands under the answer: the question asked for one change').toBe(1);
-  const card = cardsOfTurn(shown).first();
-  const proposalId = await proposalIdOf(card);
-  rec.note({ proposal_id: proposalId, open_card: await cardFacts(card) });
-  return { turn: shown, card, proposalId, conversation: opened };
+  if (cards > 0) rec.note({ proposal_id: await proposalIdOf(card), open_card: await cardFacts(card) });
+  return { turn, card, cards };
+}
+
+/** Brings the card into the window when there is one, for the step's picture of it. */
+async function showCard(proposed: Proposed): Promise<void> {
+  if (proposed.cards > 0) await proposed.card.scrollIntoViewIfNeeded();
+}
+
+/** The answer is done on the middle tier, with one open card under it that draws both values. Returns its proposal id. */
+async function expectProposed(proposed: Proposed): Promise<number> {
+  await expect(proposed.turn).toHaveAttribute('data-turn', 'done');
+  await expect(proposed.turn.locator('[data-tier]')).toHaveText(BADGE_MID);
+  await expect(proposed.turn.locator('[data-turn-line]')).toHaveCount(0);
+  expect(proposed.cards, 'one card stands under the answer: the question asked for one change').toBe(1);
+  await expectOpenCard(proposed.card);
+  return proposalIdOf(proposed.card);
 }
 
 /** An open card: its kicker, its line, the value read and the value proposed, and both buttons. */
@@ -255,14 +268,14 @@ acceptStep('3 proposal card', { shots: ['start', 'end', 'card'] }, async ({ page
   if (target === null) throw new Error('no assignment progress row is graded and holds no note: the run has no row to propose on');
   rec.note({ target_assignment: target.assignmentId, target_course: target.courseId });
   const question = proposeQuestion(target.assignmentId, PROPOSAL_WORDS.first);
-  const { turn, card } = await askForProposal(page, rec, null, question);
-  const shots = await shootTurn(page, rec, turn, question);
-  await expectShotsShowTheTurn(turn, question, shots);
-  await card.scrollIntoViewIfNeeded();
+  const proposed = await askForProposal(page, rec, null, question);
+  const shots = await shootTurn(page, rec, proposed.turn, question);
+  await expectShotsShowTheTurn(proposed.turn, question, shots);
+  await showCard(proposed);
   await rec.shot(page, 'card');
-  await expectOpenCard(card);
+  await expectProposed(proposed);
   // No note yet on the row: the value read is the planner's empty entry.
-  await expect(card.locator('[data-proposal-value="old"]')).toContainText(NO_ENTRY_YET);
+  await expect(proposed.card.locator('[data-proposal-value="old"]')).toContainText(NO_ENTRY_YET);
 });
 
 // Step 4: the first proposal approved on its card. The card then shows the outcome alone, and the
@@ -298,10 +311,10 @@ acceptStep('5 reject in the inbox', { shots: ['open', 'inbox', 'card'] }, async 
   const conversation = conversationOfStep(FIRST_PROPOSAL_STEP);
   const first = await proposalById(page, await openWithSession(page), proposalOfStep(FIRST_PROPOSAL_STEP));
   const question = proposeQuestion(first.rowId, PROPOSAL_WORDS.second);
-  const { card, proposalId } = await askForProposal(page, rec, conversation, question);
-  await card.scrollIntoViewIfNeeded();
+  const proposed = await askForProposal(page, rec, conversation, question);
+  await showCard(proposed);
   await rec.shot(page, 'open');
-  await expectOpenCard(card);
+  const proposalId = await expectProposed(proposed);
 
   await openInboxTab(page, INBOX_NEEDS_YOU);
   const item = proposalCard(page, proposalId);
@@ -389,10 +402,10 @@ acceptStep('8 stale after a planner edit', { shots: ['open', 'planner', 'stale']
     const first = await proposalById(page, await openWithSession(page), proposalOfStep(FIRST_PROPOSAL_STEP));
     const target = targetOfProposal(first);
     const question = proposeQuestion(first.rowId, PROPOSAL_WORDS.third);
-    const { card, proposalId } = await askForProposal(page, rec, conversation, question);
-    await card.scrollIntoViewIfNeeded();
+    const proposed = await askForProposal(page, rec, conversation, question);
+    await showCard(proposed);
     await rec.shot(page, 'open');
-    await expectOpenCard(card);
+    const proposalId = await expectProposed(proposed);
 
     const writes = await allowPlannerWrite(context);
     const status = await writeNotes(page, target, NOTES_LABEL, PLANNER_EDIT_TEXT);
