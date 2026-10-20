@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import type { Claim, FinishArgs, JobClaim, JobFinishArgs, SourceRow, TurnFacts, WorkspaceRpc } from '../../src/db.js';
+import type { ProposeInput } from '../../src/propose/protocol.js';
 import type { CliExit, CliProcess, CliTurn, SpawnOptions } from '../../src/providers/claude-cli.js';
 import type { ResultEvent, TurnEvent, TurnInput } from '../../src/providers/types.js';
 
@@ -24,8 +25,14 @@ export const QUESTION = 'What does the IST.323 syllabus say about late work?';
  */
 export function asAnsweringInit(line: Record<string, unknown>): Record<string, unknown> {
   if (line.type !== 'system' || line.subtype !== 'init') return line;
-  const servers = Array.isArray(line.mcp_servers) ? (line.mcp_servers as Array<{ name?: unknown }>).filter((server) => server.name !== 'rag') : line.mcp_servers;
-  const tools = Array.isArray(line.tools) ? (line.tools as unknown[]).filter((tool) => !(typeof tool === 'string' && tool.startsWith('mcp__rag__'))) : line.tools;
+  let servers = Array.isArray(line.mcp_servers) ? (line.mcp_servers as Array<{ name?: unknown }>).filter((server) => server.name !== 'rag') : line.mcp_servers;
+  let tools = Array.isArray(line.tools) ? (line.tools as unknown[]).filter((tool) => !(typeof tool === 'string' && tool.startsWith('mcp__rag__'))) : line.tools;
+  // Phase 25b: an answering turn (one that started the materials server) also starts the planner
+  // tool server, which the recordings predate; it is added as connected with its one tool.
+  if (Array.isArray(servers) && servers.some((server) => server.name === 'bb2dash') && !servers.some((server) => server.name === 'planner')) {
+    servers = [...servers, { name: 'planner', status: 'connected', source: 'dynamic' }];
+    tools = Array.isArray(tools) ? [...tools, 'mcp__planner__propose_planner_change'] : tools;
+  }
   return { ...line, mcp_servers: servers, tools };
 }
 
@@ -105,6 +112,8 @@ export interface FakeRpc {
   /** When each `workspace_finish()` was tried, the tries that failed included. */
   readonly finishTries: number[];
   readonly heartbeats: Array<{ runner: string; at: number }>;
+  /** Every `workspace_propose()` call, in order. */
+  readonly proposals: Array<{ requestId: string; runner: string; input: ProposeInput }>;
   /** From now on `workspace_stream()` answers false: the owner pressed Stop. */
   cancel(): void;
   /** From now on every call rejects, as when the database cannot be reached. */
@@ -161,6 +170,7 @@ export function fakeRpc(now: () => number = () => Date.now()): FakeRpc {
     finishes: [],
     finishTries: [],
     heartbeats: [],
+    proposals: [],
     cancel: () => {
       cancelled = true;
     },
@@ -244,6 +254,11 @@ export function fakeRpc(now: () => number = () => Date.now()): FakeRpc {
       async heartbeat(runner) {
         if (broken) throw down();
         fake.heartbeats.push({ runner, at: now() });
+      },
+      async propose(requestId, runner, input) {
+        if (broken) throw down();
+        fake.proposals.push({ requestId, runner, input });
+        return { proposal_id: String(fake.proposals.length), label: `label of ${input.row_id}`, old_value: null, new_value: input.value };
       },
     },
   };

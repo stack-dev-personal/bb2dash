@@ -2,7 +2,9 @@
 # queued questions from the database and answers each with one `claude -p` turn on Stack's
 # subscription token, with one stdio MCP server beside it: the materials server (bb2dash's
 # `mcp-server/`). Phase 24a removed the harness `rag` server and its model: retrieval is the runner's
-# own, through `workspace-search`, and the materials server's `batch.js`.
+# own, through `workspace-search`, and the materials server's `batch.js`. Phase 25b adds a second
+# stdio server, the planner tool (built from workspace/src/propose with the runner): no credential,
+# no network, only the runner's per-turn Unix socket, so the firewall and egress need nothing new.
 #
 #   docker compose -p bb2dash-wt21 --profile workspace build workspace     (before the merge)
 #
@@ -14,7 +16,8 @@
 # pins the same literals:
 #
 #   /app/workspace/      package.json, node_modules, dist/ (runner.js, healthcheck.js, search-probe.js,
-#                        hooks/tool-gate.js),
+#                        hooks/tool-gate.js, propose/planner-server.js: Phase 25b's credential-free
+#                        planner tool server, which talks only to the runner's socket in /run/workspace),
 #                        claude/settings.json, prompts/*.md
 #   /app/mcp-materials/  package.json, node_modules, dist/index.js, dist/batch.js
 #   /app/certs/          prod-ca.crt, root's and 0444: the one pinned CA. The runner checks the pooler's

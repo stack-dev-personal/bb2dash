@@ -1,6 +1,7 @@
 /**
- * The tool gate's rules (brief 102, Contract, Tool gate; brief 109, "Gate"). Read-only: two tools,
- * the materials search and the materials reader. The notes store, its collection rule and the
+ * The tool gate's rules (brief 102, Contract, Tool gate; brief 109, "Gate"). Three tools: the two
+ * read-only materials tools (the search and the reader) and, since Phase 25b, the planner proposal, which
+ * files a proposal Stack decides and changes no planner row. The notes store, its collection rule and the
  * course lister are gone from the Workspace (ruling W-2: one store, in the bb2dash project).
  *
  * The gate only denies or stays silent. A denial is exit code 2 with the reason for stderr; an
@@ -11,7 +12,12 @@
  * Pure and dependency-free: `tool-gate.ts` is the process around it.
  */
 
-export const ALLOWED_TOOLS = ['mcp__bb2dash__search_materials', 'mcp__bb2dash__get_material_text'] as const;
+/** The two materials tools, and (Phase 25b) the planner proposal, which writes nothing but a proposal row. */
+export const ALLOWED_TOOLS = [
+  'mcp__bb2dash__search_materials',
+  'mcp__bb2dash__get_material_text',
+  'mcp__planner__propose_planner_change',
+] as const;
 
 /** Exit code 2 is the CLI's blocking code: the tool call is refused and stderr goes to the model. */
 export const DENY_EXIT_CODE = 2;

@@ -1,6 +1,7 @@
 /**
  * The planner and grades feed as the prompt holds it (brief 109, The planner and grades feed): the
- * jsonb of `workspace_planner_feed` rendered as text, one line a row, no key repeated, no id.
+ * jsonb of `workspace_planner_feed` rendered as text, one line a row, no key repeated. A work row carries its
+ * item id (Phase 25b) so the assistant can name it in a planner proposal; a score row carries none.
  * `test/fixtures/contract24/feed-block.txt` is the frozen form, byte for byte.
  *
  * When the block would pass its ceiling, rows go in this order: the undated work rows, then the
@@ -19,6 +20,8 @@ const TITLE_MAX = 120;
 
 export interface FeedWorkRow {
   readonly itemKind: string;
+  /** `assignments.id`, or `readings.id` as text: what `propose_planner_change` names a row by. */
+  readonly itemId: string | null;
   readonly courseId: string | null;
   readonly title: string | null;
   readonly type: string | null;
@@ -64,6 +67,7 @@ const rowsOf = (value: unknown): Json[] => (Array.isArray(value) ? value.filter(
 function workRowOf(row: Json): FeedWorkRow {
   return {
     itemKind: textOrNull(row.item_kind) ?? '',
+    itemId: textOrNull(row.item_id),
     courseId: textOrNull(row.course_id),
     title: textOrNull(row.title),
     type: textOrNull(row.type),
@@ -156,6 +160,7 @@ function workLine(row: FeedWorkRow): string {
     cell(row.type),
     cell(row.pointsPossible),
     cell(row.inWorkload),
+    cell(row.itemId),
     cell(row.title, TITLE_MAX),
   ].join(VALUE_SEPARATOR);
 }
@@ -182,7 +187,7 @@ export interface RenderedFeed {
   readonly scoresLeftOut: number;
 }
 
-const WORK_HEADER = 'work: kind | course | due | status | type | points | workload | title';
+const WORK_HEADER = 'work: kind | course | due | status | type | points | workload | id | title';
 const SCORES_HEADER = 'scores: course | name | score | possible | grade | released | exempt | submission | seen';
 
 interface Rows {

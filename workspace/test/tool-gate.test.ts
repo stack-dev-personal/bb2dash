@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { ALLOWED_TOOLS, decide, runGate } from '../src/hooks/gate-rules.js';
+import { PROPOSE_TOOL_FULL } from '../src/propose/protocol.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PACKAGE = path.resolve(HERE, '..');
@@ -39,8 +40,11 @@ function runBuiltGate(stdin: string | null): GateRun {
 }
 
 describe('the gate rules', () => {
-  it('names the two allowed tools and nothing else', () => {
-    expect([...ALLOWED_TOOLS]).toEqual(['mcp__bb2dash__search_materials', 'mcp__bb2dash__get_material_text']);
+  it('names the three allowed tools and nothing else: the two materials tools and the planner proposal (Phase 25b)', () => {
+    expect([...ALLOWED_TOOLS]).toEqual(['mcp__bb2dash__search_materials', 'mcp__bb2dash__get_material_text', 'mcp__planner__propose_planner_change']);
+    expect(ALLOWED_TOOLS[2]).toBe(PROPOSE_TOOL_FULL);
+    expect(decide(payload('mcp__planner__propose_planner_change', { target: 'reading_progress' }))).toEqual({ allow: true });
+    expect(decide(payload('mcp__planner__propose_planner_change_x'))).toMatchObject({ allow: false });
   });
 
   it('allows the two materials tools', () => {
