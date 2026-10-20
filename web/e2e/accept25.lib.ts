@@ -190,10 +190,20 @@ export async function proposalIdOf(card: Locator): Promise<number> {
   return Number(id);
 }
 
-/** What one card shows, as facts: its state, how many values it draws, its outcome and its buttons. */
+/**
+ * What one card shows, as facts: its state, how many values it draws, its outcome and its buttons.
+ * The card is waited for first, since the page draws it once its proposal row is read: a reading
+ * taken before that would be a false fact. A card that never shows is noted as not present.
+ */
 export async function cardFacts(card: Locator): Promise<Record<string, unknown>> {
+  const shown = await card
+    .waitFor({ state: 'visible', timeout: CARDS_WAIT_MS })
+    .then(() => true)
+    .catch(() => false);
+  if (!shown) return { present: false };
   const outcome = card.locator('[data-proposal-outcome]');
   return {
+    present: true,
     state: await card.getAttribute('data-proposal-state'),
     values_drawn: await card.locator('[data-proposal-value]').count(),
     outcome: (await outcome.count()) === 0 ? null : ((await outcome.first().textContent()) ?? '').trim(),
