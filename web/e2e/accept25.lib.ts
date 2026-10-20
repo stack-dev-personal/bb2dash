@@ -208,7 +208,20 @@ export async function cardFacts(card: Locator): Promise<Record<string, unknown>>
     values_drawn: await card.locator('[data-proposal-value]').count(),
     outcome: (await outcome.count()) === 0 ? null : ((await outcome.first().textContent()) ?? '').trim(),
     buttons: await card.getByRole('button').count(),
+    // Each button's own text, so a count can be read: an open card has W-106's grey `edit` beside
+    // Approve and Reject (it shows on hover and focus, so a picture may not hold it).
+    button_words: (await card.getByRole('button').allTextContents()).map((text) => text.trim()),
   };
+}
+
+/**
+ * The Inbox tab that is picked, by the start of its text (a tab's text may end in a count). The
+ * pictures of a card far down a tab cannot hold the tab row too, so the tab is read as a fact.
+ */
+export async function pickedInboxTab(page: Page): Promise<string | null> {
+  const picked = page.getByRole('tab', { selected: true });
+  if ((await picked.count()) !== 1) return null;
+  return ((await picked.first().textContent()) ?? '').trim();
 }
 
 /** Presses a card's own button (Approve or Reject: its name starts with the word) and waits for the decide call's answer. */

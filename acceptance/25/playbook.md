@@ -105,10 +105,15 @@ proposal is drawn as a card under the answer that made it. The card's first line
 `Proposed planner change`; under it is a line that names the change and the planner item. While the
 proposal waits for a decision, the card is open: it shows two boxes side by side, one headed
 `Planner has` with the value the planner holds now, one headed `Proposed` with the value proposed;
-under them the reason; and two buttons, `Approve` and `Reject`. Once decided, the card shows the
-planner item's name and one line with the outcome, and nothing else: no boxes and no button. The
-same card stands in the Inbox, under the tab `Needs you` while it waits and under the tab
-`Archived` once decided; there a decided card also has a link that reads `Open the answer →`.
+under them the reason; and two buttons, `Approve` and `Reject`. The box headed `Proposed` also has a
+small grey text button that reads `edit`, with which the owner may change the value before he
+approves it; it is drawn only while the pointer is over the box or the box holds the focus, so a
+picture does not show it, and the facts count it as a third button. Once decided, the card
+shows the planner item's name and one line with the outcome, and nothing else: no boxes and no
+button. The same card stands in the Inbox, under the tab `Needs you` while it waits and under the
+tab `Archived` once decided; there a decided card also has a link that reads `Open the answer →`.
+A decided card can stand far down the tab `Archived`, below the row of tabs, so a picture of it
+may not hold the tabs: which tab was picked is in the facts, as `inbox_tab`.
 
 In this stage every proposal is about one field of one planner item: the note of one past, graded
 assignment, which the test picks itself. The proposed notes are made-up text that begins
@@ -138,7 +143,7 @@ Pass when all of this is true:
   `Sonnet · standard`.
 - In `3.json`: `cards_under_answer` is 1, and `proposal_id` is a number.
 - In `3.json`, `open_card`: `state` is `proposed`, `values_drawn` is 2, `outcome` is null, and
-  `buttons` is 2.
+  `buttons` is 3, and `button_words` holds `edit`, `Approve` and `Reject`.
 - `3-start.png` shows the question and, under it, the badge.
 - `3-card.png` shows one card under the answer: its first line reads `Proposed planner change`;
   a line that begins with the words Replace the note on, then the item's name; the box headed
@@ -163,12 +168,13 @@ Pass when all of this is true:
 - In `4.json`: `decide_status` is 200.
 - In `4.json`, `card`: `state` is `applied`, `values_drawn` is 0, `buttons` is 0, and `outcome` is
   `Approved: note replaced`.
+- In `4.json`: `inbox_tab` begins with `Archived`.
 - In `4.json`, `inbox_card`: `state` is `applied`, `values_drawn` is 0, `buttons` is 0, and
   `outcome` is `Approved: note replaced`.
 - `4-card.png` shows the card under the answer with the line `Approved: note replaced`, and no
   boxes and no button.
-- `4-inbox.png` shows the Inbox with the tab `Archived` picked, and the same card with the line
-  `Approved: note replaced` and the link `Open the answer →`, and no boxes and no button.
+- `4-inbox.png` shows the Inbox's card with the line `Approved: note replaced` and the link
+  `Open the answer →`, and no boxes and no button; the tab row may be above the picture, since the tab picked is read from the facts.
 
 That the note was written once, and to the proposed value, is read by the host from the database.
 
@@ -185,15 +191,17 @@ Pass when all of this is true:
 - In `5.json`: `state` is `done`, `line` is null, `answer_chars` is 1 or more, `badge` reads
   `Sonnet · standard`, `cards_under_answer` is 1, and `proposal_id` is a number that is not step
   3's `proposal_id`.
-- In `5.json`, `open_card`: `state` is `proposed`, `values_drawn` is 2 and `buttons` is 2.
+- In `5.json`, `open_card`: `state` is `proposed`, `values_drawn` is 2, `buttons` is 3, and
+  `button_words` holds `edit`, `Approve` and `Reject`.
 - In `5.json`: `decide_status` is 200.
+- In `5.json`: `inbox_tab` begins with `Archived`.
 - In `5.json`, `inbox_card` and `card`: each has `state` `rejected`, `values_drawn` 0, `buttons` 0
   and `outcome` `Rejected`.
 - `5-open.png` shows the open card: the box headed `Planner has`, the box headed `Proposed`, and the
   buttons `Approve` and `Reject`. The box headed `Planner has` shows step 4's note, which begins
   `Acceptance run 25`.
-- `5-inbox.png` shows the Inbox with the tab `Archived` picked and the card with the line
-  `Rejected`, the link `Open the answer →`, and no boxes and no button.
+- `5-inbox.png` shows the Inbox's card with the line `Rejected`, the link `Open the answer →`, and
+  no boxes and no button; the tab row may be above the picture, since the tab picked is read from the facts.
 - `5-card.png` shows the card under the second answer with the line `Rejected`, and no boxes and no
   button.
 
@@ -225,10 +233,11 @@ Pass when all of this is true:
 - In `7.json`, `workspace_cards` and `inbox_cards` each hold two entries. The first entry has
   `state` `applied` and `outcome` `Approved: note replaced`; the second has `state` `rejected` and
   `outcome` `Rejected`. Every entry has `values_drawn` 0 and `buttons` 0.
+- In `7.json`: `inbox_tab` begins with `Archived`.
 - `7-workspace.png` shows at least one of the two cards under its answer: its outcome line, no
   boxes headed `Planner has` or `Proposed`, and no button.
-- `7-inbox.png` shows the Inbox with the tab `Archived` picked and at least one of the two cards:
-  its outcome line and the link `Open the answer →`, no boxes and no button.
+- `7-inbox.png` shows the Inbox with at least one of the two cards: its outcome line and the link
+  `Open the answer →`, no boxes and no button; the tab row may be above the picture, since the tab picked is read from the facts.
 
 ## Stage: stale
 
@@ -237,8 +246,9 @@ its course. In the Workspace, an answer carries a badge above its text, which na
 that wrote the answer. In this phase the assistant may propose a change to the owner's planner; it
 never makes one. Each proposal is drawn as a card under the answer that made it. The card's first
 line reads `Proposed planner change`. While the proposal waits, the card shows two boxes side by
-side, one headed `Planner has` and one headed `Proposed`, and two buttons, `Approve` and `Reject`.
-Once decided, the card shows the planner item's name and one line with the outcome, and nothing
+side, one headed `Planner has` and one headed `Proposed`, and two buttons, `Approve` and `Reject`;
+the box headed `Proposed` also has a grey text button that reads `edit`, drawn only on hover or
+focus, so a picture does not show it, and the facts count it as a third button. Once decided, the card shows the planner item's name and one line with the outcome, and nothing
 else. The assignment's page has a block with the owner's plan for it, and in that block a text
 field labelled `Notes`; leaving the field saves what it holds.
 
@@ -263,7 +273,8 @@ Pass when all of this is true:
 
 - In `8.json`: `state` is `done`, `line` is null, `answer_chars` is 1 or more, `badge` reads
   `Sonnet · standard`, `cards_under_answer` is 1, and `proposal_id` is a number.
-- In `8.json`, `open_card`: `state` is `proposed`, `values_drawn` is 2 and `buttons` is 2.
+- In `8.json`, `open_card`: `state` is `proposed`, `values_drawn` is 2, `buttons` is 3, and
+  `button_words` holds `edit`, `Approve` and `Reject`.
 - In `8.json`: `planner_write_status` is 200 or 201, `planner_writes` is 1, and
   `notes_after_edit` has `empty` false.
 - In `8.json`: `decide_status` is 200; in `card`, `state` is `stale`, `values_drawn` is 0,
