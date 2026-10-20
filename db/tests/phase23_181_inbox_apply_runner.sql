@@ -645,9 +645,12 @@ begin
     raise exception 'FAIL 8: after the release the queued request was not claimed (%).', v_id;
   end if;
 
-  -- A sync request is never claimed by this worker.
-  if exists (select 1 from agent_requests where kind <> 'inbox_feedback' and claimed_by = 'inbox-apply-runner') then
-    raise exception 'FAIL 8: the apply worker claimed a request that is not inbox_feedback';
+  -- A sync request is never claimed by this worker. Since Phase 26 (210) the same worker also claims
+  -- announcement_review requests, so those two kinds are its own.
+  if exists (select 1 from agent_requests
+              where kind not in ('inbox_feedback', 'announcement_review')
+                and claimed_by = 'inbox-apply-runner') then
+    raise exception 'FAIL 8: the apply worker claimed a request that is neither inbox_feedback nor announcement_review';
   end if;
 end $$;
 
