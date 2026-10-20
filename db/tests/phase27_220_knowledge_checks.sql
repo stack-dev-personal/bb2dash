@@ -18,6 +18,13 @@
 --   G  Knowledge Check, another course (IST.323), its own class day             -> tentative, asks
 --   H  an existing tentative IST.352 row the column binds to by title           -> untouched, not promoted
 --   I  the existing confirmed knowledge checks and Stack's planner state         -> unchanged
+--   J  "Knowledge Check Quiz (graded)" worth 10 points, IST.352, a lecture day  -> tentative, asks
+--   K  Knowledge Check, IST.352, no due date                                    -> tentative, asks
+--   L  Knowledge Check, IST.352, a due date outside the term (2027-06-01)       -> tentative, asks
+--   M  Knowledge Check, IST.352, due 03:30Z on 2026-10-27, which is the evening
+--      of Mon 2026-10-26 in New York (a lecture day)                            -> confirmed, no question
+--   N  Knowledge Check, IST.352, a bare Wednesday (2026-10-28) on which an
+--      unbound announcement row already sits (Phase 26)                         -> tentative, asks
 --
 -- It leans on prod's IST.352 sessions and meetings for its dates; section 0 checks that they still
 -- say what the cases assume, so a changed calendar fails loudly instead of testing the wrong thing.
@@ -56,6 +63,9 @@ begin
   if exists (select 1 from sessions where course_id = KC_COURSE and session_date = '2026-10-21')
      or not exists (select 1 from meetings where course_id = KC_COURSE and day_of_week = 3) then
     v_fail := v_fail || 'precondition: IST.352 2026-10-21 is not a bare Wednesday meeting day'::text;
+  end if;
+  if exists (select 1 from sessions where course_id = KC_COURSE and session_date = '2026-10-28') then
+    v_fail := v_fail || 'precondition: IST.352 2026-10-28 is not a bare Wednesday meeting day'::text;
   end if;
   if not exists (select 1 from sessions where course_id = KC_COURSE and session_date = '2026-10-12' and kind = 'no_class')
      or not exists (select 1 from meetings where course_id = KC_COURSE and day_of_week = 1) then
@@ -104,7 +114,8 @@ begin
     col      text,
     name     text,
     due      timestamptz,
-    expect   text          -- 'confirmed' (no question) or 'asks'
+    expect   text,         -- 'confirmed' (no question) or 'asks'
+    pts      numeric default 0
   ) on commit drop;
 
   insert into _probe values
@@ -115,13 +126,19 @@ begin
     ('E', KC_COURSE,    PROBE || 'E', 'Knowledge Check - 220 probe E tuesday',   '2026-10-20 16:50+00', 'asks'),
     ('F', KC_COURSE,    PROBE || 'F', 'Reading Check - 220 probe F lecture',     '2026-10-26 16:50+00', 'asks'),
     ('G', OTHER_COURSE, PROBE || 'G', 'Knowledge Check - 220 probe G other course', '2026-10-26 16:50+00', 'asks'),
-    ('H', KC_COURSE,    PROBE || 'H', 'Knowledge Check - 220 probe H existing',  '2026-10-26 16:50+00', 'existing');
+    ('H', KC_COURSE,    PROBE || 'H', 'Knowledge Check - 220 probe H existing',  '2026-10-26 16:50+00', 'existing'),
+    ('K', KC_COURSE,    PROBE || 'K', 'Knowledge Check - 220 probe K no date',   null,                  'asks'),
+    ('L', KC_COURSE,    PROBE || 'L', 'Knowledge Check - 220 probe L next year', '2027-06-01 16:50+00', 'asks'),
+    ('M', KC_COURSE,    PROBE || 'M', 'Knowledge Check - 220 probe M late',      '2026-10-27 03:30+00', 'confirmed'),
+    ('N', KC_COURSE,    PROBE || 'N', 'Knowledge Check - 220 probe N announced', '2026-10-28 16:50+00', 'asks');
+  insert into _probe values
+    ('J', KC_COURSE,    PROBE || 'J', 'Knowledge Check Quiz (graded) 220 probe J', '2026-10-26 16:50+00', 'asks', 10);
 
   update bb_raw b
      set payload = jsonb_set(b.payload, '{gradebook}',
                      bb_jarray(b.payload->'gradebook') ||
                      (select jsonb_agg(jsonb_build_object(
-                               'columnId', pb.col, 'name', pb.name, 'possible', 0,
+                               'columnId', pb.col, 'name', pb.name, 'possible', pb.pts,
                                'due', to_char(pb.due at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
                                'isCalc', false) order by pb.case_id)
                         from _probe pb
@@ -133,6 +150,14 @@ begin
                            source, source_ref, confidence)
   values (KC_COURSE || '/220-probe-h', KC_COURSE, 'Knowledge Check - 220 probe H existing', 'quiz',
           '2026-10-26 16:50+00', 0, 'blackboard', 'phase27_220 test probe', 'tentative');
+
+  -- Case N: an unbound, unconfirmed row an announcement added (Phase 26) for that day, whose title
+  -- neither 212's binding nor the title fallback would match to the column.
+  insert into assignments (id, course_id, title, type, due_at, points_possible,
+                           source, source_ref, confidence)
+  values (KC_COURSE || '/220-probe-n-announced', KC_COURSE, 'In-class check (announced, 220 probe N)', 'quiz',
+          '2026-10-28 16:45+00', null, 'blackboard',
+          'announcement _220_probe_ (2026-10-26): probe row for phase27_220', 'tentative');
 
   -- Case I: snapshots of what must not move.
   select string_agg(format('%s|%s|%s|%s|%s', id, confidence, submission, component_id, source_ref), ';' order by id)
@@ -147,8 +172,8 @@ begin
   if r->>'status' <> 'ok' then
     raise exception 'FAIL phase27_220: the replay failed: %', r;
   end if;
-  if coalesce((r->'counts'->>'expected_confirmed')::int, -1) <> 3 then
-    v_fail := v_fail || format('counts.expected_confirmed is %s, expected 3', coalesce(r->'counts'->>'expected_confirmed', '<missing>'));
+  if coalesce((r->'counts'->>'expected_confirmed')::int, -1) <> 4 then
+    v_fail := v_fail || format('counts.expected_confirmed is %s, expected 4', coalesce(r->'counts'->>'expected_confirmed', '<missing>'));
   end if;
 
   -- =========================================================================================
@@ -202,6 +227,18 @@ begin
   end if;
   if exists (select 1 from assignments where course_id = KC_COURSE and bb_column_id = PROBE || 'H' and id <> a.id) then
     v_fail := v_fail || 'case H: a second row was inserted for a column that matched an existing one'::text;
+  end if;
+
+  -- Case M: the class day is the New York day, cited as such.
+  select * into a from assignments where course_id = KC_COURSE and bb_column_id = PROBE || 'M';
+  if position('class day (2026-10-26)' in coalesce(a.source_ref, '')) = 0 then
+    v_fail := v_fail || format('case M: the cite does not name the New York day 2026-10-26: %s', a.source_ref);
+  end if;
+
+  -- Case N: the announcement row is left as it was, unbound.
+  if exists (select 1 from assignments where id = KC_COURSE || '/220-probe-n-announced'
+               and (bb_column_id is not null or confidence <> 'tentative')) then
+    v_fail := v_fail || 'case N: the announcement row was bound or promoted'::text;
   end if;
 
   -- Case I.

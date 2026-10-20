@@ -18,8 +18,14 @@
 --     session row: the schedule lists only some Wednesdays, yet checks came on 9/16, 9/23, 9/30
 --     and 10/7, all Wednesdays without a session row.
 --   * A `no_class` session that day (Labor Day, Fall Break, Thanksgiving) always wins.
---   * No date, a date outside the term, another title, another course, or no single `attendance`
---     component: the helper returns null and the column takes today's path (tentative + question).
+--   * The column must be worth 0 points (every knowledge check so far is 0.00): a graded "Knowledge
+--     Check Quiz" worth points is not filed under attendance silently.
+--   * An unbound, unconfirmed row that an announcement added (Phase 26, source_ref 'announcement
+--     ...') due that New York day may be the same check under another title, which neither 212's
+--     binding nor the title fallback matched; the column then asks, so no silent duplicate.
+--   * No date, a date outside the term, another title, another course, points, or no single
+--     `attendance` component: the helper returns null and the column takes today's path
+--     (tentative + question).
 --
 -- No table holds per-course gradebook-column rules, so the course, the title pattern and the
 -- component code are named constants in the helper. Only the new-column branch changes: a column
@@ -36,7 +42,7 @@
 -- migration in the repo restates stage_assignments.
 
 create or replace function public.class_day_knowledge_check(p_course_id text, p_name text,
-                                                            p_due_at timestamptz)
+                                                            p_due_at timestamptz, p_possible numeric)
 returns jsonb
 language plpgsql
 stable
@@ -57,11 +63,22 @@ declare
 begin
   if p_course_id is distinct from KC_COURSE
      or p_name is null or p_name !~* KC_TITLE
+     or coalesce(p_possible, 0) <> 0
      or p_due_at is null or not bb_date_in_term(p_due_at) then
     return null;
   end if;
 
   v_day := (p_due_at at time zone CLASS_TZ)::date;
+
+  -- An announcement row for that day may be this very check: let Stack say so (Phase 26).
+  if exists (select 1 from assignments a
+              where a.course_id = p_course_id
+                and a.bb_column_id is null
+                and a.source_ref like 'announcement %'
+                and a.confidence <> 'confirmed'
+                and coalesce((a.due_at at time zone CLASS_TZ)::date, a.due_date) = v_day) then
+    return null;
+  end if;
 
   if exists (select 1 from sessions s
               where s.course_id = p_course_id and s.session_date = v_day and s.kind = 'no_class') then
@@ -92,11 +109,11 @@ begin
 end
 $function$;
 
-comment on function public.class_day_knowledge_check(text, text, timestamptz) is
-  '220 (Inbox 6336): for a new gradebook column, returns {component_id, cite} when it is an IST.352 Knowledge Check dated on an IST.352 class day (a non-no_class session, or a weekly meeting day with no no_class session); null otherwise. Called by stage_assignments.';
+comment on function public.class_day_knowledge_check(text, text, timestamptz, numeric) is
+  '220 (Inbox 6336): for a new gradebook column, returns {component_id, cite} when it is a 0-point IST.352 Knowledge Check dated on an IST.352 class day (a non-no_class session, or a weekly meeting day with no no_class session) with no unbound announcement row that day; null otherwise. Called by stage_assignments.';
 
-revoke all on function public.class_day_knowledge_check(text, text, timestamptz) from public, anon, authenticated;
-grant execute on function public.class_day_knowledge_check(text, text, timestamptz) to service_role;
+revoke all on function public.class_day_knowledge_check(text, text, timestamptz, numeric) from public, anon, authenticated;
+grant execute on function public.class_day_knowledge_check(text, text, timestamptz, numeric) to service_role;
 
 create or replace function public.stage_assignments(p_run_id uuid, p_sync_run_id bigint)
 returns jsonb
@@ -266,7 +283,7 @@ begin
                       || '-' || regexp_replace(c.column_id, '\D', '', 'g');
         end if;
 
-        v_rule := class_day_knowledge_check(c.course_id, c.name, c.due_at);
+        v_rule := class_day_knowledge_check(c.course_id, c.name, c.due_at, c.possible);
 
         insert into assignments (id, course_id, component_id, title, type, due_at, points_possible,
                                  bb_column_id, bb_item_id, bb_submission_status, bb_last_seen,
@@ -508,17 +525,20 @@ do $$
 declare
   def text := pg_get_functiondef('public.stage_assignments(uuid,bigint)'::regprocedure);
 begin
-  if position('class_day_knowledge_check(c.course_id, c.name, c.due_at)' in def) = 0
+  if position('class_day_knowledge_check(c.course_id, c.name, c.due_at, c.possible)' in def) = 0
      or position('''expected_confirmed''' in def) = 0 then
     raise exception '220: stage_assignments does not call the class-day rule';
   end if;
-  if exists (select 1 from courses where id = 'IST.352') then
-    if class_day_knowledge_check('IST.352', 'Knowledge Check - 10/14/26', '2026-10-14 16:50+00') is null
-       or class_day_knowledge_check('IST.352', 'Knowledge Check - 10/7/26', '2026-10-07 16:50+00') is null then
+  -- The data checks run only on a database that holds IST.352's attendance component and its
+  -- weekly meetings; a fresh or partial replay checks the function's text alone.
+  if exists (select 1 from grade_components where course_id = 'IST.352' and code = 'attendance')
+     and exists (select 1 from meetings where course_id = 'IST.352') then
+    if class_day_knowledge_check('IST.352', 'Knowledge Check - 10/14/26', '2026-10-14 16:50+00', 0) is null
+       or class_day_knowledge_check('IST.352', 'Knowledge Check - 10/7/26', '2026-10-07 16:50+00', 0) is null then
       raise exception '220: the rule does not answer for a knowledge check Stack already confirmed';
     end if;
-    if class_day_knowledge_check('IST.352', 'Knowledge Check - 10/12/26', '2026-10-12 16:50+00') is not null
-       or class_day_knowledge_check('IST.323', 'Knowledge Check - 10/14/26', '2026-10-14 16:50+00') is not null then
+    if class_day_knowledge_check('IST.352', 'Knowledge Check - 10/12/26', '2026-10-12 16:50+00', 0) is not null
+       or class_day_knowledge_check('IST.323', 'Knowledge Check - 10/14/26', '2026-10-14 16:50+00', 0) is not null then
       raise exception '220: the rule answers on a no_class day or for another course';
     end if;
   end if;
