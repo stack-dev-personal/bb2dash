@@ -242,6 +242,9 @@ async function openEditor(page: Page, id: number): Promise<void> {
  */
 async function emulatePhone(cdp: CDPSession, page: Page): Promise<void> {
   const scheme = await page.evaluate(() => (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+  // Chromium ignores hover/pointer in setEmulatedMedia; touch emulation (DevTools' device mode) is
+  // what makes (hover: none) and (pointer: coarse) match.
+  await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
   await cdp.send('Emulation.setEmulatedMedia', {
     features: [
       { name: 'hover', value: 'none' },
