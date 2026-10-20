@@ -260,8 +260,10 @@ must find the row changed, write nothing, and show the outcome `Stale: the row c
 then archives the conversation through the list. Archiving deletes nothing. The notes it writes are
 made-up text that begins `Acceptance run 25`; a later stage clears the note.
 
-If the folder handed in holds no `3.proposal_id` (the test then fails at once with a message that
-names it), the step is `blocked`: say in its `saw` that it waited on step 3.
+Run the title one time: the test takes step 3's proposal from the carry-over the host hands in,
+not from your own output folder, which starts empty, so do not look for it there first. If
+`test_error` in `8.json` names `carry.json`, the host handed over no proposal: the step is
+`blocked`, and say in its `saw` that it waited on step 3.
 
 ### Step 8: `8 stale after a planner edit`
 
@@ -298,8 +300,10 @@ the field, which leaves the note as the run found it. It decides nothing in the 
 proposal of the run is still open, which happens only when an earlier step failed; then it rejects
 that proposal first, so that nothing of the run waits in the Inbox.
 
-If the folder handed in holds no `3.proposal_id` (the test then fails at once with a message that
-names it), the step is `blocked`: say in its `saw` that it waited on step 3.
+Run the title one time: the test takes step 3's proposal from the carry-over the host hands in,
+not from your own output folder, which starts empty, so do not look for it there first. If
+`test_error` in `9.json` names `carry.json`, the host handed over no proposal: the step is
+`blocked`, and say in its `saw` that it waited on step 3.
 
 ### Step 9: `9 planner restored`
 
