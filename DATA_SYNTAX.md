@@ -285,7 +285,7 @@ the Google mirror sees patches, never delete + insert.
   run does not carry, on the same path with the same `item_kind`, share the row (old id to
   `detail.previous_ids`, link and children kept), counted as `rekeyed`.
 
-## Workspace (migrations 140-143, 190-198)
+## Workspace (migrations 140-143, 190-199, 202)
 
 The Workspace is a chat: a question is a row the browser writes, an answer is a row the container
 runner writes, and a queue row joins them. Read-only v1: nothing here can write planner state or a
@@ -316,7 +316,10 @@ fact table. Conversations are archived, never deleted (no delete policy on any o
   partial index `workspace_requests_one_open (conversation_id) where state in ('queued',
   'claimed')`: one open request per conversation.
 * **`workspace_runner_heartbeat`** — one row, `id smallint` = 1 by check, `polled_at`, `runner`.
-  Empty until the service first runs.
+  Empty until the service first runs. Since 202 it holds the newest beat of any runner.
+* **`workspace_runner_beats`** (202) — one row per runner name: `runner text` (the key, 1 to 200
+  characters), `polled_at`. Written only by `workspace_heartbeat()`; a row not beaten for 7 days is
+  deleted by the next beat. The owner reads it; `service_role` reads it.
 
 **`tool_calls`** is a json array of at most 20 elements in call order, each `{ "tool": text,
 "query": text | null, "scope": text | null, "ok": boolean }`. `tool` is the name after the last
@@ -341,7 +344,10 @@ chooses its sentence from the request row's code.
 the whole seconds from `polled_at` to the server's `now()`, rounded down, never negative, null
 before the first heartbeat. Offline = no heartbeat, or one older than 120 s, measured as
 `polled_age_seconds` plus the time since the page read it; the browser's wall clock is never
-compared with `polled_at`.
+compared with `polled_at`. Since 202, two more last columns: `runners_alive integer` (the runners
+whose last beat is under 90 s old, the runner healthcheck's window; a beat exactly 90 s old is not
+alive) and `alive_runners text[]` (their names, sorted; `{}` when none). `polled_at` and `runner`
+are the newest beat of any runner.
 
 **The browser's functions** (140; `security invoker`, `search_path = public, pg_temp`):
 
@@ -480,6 +486,12 @@ first and then granted what the owner needs. Every policy names `app_owner()` in
   (a jsonb of eight keys; the window is clamped to 180 days either side of today in New York and the
   courses are the request's own stored scope), `workspace_job_claim` and `workspace_job_finish` (a
   rolling summary, or a remembered item written as an upsert on its conversation).
+* **The second runner (202)** — `workspace_claim_v3(p_runner text, p_max_open integer default 2)`:
+  `workspace_claim_v2` with one rule changed: it claims while fewer than `p_max_open` requests are
+  claimed across runners (v2: while none is); a cap outside 1 to 4 is refused (22023). Same lock, sweeps
+  and four columns. `workspace_runner` executes thirteen (207's `workspace_search_timing` and this one
+  added to the eleven) and still holds no table, view or sequence grant. The runner calls it with 2 under
+  its fixed name `workspace@<WORKSPACE_RUNNER_NAME>` (`workspace@workspace`, `workspace@workspace-2`).
 
 * **The review round (199)** — `create or replace` only. `workspace_job_claim`: a message is old for a
   rolling job when the messages newer than it already pass 14,000 bytes, and the newest finished
