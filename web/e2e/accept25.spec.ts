@@ -44,6 +44,7 @@ import {
   openProposalsOf,
   openWithSession,
   pickTarget,
+  pickedInboxTab,
   pressOnCard,
   proposalById,
   proposalCard,
@@ -113,6 +114,8 @@ const NEW_VALUE_HEADING = 'Proposed';
 const NO_ENTRY_YET = 'no entry yet';
 const APPROVE_WORD = 'Approve';
 const REJECT_WORD = 'Reject';
+/** W-106's grey text button in the Proposed box (`src/lib/proposal-draft.ts`, EDIT_WORD). */
+const EDIT_WORD = 'edit';
 const NOTE_LINE_START = 'Replace the note on ';
 const OUTCOME_APPLIED = 'Approved: note replaced';
 const OUTCOME_REJECTED = 'Rejected';
@@ -182,7 +185,7 @@ async function expectProposed(proposed: Proposed): Promise<number> {
   return proposalIdOf(proposed.card);
 }
 
-/** An open card: its kicker, its line, the value read and the value proposed, and both buttons. */
+/** An open card: its kicker, its line, the value read and the value proposed, both decisions and the edit. */
 async function expectOpenCard(card: Locator): Promise<void> {
   await expect(card).toHaveAttribute('data-proposal-state', 'proposed');
   await expect(card.getByText(PROPOSAL_KICKER, { exact: true })).toBeVisible();
@@ -192,6 +195,8 @@ async function expectOpenCard(card: Locator): Promise<void> {
   await expect(card.locator('[data-proposal-value="new"]')).toContainText(NEW_VALUE_HEADING);
   await expect(card.getByRole('button', { name: new RegExp(`^${APPROVE_WORD}: `) })).toBeEnabled();
   await expect(card.getByRole('button', { name: new RegExp(`^${REJECT_WORD}: `) })).toBeEnabled();
+  await expect(card.getByRole('button'), 'an open card has Approve, Reject and the edit (W-106)').toHaveCount(3);
+  await expect(card.getByRole('button').filter({ hasText: new RegExp(`^${EDIT_WORD}$`) })).toHaveCount(1);
 }
 
 /** A decided card: its outcome, no value drawn and no button. */
@@ -298,7 +303,7 @@ acceptStep('4 approve on the card', { shots: ['card', 'inbox'] }, async ({ page 
   await openInboxTab(page, INBOX_ARCHIVED);
   const item = proposalCard(page, proposalId);
   await expect(item, 'the decided item stands under Archived').toHaveCount(1);
-  rec.note({ inbox_card: await cardFacts(item) });
+  rec.note({ inbox_tab: await pickedInboxTab(page), inbox_card: await cardFacts(item) });
   await item.scrollIntoViewIfNeeded();
   await rec.shot(page, 'inbox');
   await expectDecidedCard(item, OUTCOME_APPLIED);
@@ -321,7 +326,7 @@ acceptStep('5 reject in the inbox', { shots: ['open', 'inbox', 'card'] }, async 
   await expect(item, 'the open item stands under Needs you').toHaveCount(1);
   rec.note({ decide_status: await pressOnCard(page, item, REJECT_WORD), decided_at: utcNow() });
   await openInboxTab(page, INBOX_ARCHIVED);
-  rec.note({ inbox_card: await cardFacts(item) });
+  rec.note({ inbox_tab: await pickedInboxTab(page), inbox_card: await cardFacts(item) });
   await item.scrollIntoViewIfNeeded();
   await rec.shot(page, 'inbox');
   await expectDecidedCard(item, OUTCOME_REJECTED);
@@ -382,7 +387,7 @@ acceptStep('7 decided cards draw no value', { shots: ['workspace', 'inbox'] }, a
   for (const { id, outcome } of decided) await expectDecidedCard(proposalCard(page, id), outcome);
 
   await openInboxTab(page, INBOX_ARCHIVED);
-  rec.note({ inbox_cards: [await cardFacts(proposalCard(page, decided[0].id)), await cardFacts(proposalCard(page, decided[1].id))] });
+  rec.note({ inbox_tab: await pickedInboxTab(page), inbox_cards: [await cardFacts(proposalCard(page, decided[0].id)), await cardFacts(proposalCard(page, decided[1].id))] });
   await proposalCard(page, decided[0].id).scrollIntoViewIfNeeded();
   await rec.shot(page, 'inbox');
   for (const { id, outcome } of decided) await expectDecidedCard(proposalCard(page, id), outcome);
