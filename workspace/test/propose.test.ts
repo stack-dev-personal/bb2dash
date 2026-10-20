@@ -5,6 +5,7 @@
  */
 
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,6 +16,7 @@ import { openProposeChannel, proposeSocketPath, PROPOSE_SOCKET_MODE, type Propos
 import { sendProposal } from '../src/propose/client.js';
 import { createPlannerHandler, DEFAULT_PROTOCOL_VERSION } from '../src/propose/planner-mcp.js';
 import {
+  OFFERED_PLANNER_STATUSES,
   PLANNER_SERVER,
   PROPOSALS_PER_TURN,
   PROPOSE_CALLS_PER_TURN,
@@ -37,6 +39,31 @@ const VALID: ProposeInput = {
   reason: 'He said he turned it in.',
 };
 const ROW = { proposal_id: '17', label: 'Problem Set 4', old_value: null, new_value: 'submitted' };
+
+describe('the statuses the tool offers (119a R2-9)', () => {
+  const WEB_STATUS_FILE = path.resolve(HERE, '..', '..', 'web', 'src', 'lib', 'progress-status.ts');
+
+  /** The web's OFFERED_STATUSES, read from its source text: every status menu in the app reads it. */
+  function webOffered(): string[] {
+    const text = fs.readFileSync(WEB_STATUS_FILE, 'utf8');
+    const body = /export const OFFERED_STATUSES = \[([^\]]*)\]/.exec(text)?.[1];
+    expect(body, 'OFFERED_STATUSES in web/src/lib/progress-status.ts').toBeDefined();
+    return [...(body ?? '').matchAll(/'([a-z_]+)'/g)].map((match) => match[1] ?? '');
+  }
+
+  it('are the web\'s offered statuses, in menu order', () => {
+    expect(webOffered()).toEqual(['not_started', 'in_progress', 'submitted', 'graded', 'excused', 'missed']);
+    expect([...OFFERED_PLANNER_STATUSES]).toEqual(webOffered());
+  });
+
+  it('are the list the tool description gives the model, and no retired status', () => {
+    const description = PROPOSE_INPUT_SCHEMA.properties.value.description;
+    expect(description).toContain(`For status one of ${webOffered().join(', ')};`);
+    const listed = /For status one of ([^;]*);/.exec(description)?.[1] ?? '';
+    expect(listed.split(', ')).toEqual(webOffered());
+    expect(listed).not.toMatch(/\b(planned|waived|not_applicable)\b/);
+  });
+});
 
 describe('the tool\'s names and input', () => {
   it('is mcp__planner__propose_planner_change, five a turn', () => {
