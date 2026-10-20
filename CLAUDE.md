@@ -42,7 +42,9 @@ Supabase project: `goultdzqcavefcgnifdy` (us-east-1, Postgres 17). Full access v
   narrowly on 2026-09-27 (DECISIONS, batch item 59): only rows named in an Inbox item Stack answered
   himself, status only when his words say so, scores as Blackboard shows them, every write in that
   day's log (since Phase 23: in `inbox_apply_writes` when it is made, and in the day file once the
-  exporter has run). `reading_progress` has no such path. Status values and labels live in `web/src/lib/progress-status.ts`.
+  exporter has run). `reading_progress` has no such path. Since Phase 25b the Workspace assistant may
+  **propose** a change to either table; nothing is written until Stack approves it, and then
+  `workspace_proposal_decide` (206) writes it as Stack under his row security (Workspace bullet below). Status values and labels live in `web/src/lib/progress-status.ts`.
 * Announcement reader (Phase 26, brief 120, migrations 210–212). After a sync closes done, the `sync` container
   files an `announcement_review` request, and the `apply` container runs `/announcement-review` (Sonnet) on new or
   edited posts.
@@ -86,15 +88,25 @@ Supabase project: `goultdzqcavefcgnifdy` (us-east-1, Postgres 17). Full access v
   first writes a search plan; the runner carries it out and the routed model answers. A lookup is one turn:
   the runner searches with his words. No turn resumes a CLI session: every turn's context is rebuilt from
   the database (the recent turns, a rolling summary, the passages found, attached files, the planner and
-  grades feed), each block fenced as data, and no transcript is kept. **Still read-only for the planner**:
-  the assistant's tools are off, two read tools over the course materials pass a gate
-  (`search_materials`, `get_material_text`, with a per-turn limit and the request's course scope), and no
-  notes store is read. The runner's login executes twelve SECURITY DEFINER functions (the twelfth, 207 from Phase 25a,
-  returns only eleven search timings, for the doctor's index row) and holds no table
-  grant; through them, for a request or a job it holds, it reads the conversation, the course list, attached
-  files' names and the feed's fixed columns (assignments, readings, the status of `assignment_progress` and
-  `reading_progress`, posted scores). It can write neither planner state, a grade nor a fact table, and the
-  assistant never works out a grade. **One retrieval store, pgvector, inside the bb2dash project**: course
+  grades feed), each block fenced as data, and no transcript is kept. **The assistant proposes, never writes
+  the planner** (Phase 25b, from its cut-over; brief 119 E, contract `119b`): the assistant's tools are off,
+  two read tools over the course materials pass a gate (`search_materials`, `get_material_text`, with a
+  per-turn limit and the request's course scope), and a third, `propose_planner_change`, served by a
+  credential-free MCP server (`planner`, `workspace/src/propose/`) that hands each call to the runner over a
+  per-turn socket; the runner files it through `workspace_propose` (204) under its own request: at most five a
+  turn, on `status` and `notes` of `assignment_progress` and `reading_progress` and `planned_start` /
+  `planned_finish` of `assignment_progress`, a note being the whole new text (at most 2,000 characters). Each
+  proposal is a `workspace_proposals` row (203) and an Inbox item of kind `assistant_proposal` (205), kept out
+  of the apply queue, `/inbox-apply` and the decision filing. Stack decides on the card under the answer or in
+  the Inbox; both call `workspace_proposal_decide` (206, SECURITY INVOKER, as Stack under his row security),
+  which re-reads the row and writes it, or marks the proposal `stale`; a proposal unanswered for 7 days expires
+  (hourly sweep). No notes store is read. The runner's login executes fourteen SECURITY DEFINER functions (the
+  twelfth, 207 from Phase 25a, returns only eleven search timings, for the doctor's index row; the thirteenth,
+  `workspace_claim_v3` (202); the fourteenth, `workspace_propose` (204)) and holds no table grant; through them,
+  for a request or a job it holds, it reads the conversation, the course list, attached files' names and the
+  feed's fixed columns (assignments and readings with their ids, the status of `assignment_progress` and
+  `reading_progress`, posted scores). It can write neither planner state, a grade nor a fact table, only a
+  proposal, and the assistant never works out a grade. **One retrieval store, pgvector, inside the bb2dash project**: course
   files (`bb_file_text`, `bb_text_embeddings`), his uploads and the assistant's memory
   (`workspace_documents`, `workspace_document_text`, `workspace_text_embeddings`), all on gte-small at 384
   dimensions, each vector table with its HNSW index, behind one search (`workspace_search`) that names the
@@ -168,7 +180,14 @@ Supabase project: `goultdzqcavefcgnifdy` (us-east-1, Postgres 17). Full access v
   rebuilds every service and is never run while a sync is open (DECISIONS 2026-10-07). On a phase branch,
   before the merge, they run only as a test compose project from a phase worktree (`bb2dash-wt24` in Phase
   24a), built under test tags through a second compose file so that no live tag moves, the service named in
-  every command, and only inside a window Stack has agreed to: one runner answers the queue at a time.
+  every command, and only inside a window Stack has agreed to: one test runner answers the queue at a time.
+  **Two runners (Phase 25b, from its cut-over):** `workspace` and `workspace-2` (`extends: workspace`, the same
+  image `bb2dash-workspace:local` with no build of its own, the same secrets, network and egress port 3128)
+  claim through `workspace_claim_v3(runner, 2)` (202): at most two answers at once across both, one open request
+  per conversation. Each names itself by `WORKSPACE_RUNNER_NAME` (`workspace@workspace`,
+  `workspace@workspace-2`) and beats into `workspace_runner_beats`; `v_workspace_status.runners_alive` counts
+  beats under 90 s, and the doctor has a row for each and a `workspace runners` row. Build `workspace` first,
+  then `up -d workspace-2`; each alone, by name, never during a turn.
   **Egress (Phase 25a, from its cut-over):** `workspace`, `apply` and `workspace-ingest` reach the internet only
   through the `egress` service (`docker/egress/`, Squid 6.13 peek-and-splice, nothing decrypted): one port and one
   allow-list per network (3128 workspace and 3129 apply: `api.anthropic.com` and the project host; 3130 ingest: the
@@ -176,8 +195,8 @@ Supabase project: `goultdzqcavefcgnifdy` (us-east-1, Postgres 17). Full access v
   Their firewalls allow only egress's port and the session pooler on 5432; DNS is closed, both names pinned in
   `/etc/hosts` at start. A refusal shows in Squid's log as `TCP_DENIED/200`. `sync`, `bb2dash-mcp` and
   `harness-jobs` stay open (brief 119, question 2). Never restart `egress` during a turn, an apply run or an upload.
-  `workspace`: the runner reaches the database only as the login role `workspace_runner`, through twelve
-  SECURITY DEFINER functions (142, 143, 196, 199, 207), and mounts three secrets from `SECRETS_DIR` as files:
+  `workspace` (and `workspace-2`): the runner reaches the database only as the login role `workspace_runner`,
+  through fourteen SECURITY DEFINER functions (142, 143, 196, 199, 207, 202, 204), and mounts three secrets from `SECRETS_DIR` as files:
   `workspace_runner_db_url`, `claude_oauth_token`, `bb2dash_mcp_service_key` (the one credential there that
   could write; read only by the materials package, DECISIONS 2026-10-05). Its CLI config folder is a tmpfs.
   `workspace-ingest` reads his uploads: no model, no Claude token, no service key; its own network
