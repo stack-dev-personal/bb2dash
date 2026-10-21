@@ -142,7 +142,8 @@ session stopped mid-way, "apply 220, then cut over 25b and apply 202-206 and reb
   400 or more; a 4xx would be cleaner), and the planner feed the assistant is given left out the graded row it
   proposed on (the tool found it by id).
 * Step 1 answered 2026-10-21: usage credits are off (the week's usage had reset, so no percentages were noted).
-* **Both operator notes fixed on `fix/phase25b-followups` (2026-10-21), NOT merged, NOT cut over:**
+* **Both operator notes fixed (2026-10-21): PR #135 MERGED `86268ff` on Stack's "merge then cut over", CUT OVER, and
+  ACCEPTED by run `20261021T224728Z` (green from `main` at `86268ff`):**
   * Migration **208** (`208_workspace_proposal_decide_409.sql`) replaces `workspace_proposal_decide` with 206's body but
     for the one refusal, now raised as SQLSTATE `PGRST` with code `55000` and the same words in a JSON message and
     `{status: 409}` as its detail: PostgREST answers **409**, the body still says `55000`, so the web app is unchanged.
@@ -157,9 +158,22 @@ session stopped mid-way, "apply 220, then cut over 25b and apply 202-206 and reb
     the full 32,000 bytes still gives a 128,000-byte prompt; an ordinary question is unchanged (brief 109 amended).
   * Review notes left as they are: 203's `approved_value` guard still raises 55000 (a 500), but only a direct PATCH of
     that column reaches it and the app sends none; a SQL caller of 206 now reads the code from the JSON message.
-  * Cut-over, on Stack's word after the merge: apply 208 byte-identical; rebuild `workspace`, then `up -d workspace-2`,
-    each alone; run 206's and 208's units with `db-test`; the next `just accept 25` shows the 409 at step 6. Pack 25 on
-    `main` expects 409 from the merge on, so it is not run between the merge and 208's apply.
+  * Cut-over (2026-10-21, 20:16Z to 20:20Z): 208 applied under its file's name, byte-identical (md5 `aa982f3c`);
+    `phase25b_206_decide.sql` and `phase25b_208_decide_409.sql` PASS verbatim via `db-test`; `workspace` rebuilt alone
+    (`--no-deps`, so `egress` was left as it was), then `workspace-2` recreated alone on the same image; both healthy.
+  * Acceptance: run `20261021T224728Z` GREEN, steps 0 and 2 to 11; step 6's second decisions answered **409** with code
+    `55000` ("already applied", "already rejected"); the planner row back to its reading (md5 `77888c0d` without
+    `updated_at`), no proposal open, no session of the run left. Three runs before it did not finish: `20261021T202321Z`
+    red at the image build (30-minute timeout, during the network fault below), `20261021T205615Z` and `20261021T220133Z`
+    stopped by Claude Code for low memory on the host. `205615Z` stopped inside stage decide and left its note on
+    `ECN.304/exam-1` and its conversation open: put back by guarded SQL (the row's md5 equals the reading above) and
+    archived; its one app session, which its sign-out could not end (the token had expired), deleted by id on Stack's word.
+  * Found at the cut-over, not caused by it: a network fault about 20:06Z left the session pooler holding dead connections,
+    all 4 of `inbox_apply_runner`'s and all 4 of `workspace_ingest_runner`'s (each role's limit), so `apply` and
+    `workspace-ingest` were down from about 20:09Z ("too many connections", 53300). Their idle backends older than
+    5 minutes, and `workspace_runner`'s, were ended with `pg_terminate_backend`; both reconnected at 20:21:38Z, healthy.
+    The runners' 60 restarts since 2026-10-20 are the same kind: the watchdog 3 times, and the entrypoint refusing to
+    start while the pooler's name did not resolve (one stretch 02:54Z to 16:46Z, the host offline). Nothing changed for it.
 
 ## Phase 25a: hardening after 24b (brief 119), 2026-10-19: built, reviewed, MERGED (#121 `9d6d5dec`, bb2dash-stack #9 `9dfcd01`) and CUT OVER
 
