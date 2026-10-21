@@ -58,3 +58,25 @@ describe('the feed gives every date its New York weekday', () => {
     expect(linesOf(feed)[0]).toBe('Planner and grades, read unknown New York time. Work due start to end; posted scores are not limited to those dates.');
   });
 });
+
+describe('a score line names the assignment its column is linked to', () => {
+  // A graded row is usually older than the work window, so its score line is where the assistant finds
+  // the id a planner proposal names it by (25b follow-up).
+  function scoreLineOf(assignmentId: string | null): string {
+    const base = bigFeedJson(0, 1) as { scores: Array<Record<string, unknown>> };
+    const feed = parseFeed({ ...base, scores: [{ ...base.scores[0], assignment_id: assignmentId }] });
+    if (feed === null) throw new Error('synthetic feed does not parse');
+    return linesOf(feed).find((line) => line.startsWith('CRS.')) ?? '';
+  }
+
+  it('puts the id after the course, under the header that names it', () => {
+    const feed = parseFeed(bigFeedJson(0, 1));
+    if (feed === null) throw new Error('synthetic feed does not parse');
+    expect(linesOf(feed)).toContain('scores: course | id | name | score | possible | grade | released | exempt | submission | seen');
+    expect(scoreLineOf('ECN.304/exam-1').split(' | ').slice(0, 3)).toEqual(['CRS.100', 'ECN.304/exam-1', 'Synthetic graded column 0']);
+  });
+
+  it('shows a dash for a column linked to no assignment', () => {
+    expect(scoreLineOf(null).split(' | ')[1]).toBe('-');
+  });
+});

@@ -1,7 +1,9 @@
 /**
  * The planner and grades feed as the prompt holds it (brief 109, The planner and grades feed): the
  * jsonb of `workspace_planner_feed` rendered as text, one line a row, no key repeated. A work row carries its
- * item id (Phase 25b) so the assistant can name it in a planner proposal; a score row carries none.
+ * item id (Phase 25b) so the assistant can name it in a planner proposal; a score row carries the id of the
+ * assignment its column is linked to, or `-` (25b follow-up: a graded row is usually older than the work
+ * window, so its score line is the only place the assistant sees it).
  * `test/fixtures/contract24/feed-block.txt` is the frozen form, byte for byte. Every date carries its New
  * York weekday and the first line names today (`dates.ts`), so the model never works a weekday out.
  *
@@ -36,6 +38,8 @@ export interface FeedWorkRow {
 
 export interface FeedScoreRow {
   readonly courseId: string | null;
+  /** `assignments.id` of the linked column, or null: what `propose_planner_change` names the row by. */
+  readonly assignmentId: string | null;
   readonly name: string | null;
   readonly possible: number | string | null;
   readonly displayScore: number | string | null;
@@ -84,6 +88,7 @@ function workRowOf(row: Json): FeedWorkRow {
 function scoreRowOf(row: Json): FeedScoreRow {
   return {
     courseId: textOrNull(row.course_id),
+    assignmentId: textOrNull(row.assignment_id),
     name: textOrNull(row.name),
     possible: numberOrText(row.possible),
     displayScore: numberOrText(row.display_score),
@@ -140,6 +145,7 @@ function workLine(row: FeedWorkRow): string {
 function scoreLine(row: FeedScoreRow): string {
   return [
     cell(row.courseId),
+    cell(row.assignmentId),
     cell(row.name, TITLE_MAX),
     cell(row.displayScore),
     cell(row.possible),
@@ -160,7 +166,7 @@ export interface RenderedFeed {
 }
 
 const WORK_HEADER = 'work: kind | course | due | status | type | points | workload | id | title';
-const SCORES_HEADER = 'scores: course | name | score | possible | grade | released | exempt | submission | seen';
+const SCORES_HEADER = 'scores: course | id | name | score | possible | grade | released | exempt | submission | seen';
 
 interface Rows {
   readonly work: readonly FeedWorkRow[];
