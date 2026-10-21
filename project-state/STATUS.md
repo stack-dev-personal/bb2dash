@@ -141,6 +141,18 @@ session stopped mid-way, "apply 220, then cut over 25b and apply 202-206 and reb
   Operator notes, none changing the verdict: a refused second decision comes back as HTTP 500 (the playbook takes
   400 or more; a 4xx would be cleaner), and the planner feed the assistant is given left out the graded row it
   proposed on (the tool found it by id).
+* Step 1 answered 2026-10-21: usage credits are off (the week's usage had reset, so no percentages were noted).
+* **Both operator notes fixed on `fix/phase25b-followups` (2026-10-21), NOT merged, NOT cut over:**
+  * Migration **208** (`208_workspace_proposal_decide_409.sql`) replaces `workspace_proposal_decide` with 206's body but
+    for the one refusal, now raised as SQLSTATE `PGRST` with code `55000` and the same words in a JSON message and
+    `{status: 409}` as its detail: PostgREST answers **409**, the body still says `55000`, so the web app is unchanged.
+    New unit `phase25b_208_decide_409.sql`; 206's unit reads the `PGRST` form. Pack 25's step 6 now expects `409`.
+    Dry run on prod in a rolled-back transaction: the migration and its unit PASS; 206's unit PASS via `db-test` before 208.
+  * The feed: each score line now carries the id of the assignment its column is linked to (`course | id | name | …`),
+    so a graded row older than the work window can be named in a proposal. Runner code only (`workspace/src/context/feed.ts`,
+    the frozen `feed-block.txt` updated); 196 is untouched.
+  * Cut-over, on Stack's word after the merge: apply 208 byte-identical; rebuild `workspace`, then `up -d workspace-2`,
+    each alone; run 206's and 208's units with `db-test`; the next `just accept 25` shows the 409 at step 6.
 
 ## Phase 25a: hardening after 24b (brief 119), 2026-10-19: built, reviewed, MERGED (#121 `9d6d5dec`, bb2dash-stack #9 `9dfcd01`) and CUT OVER
 
