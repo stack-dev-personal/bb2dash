@@ -150,9 +150,16 @@ session stopped mid-way, "apply 220, then cut over 25b and apply 202-206 and reb
     Dry run on prod in a rolled-back transaction: the migration and its unit PASS; 206's unit PASS via `db-test` before 208.
   * The feed: each score line now carries the id of the assignment its column is linked to (`course | id | name | …`),
     so a graded row older than the work window can be named in a proposal. Runner code only (`workspace/src/context/feed.ts`,
-    the frozen `feed-block.txt` updated); 196 is untouched.
+    the frozen `feed-block.txt` updated); 196 is untouched. The tool's schema now says an id may come from a score line.
+  * The feed's ceiling rose from 12,000 to **14,000** bytes, on Stack's pick: prod's feed of 2026-10-21 (60 work rows,
+    43 score rows, all linked) renders at about 11.8 KB without the ids and 13.1 KB with them, so at 12,000 the oldest
+    graded rows would have been cut first. The attached documents' floor fell from 33,600 to 31,600 so a question of
+    the full 32,000 bytes still gives a 128,000-byte prompt; an ordinary question is unchanged (brief 109 amended).
+  * Review notes left as they are: 203's `approved_value` guard still raises 55000 (a 500), but only a direct PATCH of
+    that column reaches it and the app sends none; a SQL caller of 206 now reads the code from the JSON message.
   * Cut-over, on Stack's word after the merge: apply 208 byte-identical; rebuild `workspace`, then `up -d workspace-2`,
-    each alone; run 206's and 208's units with `db-test`; the next `just accept 25` shows the 409 at step 6.
+    each alone; run 206's and 208's units with `db-test`; the next `just accept 25` shows the 409 at step 6. Pack 25 on
+    `main` expects 409 from the merge on, so it is not run between the merge and 208's apply.
 
 ## Phase 25a: hardening after 24b (brief 119), 2026-10-19: built, reviewed, MERGED (#121 `9d6d5dec`, bb2dash-stack #9 `9dfcd01`) and CUT OVER
 
