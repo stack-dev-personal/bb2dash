@@ -50,16 +50,26 @@ describe('the feed block', () => {
     expect(renderFeed(feedFixture()).text).toBe(readContractText('feed-block.txt'));
   });
 
-  it('leaves no row out for 47 work rows and 32 score rows, and stays under its 12,000 bytes', () => {
+  it('leaves no row out for 47 work rows and 32 score rows, and stays under its 14,000 bytes', () => {
     const feed = parseFeed(bigFeedJson(47, 32));
     if (feed === null) throw new Error('synthetic feed does not parse');
     const rendered = renderFeed(feed);
     expect(rendered.rows).toBe(79);
     expect(rendered.workLeftOut + rendered.scoresLeftOut).toBe(0);
     expect(rendered.text).toContain('left out: 0 work rows, 0 score rows');
-    expect(utf8Bytes(rendered.text)).toBeLessThan(12_000);
+    expect(utf8Bytes(rendered.text)).toBeLessThan(14_000);
     const assembled = assemblePrompt({ ...base, context: emptyContext(), feed });
     expect(assembled.feedRows).toBe(79);
+  });
+
+  it('leaves no row out at the counts prod held on 2026-10-21: 60 work rows, 43 score rows each with its id', () => {
+    // Each score line carries its linked assignment id (25b follow-up); prod's average id was 26 characters.
+    const json = bigFeedJson(60, 43) as { scores: Array<Record<string, unknown>> };
+    const feed = parseFeed({ ...json, scores: json.scores.map((row, i) => ({ ...row, assignment_id: `CRS.${100 + (i % 5)}/graded-item-${String(i).padStart(9, '0')}` })) });
+    if (feed === null) throw new Error('synthetic feed does not parse');
+    const rendered = renderFeed(feed);
+    expect(rendered.workLeftOut + rendered.scoresLeftOut).toBe(0);
+    expect(rendered.rows).toBe(103);
   });
 
   it('cuts undated work first, then the oldest scores, then the farthest work, and counts what went', () => {
@@ -236,10 +246,10 @@ describe('the recent turns', () => {
 });
 
 describe('the budget rules', () => {
-  const spare = PROMPT_TARGET_BYTES - 80_000;
+  const spare = PROMPT_TARGET_BYTES - 82_000;
 
-  it('puts the floors at a spare of 48,000: recent turns 14,400, documents 33,600', () => {
-    expect(spare).toBe(48_000);
+  it('puts the floors at a spare of 46,000: recent turns 14,400, documents 31,600', () => {
+    expect(spare).toBe(46_000);
     expect(recentBudget(spare, true)).toBe(RECENT_FLOOR_BYTES);
     expect(attachedBudget(spare, RECENT_FLOOR_BYTES, true)).toBe(ATTACHED_FLOOR_BYTES);
     expect(RECENT_FLOOR_BYTES + ATTACHED_FLOOR_BYTES).toBe(spare);

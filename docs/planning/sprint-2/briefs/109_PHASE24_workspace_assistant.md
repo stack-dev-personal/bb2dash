@@ -630,6 +630,10 @@ Six blocks have a ceiling and take only what they need:
 | framing, the lines at the top of the prompt | 2,000 |
 | the six together | 80,000 |
 
+Amended 2026-10-21 (Phase 25b follow-up, DECISIONS): the feed's ceiling is **14,000** (score lines carry the
+linked assignment's id), the six together 82,000, the spare never under 46,000, and the attached documents'
+floor 31,600; only a question of the full 32,000 bytes reaches those floors.
+
 A block's own two lines and its header count inside that block's size, so a passage of 2,000 bytes is
 2,000 with them. Two blocks share the **spare**, which is 128,000 minus the real size of the six. The
 spare is never under 48,000, and on an ordinary question it is about 80,000.

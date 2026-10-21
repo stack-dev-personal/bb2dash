@@ -3,7 +3,8 @@
  * stays under the kernel's 131,072 bytes (`ARG_MAX_BYTES`); the runner assembles to 128,000.
  *
  * Six blocks have a ceiling and take only what they need. Two blocks share the spare, which is
- * 128,000 minus the real size of the six and is never under 48,000.
+ * 128,000 minus the real size of the six and is never under 46,000 (48,000 until the 25b follow-up gave
+ * the feed 2,000 more for the score lines' ids; only a question of the full 32,000 bytes reaches it).
  */
 
 export const PROMPT_TARGET_BYTES = 128_000;
@@ -11,7 +12,7 @@ export const PROMPT_TARGET_BYTES = 128_000;
 export const CEILING_BYTES = Object.freeze({
   question: 32_000,
   passages: 28_000,
-  feed: 12_000,
+  feed: 14_000,
   summary: 3_000,
   memory: 3_000,
   framing: 2_000,
@@ -26,8 +27,8 @@ export const MEMORY_ITEM_MAX_BYTES = 1_000;
 export const RECENT_FLOOR_BYTES = 14_400;
 /** With no attachment the recent turns take the whole spare, up to today's replay size. */
 export const RECENT_MAX_BYTES = 96_000;
-/** The attached documents are never given less than this. */
-export const ATTACHED_FLOOR_BYTES = 33_600;
+/** The attached documents are never given less than this (33,600 until the feed took 2,000 more). */
+export const ATTACHED_FLOOR_BYTES = 31_600;
 /** With an attachment the recent turns get this share of the spare and the documents the rest. */
 const RECENT_SHARE_WITH_ATTACHMENT = 0.3;
 /** A cut message is kept only when at least this much of it fits. */
