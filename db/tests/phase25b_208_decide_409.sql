@@ -66,6 +66,18 @@ begin
   return v;
 end $$;
 
+-- What a refused decision must leave as it is: the proposals, their Inbox items and the planner rows.
+create function pg_temp.w208_snapshot(p_ids bigint[]) returns jsonb
+  language sql stable as $$
+  select coalesce((select jsonb_agg(jsonb_build_object('id', w.id, 'state', w.state, 'decided_at', w.decided_at,
+                                                       'approved_value', w.approved_value, 'item_state', i.state,
+                                                       'resolved_at', i.resolved_at, 'resolution', i.resolution) order by w.id)
+                     from workspace_proposals w join attention_items i on i.workspace_proposal_id = w.id
+                    where w.id = any (p_ids)), '[]'::jsonb)
+      || coalesce((select jsonb_agg(to_jsonb(p) order by p.assignment_id) from assignment_progress p
+                    where p.assignment_id in (select w.row_id from workspace_proposals w where w.id = any (p_ids))), '[]'::jsonb)
+$$;
+
 -- The refusal a second decision must get, for a proposal and the state it holds.
 create function pg_temp.w208_refusal_problems(p_got jsonb, p_id bigint, p_state text) returns text[]
   language plpgsql as $$
@@ -171,15 +183,7 @@ begin
   v_got := pg_temp.w208_decide(p_rejected, 'reject');
   if v_got is distinct from '{"ok": "rejected|false"}'::jsonb then v_fail := v_fail || format('first reject: %s', v_got); end if;
 
-  -- What a refused decision must leave as it is: both proposals, their Inbox items, the planner rows.
-  select jsonb_agg(jsonb_build_object('id', w.id, 'state', w.state, 'decided_at', w.decided_at,
-                                      'approved_value', w.approved_value, 'item_state', i.state,
-                                      'resolved_at', i.resolved_at, 'resolution', i.resolution) order by w.id)
-         || coalesce((select jsonb_agg(to_jsonb(p) order by p.assignment_id) from assignment_progress p
-                       where p.assignment_id in ('ECN.304/w208-d1', 'ECN.304/w208-d2')), '[]'::jsonb)
-    into v_before
-    from workspace_proposals w join attention_items i on i.workspace_proposal_id = w.id
-   where w.id in (p_applied, p_rejected);
+  v_before := pg_temp.w208_snapshot(array[p_applied, p_rejected]);
 
   -- 1. Applied, asked again either way.
   v_fail := v_fail || pg_temp.w208_refusal_problems(pg_temp.w208_decide(p_applied, 'approve'), p_applied, 'applied');
@@ -188,14 +192,7 @@ begin
   v_fail := v_fail || pg_temp.w208_refusal_problems(pg_temp.w208_decide(p_rejected, 'approve'), p_rejected, 'rejected');
   v_fail := v_fail || pg_temp.w208_refusal_problems(pg_temp.w208_decide(p_rejected, 'reject'), p_rejected, 'rejected');
 
-  select jsonb_agg(jsonb_build_object('id', w.id, 'state', w.state, 'decided_at', w.decided_at,
-                                      'approved_value', w.approved_value, 'item_state', i.state,
-                                      'resolved_at', i.resolved_at, 'resolution', i.resolution) order by w.id)
-         || coalesce((select jsonb_agg(to_jsonb(p) order by p.assignment_id) from assignment_progress p
-                       where p.assignment_id in ('ECN.304/w208-d1', 'ECN.304/w208-d2')), '[]'::jsonb)
-    into v_after
-    from workspace_proposals w join attention_items i on i.workspace_proposal_id = w.id
-   where w.id in (p_applied, p_rejected);
+  v_after := pg_temp.w208_snapshot(array[p_applied, p_rejected]);
   if v_after is distinct from v_before then
     v_fail := v_fail || format('a refused decision changed something: %s -> %s', v_before, v_after);
   end if;
