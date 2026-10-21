@@ -40,6 +40,14 @@
 
 begin;
 
+-- A refusal as '<code> <message>'. 208 sends the 55000 refusal as SQLSTATE PGRST with the code and the
+-- words in a JSON message; every other refusal is read as it is.
+create function pg_temp.w104_err(p_state text, p_message text) returns text
+  language sql immutable as $$
+  select case when p_state = 'PGRST' then (p_message::jsonb ->> 'code') || ' ' || (p_message::jsonb ->> 'message')
+              else p_state || ' ' || p_message end
+$$;
+
 create function pg_temp.w104_try(p_role text, p_sub text, p_sql text) returns text
   language plpgsql as $$
 declare
@@ -55,7 +63,7 @@ begin
     get diagnostics n = row_count;
     v := 'ok:' || n;
   exception when others then
-    v := sqlstate || ' ' || sqlerrm;
+    v := pg_temp.w104_err(sqlstate, sqlerrm);
   end;
   reset role;
   return v;
@@ -72,7 +80,7 @@ begin
   begin
     select d.state || '|' || d.applied into v from public.workspace_proposal_decide(p_id, p_decision) d;
   exception when others then
-    v := sqlstate || ' ' || sqlerrm;
+    v := pg_temp.w104_err(sqlstate, sqlerrm);
   end;
   reset role;
   return v;
@@ -89,7 +97,7 @@ begin
   begin
     select d.state || '|' || d.applied into v from public.workspace_proposal_decide(p_id, p_decision, p_value) d;
   exception when others then
-    v := sqlstate || ' ' || sqlerrm;
+    v := pg_temp.w104_err(sqlstate, sqlerrm);
   end;
   reset role;
   return v;

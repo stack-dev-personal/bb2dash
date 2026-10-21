@@ -67,8 +67,8 @@ export const PROPOSE_INPUT_SCHEMA = Object.freeze({
   additionalProperties: false,
   required: ['target', 'row_id', 'field', 'value', 'reason'],
   properties: {
-    target: { type: 'string', enum: [...PROPOSE_TARGETS], description: 'assignment_progress for an assignment (kind A in the planner block), reading_progress for a reading (kind R).' },
-    row_id: { type: 'string', minLength: 1, maxLength: ROW_ID_MAX_CHARS, description: 'The row\'s id exactly as the planner block\'s id column shows it.' },
+    target: { type: 'string', enum: [...PROPOSE_TARGETS], description: 'assignment_progress for an assignment (kind A in the planner block, or an id on a score line), reading_progress for a reading (kind R).' },
+    row_id: { type: 'string', minLength: 1, maxLength: ROW_ID_MAX_CHARS, description: 'The row\'s id exactly as an id column of the planner block shows it (a work line or a score line).' },
     field: { type: 'string', enum: [...PROPOSE_FIELDS], description: 'status or notes; planned_start or planned_finish on an assignment only.' },
     value: { type: 'string', minLength: 1, maxLength: VALUE_MAX_CHARS, description: `For status one of ${OFFERED_PLANNER_STATUSES.join(', ')}; for a planned date YYYY-MM-DD; for notes the whole new note, which replaces the old one.` },
     reason: { type: 'string', minLength: 1, maxLength: REASON_MAX_CHARS, description: 'One sentence for Stack: why, in his own words where he gave them.' },
