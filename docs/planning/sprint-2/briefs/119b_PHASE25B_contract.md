@@ -75,6 +75,8 @@ request_id, reason}`, `workspace_proposal_id = id`. Returns the row the tool sho
 
 Amended 2026-10-20 (E-1 to E-5, 119a): with `p_value` an approval writes Stack's edited value instead of `new_value`, checked by `workspace_proposal_value_check` (the rules 204 applies) and refused when it equals the planner's value; `p_value` on a reject is refused; `approved_value` keeps what was written and the Inbox resolution carries `edited`.
 
+Amended 2026-10-21 (migration 208, acceptance run 20261020T222413Z's operator note): the refusal of a proposal that is not `proposed` is raised as SQLSTATE `PGRST` with the message `{code: "55000", message: "proposal <id> is already <state>", details: null, hint: null}` and the detail `{status: 409, headers: {}}`, so PostgREST answers **409** with code `55000` in the body instead of a 500. The page's contract (code `55000`, the words) is unchanged; a caller in SQL reads the code from the JSON message.
+
 SECURITY INVOKER (runs as Stack under the RLS he has); execute to `authenticated` only. `p_decision` is
 `approve` or `reject` (22023 otherwise). In one transaction: lock the proposal (`for update`); not `proposed`
 → raise `55000` with the state it holds in the message (`proposal <id> is already <state>`); past

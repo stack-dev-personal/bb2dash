@@ -213,9 +213,9 @@ conversation and takes one picture (`6-cards.png`).
 
 Pass when all of this is true:
 
-- In `6.json`, `first_refusal`: `status` is a number of 400 or more, `code` is `55000`, and
+- In `6.json`, `first_refusal`: `status` is `409`, `code` is `55000`, and
   `message` holds the words already applied.
-- In `6.json`, `second_refusal`: `status` is a number of 400 or more, `code` is `55000`, and
+- In `6.json`, `second_refusal`: `status` is `409`, `code` is `55000`, and
   `message` holds the words already rejected.
 - In `6.json`, `first_card`: `state` `applied`, `values_drawn` 0, `buttons` 0, `outcome`
   `Approved: note replaced`. `second_card`: `state` `rejected`, `values_drawn` 0, `buttons` 0,

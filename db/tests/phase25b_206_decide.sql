@@ -55,7 +55,9 @@ begin
     get diagnostics n = row_count;
     v := 'ok:' || n;
   exception when others then
-    v := sqlstate || ' ' || sqlerrm;
+    -- 208 sends the 55000 refusal as SQLSTATE PGRST with the code and words in a JSON message.
+    v := case when sqlstate = 'PGRST' then (sqlerrm::jsonb ->> 'code') || ' ' || (sqlerrm::jsonb ->> 'message')
+              else sqlstate || ' ' || sqlerrm end;
   end;
   reset role;
   return v;
@@ -72,7 +74,9 @@ begin
   begin
     select d.state || '|' || d.applied into v from public.workspace_proposal_decide(p_id, p_decision) d;
   exception when others then
-    v := sqlstate || ' ' || sqlerrm;
+    -- 208 sends the 55000 refusal as SQLSTATE PGRST with the code and words in a JSON message.
+    v := case when sqlstate = 'PGRST' then (sqlerrm::jsonb ->> 'code') || ' ' || (sqlerrm::jsonb ->> 'message')
+              else sqlstate || ' ' || sqlerrm end;
   end;
   reset role;
   return v;
@@ -89,7 +93,9 @@ begin
   begin
     select d.state || '|' || d.applied into v from public.workspace_proposal_decide(p_id, p_decision, p_value) d;
   exception when others then
-    v := sqlstate || ' ' || sqlerrm;
+    -- 208 sends the 55000 refusal as SQLSTATE PGRST with the code and words in a JSON message.
+    v := case when sqlstate = 'PGRST' then (sqlerrm::jsonb ->> 'code') || ' ' || (sqlerrm::jsonb ->> 'message')
+              else sqlstate || ' ' || sqlerrm end;
   end;
   reset role;
   return v;

@@ -127,6 +127,8 @@ const NOTES_LABEL = 'Notes';
 
 /** 206's refusal of a proposal that is no longer `proposed`. */
 const ALREADY_DECIDED_CODE = '55000';
+/** 208: PostgREST sends 206's refusal as 409 Conflict, not 500. */
+const ALREADY_DECIDED_STATUS = 409;
 
 /* ---------------------------------------------------------------------------
  * Steps shared by the stages
@@ -340,7 +342,7 @@ acceptStep('5 reject in the inbox', { shots: ['open', 'inbox', 'card'] }, async 
   await expectDecidedCard(onAnswer, OUTCOME_REJECTED);
 });
 
-// Step 6: a second decision on each decided proposal is refused (55000), and the page still shows
+// Step 6: a second decision on each decided proposal is refused (409, code 55000), and the page still shows
 // each as decided. The calls are the ones the cards make.
 acceptStep('6 second decision refused', { shots: ['cards'] }, async ({ page }, rec) => {
   const conversation = conversationOfStep(FIRST_PROPOSAL_STEP);
@@ -361,8 +363,10 @@ acceptStep('6 second decision refused', { shots: ['cards'] }, async ({ page }, r
   rec.note({ first_card: await cardFacts(cards[0] as Locator), second_card: await cardFacts(cards[1] as Locator) });
   await (cards[1] as Locator).scrollIntoViewIfNeeded();
   await rec.shot(page, 'cards');
+  expect(onFirst.status, 'the refusal is a 409 (208), not a 500').toBe(ALREADY_DECIDED_STATUS);
   expect(onFirst.code, 'a reject of the approved proposal is refused as already decided').toBe(ALREADY_DECIDED_CODE);
   expect(onFirst.message ?? '').toMatch(/already applied/);
+  expect(onSecond.status, 'the refusal is a 409 (208), not a 500').toBe(ALREADY_DECIDED_STATUS);
   expect(onSecond.code, 'an approve of the rejected proposal is refused as already decided').toBe(ALREADY_DECIDED_CODE);
   expect(onSecond.message ?? '').toMatch(/already rejected/);
   await expectDecidedCard(cards[0] as Locator, OUTCOME_APPLIED);
