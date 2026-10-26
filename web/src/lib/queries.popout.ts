@@ -330,7 +330,13 @@ export function useSessionFiles(sessionId: number) {
 export type PlannerPatch = Partial<
   Pick<
     AssignmentProgress,
-    'status' | 'priority' | 'planned_start' | 'planned_finish' | 'est_minutes' | 'notes'
+    | 'status'
+    | 'priority'
+    | 'planned_start'
+    | 'planned_finish'
+    | 'est_minutes'
+    | 'notes'
+    | 'due_override'
   >
 >;
 
@@ -340,6 +346,32 @@ export const NOTES_MAX_LENGTH = 2000;
 export const EST_MINUTES_MAX = 10_080;
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+/** An RFC 3339 instant with an explicit zone, the form `due_override` is sent in. */
+const ISO_INSTANT_PATTERN =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?(Z|[+-]\d{2}:\d{2})$/;
+/** Stack's own due date must fall in a plausible window; anything else is a typo. */
+const DUE_OVERRIDE_MIN_YEAR = 2000;
+const DUE_OVERRIDE_MAX_YEAR = 2100;
+
+/** Validate Stack's own due instant (migration 221). Null clears it. */
+function validateDueOverride(value: unknown): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value !== 'string' || !ISO_INSTANT_PATTERN.test(value)) {
+    throw new Error('Due date must be a date and time.');
+  }
+  const at = new Date(value);
+  const year = at.getUTCFullYear();
+  if (
+    !Number.isFinite(at.getTime()) ||
+    year < DUE_OVERRIDE_MIN_YEAR ||
+    year > DUE_OVERRIDE_MAX_YEAR
+  ) {
+    throw new Error(
+      `Due date must fall between ${DUE_OVERRIDE_MIN_YEAR} and ${DUE_OVERRIDE_MAX_YEAR}.`,
+    );
+  }
+  return at.toISOString();
+}
 
 /**
  * Validate the patch at the boundary before it reaches Postgres. Every failure
@@ -392,6 +424,8 @@ export function validatePlannerPatch(patch: PlannerPatch): PlannerPatch {
       clean.notes = trimmed === '' ? null : trimmed;
     }
   }
+
+  if ('due_override' in patch) clean.due_override = validateDueOverride(patch.due_override);
 
   return clean;
 }

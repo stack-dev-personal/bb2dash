@@ -99,6 +99,25 @@ describe('validatePlannerPatch', () => {
     expect(Object.keys(validatePlannerPatch({}))).toHaveLength(0);
   });
 
+  it('passes Stack’s own due instant through as UTC, and null clears it (221)', () => {
+    expect(validatePlannerPatch({ due_override: '2026-10-22T15:30:00-04:00' })).toEqual({
+      due_override: '2026-10-22T19:30:00.000Z',
+    });
+    expect(validatePlannerPatch({ due_override: null })).toEqual({ due_override: null });
+    expect(validatePlannerPatch({ due_override: '' })).toEqual({ due_override: null });
+  });
+
+  it('rejects a due override that is not a zoned instant or is implausible', () => {
+    expect(() => validatePlannerPatch({ due_override: '2026-10-22' })).toThrow(/date and time/);
+    expect(() => validatePlannerPatch({ due_override: '2026-10-22T15:30' })).toThrow(
+      /date and time/,
+    );
+    expect(() => validatePlannerPatch({ due_override: 'drop table' })).toThrow(/date and time/);
+    expect(() => validatePlannerPatch({ due_override: '1999-01-01T00:00:00Z' })).toThrow(
+      /between/,
+    );
+  });
+
   it('treats an emptied field as a clear, not as a bad value', () => {
     expect(validatePlannerPatch({ planned_start: '' })).toEqual({ planned_start: null });
     expect(validatePlannerPatch({ planned_finish: null })).toEqual({ planned_finish: null });

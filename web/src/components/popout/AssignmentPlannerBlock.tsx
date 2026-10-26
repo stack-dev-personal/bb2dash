@@ -21,19 +21,26 @@ import {
   type PlannerPatch,
 } from '@/lib/queries.popout';
 import { isQueryUnresolved, queryStateText, type QueryLike } from '@/components/shared/QueryState';
+import { dueOverrideForm, dueOverrideInstant } from '@/lib/due-override';
 import styles from './Popout.module.css';
 
-/** The planner fields, as the form holds them (empty string = cleared). */
+/**
+ * The planner fields, as the form holds them (empty string = cleared).
+ *
+ * Planned start and finish were taken off the form on Stack's review
+ * (2026-10-26): his own due date replaced them. The columns stay, because the
+ * Workspace assistant can still propose them.
+ */
 export interface PlannerForm {
-  planned_start: string;
-  planned_finish: string;
+  due_date: string;
+  due_time: string;
   est_minutes: string;
   notes: string;
 }
 
 export const EMPTY_FORM: PlannerForm = {
-  planned_start: '',
-  planned_finish: '',
+  due_date: '',
+  due_time: '',
   est_minutes: '',
   notes: '',
 };
@@ -41,14 +48,19 @@ export const EMPTY_FORM: PlannerForm = {
 export function formFrom(progress: AssignmentProgress | null | undefined): PlannerForm {
   if (!progress) return EMPTY_FORM;
   return {
-    planned_start: progress.planned_start ?? '',
-    planned_finish: progress.planned_finish ?? '',
+    ...dueOverrideForm(progress.due_override),
     est_minutes: progress.est_minutes == null ? '' : String(progress.est_minutes),
     notes: progress.notes ?? '',
   };
 }
 
-const PLANNER_FIELDS = ['planned_start', 'planned_finish', 'est_minutes', 'notes'] as const;
+const PLANNER_FIELDS = ['due_date', 'due_time', 'est_minutes', 'notes'] as const;
+
+/** Two stored instants name the same moment (or are both unset). */
+function sameInstant(a: string | null, b: string | null | undefined): boolean {
+  if (a === null || b === null || b === undefined) return a === (b ?? null);
+  return Date.parse(a) === Date.parse(b);
+}
 
 /**
  * Take the server's values for every field the owner has not touched since
@@ -78,13 +90,12 @@ export interface ProgressQuery extends QueryLike {
   data: AssignmentProgress | null | undefined;
 }
 
-export function AssignmentPlannerBlock({
-  assignmentId,
-  progressQ,
-}: {
+export interface AssignmentPlannerBlockProps {
   assignmentId: string;
   progressQ: ProgressQuery;
-}) {
+}
+
+export function AssignmentPlannerBlock({ assignmentId, progressQ }: AssignmentPlannerBlockProps) {
   const save = useSavePlanner();
 
   const [form, setForm] = useState<PlannerForm>(EMPTY_FORM);
@@ -146,16 +157,45 @@ export function AssignmentPlannerBlock({
       dirtyFields.current.delete(key);
       return;
     }
+    if (key === 'due_date' || key === 'due_time') {
+      commitDue(key, { ...form, [key]: current });
+      return;
+    }
     const settle = () => dirtyFields.current.delete(key);
     if (key === 'est_minutes') {
       commit({ est_minutes: current === '' ? null : Number(current) }, settle);
       return;
     }
-    if (key === 'notes') {
-      commit({ notes: current }, settle);
+    commit({ notes: current }, settle);
+  }
+
+  /**
+   * Save Stack's own due date from the two fields. An empty date clears it
+   * (Blackboard's date shows again); the time is optional, and an empty one is
+   * the end of the day. Only the field that was committed settles: the other
+   * may still be mid-edit (tabbing from the date into the time).
+   */
+  function commitDue(key: 'due_date' | 'due_time', next: Pick<PlannerForm, 'due_date' | 'due_time'>) {
+    // A time typed before any date has nothing to attach to yet: keep it in
+    // the box, and it is saved with the date once one is picked.
+    if (key === 'due_time' && next.due_date.trim() === '') return;
+    let instant: string | null;
+    try {
+      instant = dueOverrideInstant(next);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'That is not a date.');
       return;
     }
-    commit({ [key]: current === '' ? null : current } as PlannerPatch, settle);
+    const settle = () => dirtyFields.current.delete(key);
+    if (sameInstant(instant, progress?.due_override)) {
+      // Nothing to write and no refetch will come, so show the stored value
+      // again (a cleared time that resolves to the saved one reads back as it).
+      settle();
+      const stored = dueOverrideForm(progress?.due_override);
+      setForm((f) => ({ ...f, [key]: stored[key] }));
+      return;
+    }
+    commit({ due_override: instant }, settle);
   }
 
   // The planner block is the owner's own row. Until it has actually been read
@@ -217,28 +257,31 @@ export function AssignmentPlannerBlock({
         </label>
 
         <label className={styles.field}>
-          <span className={styles.fieldLabel}>Planned start</span>
+          <span className={styles.fieldLabel}>Due date</span>
           <input
             className={styles.control}
             type="date"
-            value={form.planned_start}
+            value={form.due_date}
             disabled={controlsDisabled}
             aria-busy={pending}
-            onChange={(e) => editField('planned_start', e.target.value)}
-            onBlur={(e) => commitField('planned_start', e.target.value)}
+            onChange={(e) => editField('due_date', e.target.value)}
+            onBlur={(e) => commitField('due_date', e.target.value)}
           />
         </label>
 
         <label className={styles.field}>
-          <span className={styles.fieldLabel}>Planned finish</span>
+          <span className={styles.fieldLabel}>Due time (optional)</span>
           <input
             className={styles.control}
-            type="date"
-            value={form.planned_finish}
-            disabled={controlsDisabled}
+            type="time"
+            value={form.due_time}
+            // Never locked by the date's own save: tabbing from the date to
+            // the time starts that save, and a disabled field would drop what
+            // is typed next.
+            disabled={plannerUnavailable}
             aria-busy={pending}
-            onChange={(e) => editField('planned_finish', e.target.value)}
-            onBlur={(e) => commitField('planned_finish', e.target.value)}
+            onChange={(e) => editField('due_time', e.target.value)}
+            onBlur={(e) => commitField('due_time', e.target.value)}
           />
         </label>
 
