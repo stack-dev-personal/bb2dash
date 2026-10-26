@@ -126,6 +126,33 @@ begin
   end if;
 end $$;
 
+-- =============================================================================================
+-- 5. (222) A save that does not touch the date leaves the calendar alone; changing it does not
+-- =============================================================================================
+update app_settings set gcal_dirty = false where id;
+
+insert into assignment_progress (assignment_id, status)
+values ('TEST/fix-221', 'in_progress')
+on conflict (assignment_id) do update set status = excluded.status;
+
+do $$
+begin
+  if (select gcal_dirty from app_settings where id) then
+    raise exception 'FAIL fix_221 (222): a status-only upsert marked the calendar dirty';
+  end if;
+end $$;
+
+insert into assignment_progress (assignment_id, due_override)
+values ('TEST/fix-221', timestamptz '2026-10-21 12:00 America/New_York')
+on conflict (assignment_id) do update set due_override = excluded.due_override;
+
+do $$
+begin
+  if not (select gcal_dirty from app_settings where id) then
+    raise exception 'FAIL fix_221 (222): an upsert that changed due_override did not mark the calendar dirty';
+  end if;
+end $$;
+
 select 'fix_221_due_override: PASS' as result;
 
 rollback;
