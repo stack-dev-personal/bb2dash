@@ -280,12 +280,16 @@ Branch `feat/phase26-announcement-reader`. Migrations 210–212 in block 210–2
   `announcement `, the held day is `due_at`'s, else `due_date`, else `event_start`'s New York day. A held day or points
   that Blackboard never gave for that column in an earlier crawl (`bb_gradebook`) is the post's: a different Blackboard
   value raises a conflict and leaves the row. The same day, or no held day, fills as before, and a value Blackboard gave
-  before moves with Blackboard. On any row, while the reader's own question about its date (`due_at` or `due_date`) or
-  points is open, that field is neither written nor asked, so the post's question is never overwritten. Three review
-  rounds: round 1 found the "Blackboard filled it" and reader-question cases, round 2 the gaps in round 1's
-  `bb_last_seen` window (a kept row, `due_date` questions, other rows, the out-of-term branch), all fixed by round 3's
-  data rule; `/security-review` found nothing. Unit `phase26_223_announcement_dates.sql` (seventeen cases and the
-  stage's counts) fails at case (a)
+  before moves with Blackboard. On any row, while the reader's own question is open: on `due_at` or points that field is
+  held (nothing written, nothing raised, counted as `held_for_reader`, not as a disagreement), so the post's question is
+  never overwritten; on `due_date` the row is not moved to another day, and the transform's own `due_at` question is
+  still raised beside it. Three review rounds: round 1 found the "Blackboard filled it" and reader-question cases,
+  round 2 the gaps in round 1's `bb_last_seen` window (a kept row, `due_date` questions, other rows, the out-of-term
+  branch), fixed by round 3's data rule; round 3's review led to round 4 (the held count, the `due_date` question, the
+  index-friendly reads). Left as known, each erring toward asking or agreement: a placeholder that lands on the held
+  day is filled with its clock time; a re-created column has no history, so its first value is asked; rows from other
+  sources keep 220's rule (the placeholder itself is not detected; a sprint 3 candidate). `/security-review` found
+  nothing. Unit `phase26_223_announcement_dates.sql` (nineteen cases and the stage's counts) fails at case (a)
   without 223, with Quiz 5's very date, and passes with it in a rolled-back dry run (texts fetched at the commit and
   their SHA-256 checked);
   the units that run the transform pass with it, except `phase16_105` (already red on `main`: IST.466's
