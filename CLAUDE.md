@@ -55,8 +55,9 @@ Supabase project: `goultdzqcavefcgnifdy` (us-east-1, Postgres 17). Full access v
     * each write is logged in `announcement_review_writes`.
   * It never writes `assignment_progress` or `reading_progress`.
   * `bind_announcement_rows` (212) binds a new gradebook column to the matching announcement row before `stage_assignments`.
-  * Since 223, `stage_assignments` never replaces an announcement row's day (or quoted points) with the bound column's: a
-    different day raises a `due_at` conflict (Blackboard gives a new column a placeholder date, "created + 1 day").
+  * Since 223, `stage_assignments` never replaces an announcement row's day or points that Blackboard never gave (read
+    from `bb_gradebook`) with the bound column's: it asks (Blackboard gives a new column a placeholder date, "created + 1
+    day"). While the reader's own question on a row's date or points is open, the transform neither writes nor asks it.
 * Grades show one deterministic figure, "graded so far" (`web/src/lib/graded-so-far.ts`), computed
   only from mirrored Blackboard scores, `grade_components` and column links; what it leaves out is
   named under it. No what-if, no projections.

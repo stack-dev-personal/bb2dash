@@ -277,12 +277,15 @@ Branch `feat/phase26-announcement-reader`. Migrations 210–212 in block 210–2
   1 day", 10/27 16:53) filled the row's empty `due_at`, so the in-class quiz of 10/22 moved to 10/27 with no question
   (Activity said only "1 tentative value(s) replaced"). Quiz 6 (`due_date` 10/27) would have been overwritten the same
   way. 223 redefines `stage_assignments` (220's body, patched by script): for a row whose `source_ref` starts
-  `announcement `, the held day is `due_at`'s, else `due_date`, else `event_start`'s New York day. While the row's
-  values are still the post's (the first fold that sees its column, or a question about it open or kept), a different
-  Blackboard day raises a `due_at` conflict and leaves the row, and differing points are asked too; the same day, or no
-  held day, fills as before; a value Blackboard filled itself then moves with Blackboard; the reader's own open question
-  on the same field is left standing. Code review round 1 found the last two (fixed in round 2); `/security-review`
-  found nothing. Unit `phase26_223_announcement_dates.sql` (thirteen cases and the stage's counts) fails at case (a)
+  `announcement `, the held day is `due_at`'s, else `due_date`, else `event_start`'s New York day. A held day or points
+  that Blackboard never gave for that column in an earlier crawl (`bb_gradebook`) is the post's: a different Blackboard
+  value raises a conflict and leaves the row. The same day, or no held day, fills as before, and a value Blackboard gave
+  before moves with Blackboard. On any row, while the reader's own question about its date (`due_at` or `due_date`) or
+  points is open, that field is neither written nor asked, so the post's question is never overwritten. Three review
+  rounds: round 1 found the "Blackboard filled it" and reader-question cases, round 2 the gaps in round 1's
+  `bb_last_seen` window (a kept row, `due_date` questions, other rows, the out-of-term branch), all fixed by round 3's
+  data rule; `/security-review` found nothing. Unit `phase26_223_announcement_dates.sql` (seventeen cases and the
+  stage's counts) fails at case (a)
   without 223, with Quiz 5's very date, and passes with it in a rolled-back dry run (texts fetched at the commit and
   their SHA-256 checked);
   the units that run the transform pass with it, except `phase16_105` (already red on `main`: IST.466's
