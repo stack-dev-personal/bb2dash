@@ -16,20 +16,23 @@
 -- THE RULE
 -- ---------------------------------------------------------------------------------------------
 -- For a matched row whose source_ref starts 'announcement ' (written by 211, or by hand from a post):
---   * the announced day is the New York day of due_at, else due_date, else the New York day of
---     event_start;
---   * Blackboard's due day equal to it: unchanged (Blackboard adds the clock time);
---   * a different day: the row is left as it is and a due_at conflict is raised, the branch a
---     confirmed row already takes ("Accept Blackboard" / "Keep mine"; a kept answer stands through
---     attention_keep_stands);
---   * no announced day at all: filled from Blackboard, unchanged;
---   * points already on such a row were quoted from the post, so a different value is asked too.
+--   * the held day is the New York day of due_at, else due_date, else the New York day of event_start;
+--   * while the row's values are still the post's - the first fold that sees its column
+--     (bb_last_seen still null), or later while a due_at question about it is open or Stack's
+--     "Keep mine" stands - a different Blackboard day is asked as a due_at conflict and the row is
+--     left as it is (the branch a confirmed row already takes); points differing likewise;
+--   * Blackboard's day equal to the held day, or no held day at all: filled, as under 220;
+--   * after that, a value Blackboard filled moves with Blackboard, as under 220;
+--   * an open question the reader (211) raised on the same field is left standing: raise_attention
+--     keeps one open item per field and would otherwise overwrite it.
 -- Every other row behaves exactly as under 220.
 --
--- SHAPE: stage_assignments(uuid, bigint) is 220's body, copied by script, with five patches (the
--- declarations, the announced day after the row is read, the fill branch, the two tentative
--- overwrites of due_at, the points overwrite) and the day-only conflict's values, which now name the
--- announced day when due_date is null. Signature, SECURITY DEFINER, search_path and grants unchanged.
+-- SHAPE: stage_assignments(uuid, bigint) is 220's body, copied by script, patched in the
+-- declarations, after the row is read, in the fill, day-only, instant and points branches, and in
+-- the values of the out-of-term and day-only conflicts (which now name an event_start-only day).
+-- Signature, SECURITY DEFINER, search_path and grants unchanged; the function's comment restated.
+-- Known and unchanged (as for a confirmed row since 042): "Accept Blackboard" on a day-only row
+-- writes due_at only, so due_date keeps the old day; every reader takes due_at first.
 -- Quiz 5's present 10/27 is not repaired here: Stack's own date (221) covers it.
 
 create or replace function public.stage_assignments(p_run_id uuid, p_sync_run_id bigint)
@@ -52,8 +55,12 @@ declare
   v_n int; v_aid text; v_old_col text; v_new_id text;
   v_rule jsonb;                            -- 220: class_day_knowledge_check()'s answer, or null
   v_from_ann boolean;                      -- 223: the row came from an announcement
-  v_ann_day date;                          -- 223: the day the announcement gave it, or null
+  v_ann_day date;                          -- 223: the day the row holds (announced), or null
   v_bb_day date;                           -- 223: Blackboard's due day, in New York
+  v_ask_due boolean;                       -- 223: a different day is asked, not written
+  v_ask_pts boolean;                       -- 223: different points are asked, not written
+  v_reader_due boolean;                    -- 223: the reader's own due_at question is open
+  v_reader_pts boolean;                    -- 223: the reader's own points question is open
   c record; a assignments%rowtype;
 begin
   begin
@@ -261,14 +268,40 @@ begin
       select * into a from assignments where id = v_aid;
 
       -- 223: a row made from an announcement (by the reader, 211, or by hand from a post) holds the
-      -- day the professor announced. A new column's due date can be Blackboard's placeholder
-      -- ("created + 1 day"; ECN.304 Quiz 5, 2026-10-26), so a different day is asked, never written
-      -- over. An in-class row may carry its day only as event_start.
+      -- day and points the post gave. A new column's due date can be Blackboard's placeholder
+      -- ("created + 1 day"; ECN.304 Quiz 5, 2026-10-26), so a difference is asked, never written over,
+      -- while the values are still the post's: on the first fold that sees the row's column
+      -- (bb_last_seen still null), and after that only while Stack's question about it is open or
+      -- his "Keep mine" stands. A value Blackboard filled itself moves with Blackboard, as under 220.
+      -- An in-class row may carry its day only as event_start. The reader's own open question on the
+      -- same field is left as it is: raise_attention would overwrite it (one open item per field).
       v_from_ann := coalesce(a.source_ref like 'announcement %', false);
-      v_ann_day  := case when v_from_ann then
-                      coalesce((a.due_at at time zone 'America/New_York')::date, a.due_date,
-                               (a.event_start at time zone 'America/New_York')::date) end;
+      v_ann_day  := coalesce((a.due_at at time zone 'America/New_York')::date, a.due_date,
+                             (a.event_start at time zone 'America/New_York')::date);
       v_bb_day   := (c.due_at at time zone 'America/New_York')::date;
+      v_ask_due  := v_from_ann and c.due_at is not null and (
+                      a.bb_last_seen is null
+                      or exists (select 1 from attention_items ai
+                                  where ai.kind = 'conflict' and ai.state = 'open' and ai.ref = a.id
+                                    and coalesce(ai.course_id, '') = c.course_id and ai.field = 'due_at')
+                      or attention_keep_stands(c.course_id, a.id, 'due_at', to_jsonb(c.due_at)));
+      v_ask_pts  := v_from_ann and c.possible is not null and (
+                      a.bb_last_seen is null
+                      or exists (select 1 from attention_items ai
+                                  where ai.kind = 'conflict' and ai.state = 'open' and ai.ref = a.id
+                                    and coalesce(ai.course_id, '') = c.course_id
+                                    and ai.field = 'points_possible')
+                      or attention_keep_stands(c.course_id, a.id, 'points_possible', to_jsonb(c.possible)));
+      v_reader_due := v_from_ann and exists (
+                      select 1 from attention_items ai
+                       where ai.kind = 'conflict' and ai.state = 'open' and ai.ref = a.id
+                         and coalesce(ai.course_id, '') = c.course_id and ai.field = 'due_at'
+                         and ai.suggested->>'source' = 'announcement');
+      v_reader_pts := v_from_ann and exists (
+                      select 1 from attention_items ai
+                       where ai.kind = 'conflict' and ai.state = 'open' and ai.ref = a.id
+                         and coalesce(ai.course_id, '') = c.course_id and ai.field = 'points_possible'
+                         and ai.suggested->>'source' = 'announcement');
 
       -- ------------------------------------------------------------------------------------
       -- due_at
@@ -281,35 +314,39 @@ begin
             else
               v_out_of_term := v_out_of_term + 1; v_conflicts := v_conflicts + 1;
               if raise_attention(p_sync_run_id, 'conflict', c.course_id, 'assignment', a.id, 'due_at',
-                   to_jsonb(coalesce(a.due_at::text, a.due_date::text)), to_jsonb(c.due_at),
+                   to_jsonb(coalesce(a.due_at::text, a.due_date::text,
+                                     case when v_from_ann then v_ann_day::text end)), to_jsonb(c.due_at),
                    format('%s: Blackboard says "%s" is due %s, which is outside the term - the shell still carries a column from a previous year. bb2dash kept %s. Which is right?',
                           c.course_id, a.title,
                           to_char(c.due_at at time zone 'America/New_York', 'YYYY-MM-DD'),
-                          coalesce(to_char(a.due_at at time zone 'America/New_York', 'YYYY-MM-DD'), to_char(a.due_date, 'YYYY-MM-DD'), 'no date')),
+                          coalesce(to_char(a.due_at at time zone 'America/New_York', 'YYYY-MM-DD'), to_char(a.due_date, 'YYYY-MM-DD'),
+                                   case when v_from_ann then to_char(v_ann_day, 'YYYY-MM-DD') end, 'no date')),
                    jsonb_build_object('column_id', c.column_id, 'out_of_term', true, 'source', 'stage_assignments'))
               then v_raised := v_raised + 1; end if;
             end if;
           end if;
 
         elsif a.due_at is null and a.due_date is null
-              and (v_ann_day is null or v_bb_day = v_ann_day) then
+              and (not v_ask_due or v_ann_day is null or v_bb_day = v_ann_day) then
           update assignments set due_at = c.due_at where id = a.id;
           v_filled := v_filled + 1;
 
         elsif a.due_at is null then
           -- Only the day was known. Same day means Blackboard is adding the clock time, which
           -- contradicts nothing; a different day is a real disagreement.
-          if (c.due_at at time zone 'America/New_York')::date = a.due_date then
+          if v_bb_day = a.due_date then
             update assignments set due_at = c.due_at where id = a.id;
             v_filled := v_filled + 1;
-          elsif a.confidence in ('tentative','inferred') and not v_from_ann then
+          elsif a.confidence in ('tentative','inferred') and not v_ask_due then
             update assignments
                set due_at = c.due_at,
-                   due_date = (c.due_at at time zone 'America/New_York')::date
+                   due_date = v_bb_day
              where id = a.id;
             v_overwritten := v_overwritten + 1;
           elsif attention_keep_stands(c.course_id, a.id, 'due_at', to_jsonb(c.due_at)) then
             v_settled := v_settled + 1;
+          elsif v_reader_due then
+            v_conflicts := v_conflicts + 1;     -- 223: the reader's open question stands
           else
             v_conflicts := v_conflicts + 1;
             if raise_attention(p_sync_run_id, 'conflict', c.course_id, 'assignment', a.id, 'due_at',
@@ -323,11 +360,13 @@ begin
 
         elsif a.due_at is distinct from c.due_at then
           if a.confidence in ('tentative','inferred')
-             and not (v_from_ann and v_bb_day is distinct from v_ann_day) then
+             and not (v_ask_due and v_bb_day is distinct from v_ann_day) then
             update assignments set due_at = c.due_at where id = a.id;
             v_overwritten := v_overwritten + 1;
           elsif attention_keep_stands(c.course_id, a.id, 'due_at', to_jsonb(c.due_at)) then
             v_settled := v_settled + 1;
+          elsif v_reader_due then
+            v_conflicts := v_conflicts + 1;     -- 223: the reader's open question stands
           else
             v_conflicts := v_conflicts + 1;
             if raise_attention(p_sync_run_id, 'conflict', c.course_id, 'assignment', a.id, 'due_at',
@@ -350,13 +389,14 @@ begin
           update assignments set points_possible = c.possible where id = a.id;
           v_filled := v_filled + 1;
         elsif a.points_possible <> c.possible then
-          -- 223: points on an announcement row were quoted from the post, so a difference is asked.
-          if a.confidence in ('tentative','inferred') and not v_from_ann then
+          if a.confidence in ('tentative','inferred') and not v_ask_pts then
             update assignments set points_possible = c.possible where id = a.id;
             v_overwritten := v_overwritten + 1;
           elsif attention_keep_stands(c.course_id, a.id, 'points_possible',
                                       to_jsonb(c.possible)) then
             v_settled := v_settled + 1;
+          elsif v_reader_pts then
+            v_conflicts := v_conflicts + 1;     -- 223: the reader's open question stands
           else
             v_conflicts := v_conflicts + 1;
             if raise_attention(p_sync_run_id, 'conflict', c.course_id, 'assignment', a.id,
@@ -451,14 +491,27 @@ begin
 end
 $function$;
 
+comment on function public.stage_assignments(uuid, bigint) is
+  'Folds one crawl''s gradebook columns and content links into assignments, and starts by calling '
+  'apply_resolutions() so Stack''s answers land before Blackboard''s values are read. A disagreement '
+  'with a confirmed row is raised as an attention_items conflict and the row is left alone - unless '
+  'Stack already settled that exact disagreement with "Keep mine" and Blackboard has not changed its '
+  'answer since (conflicts_settled). A tentative row takes Blackboard''s value, except a row made from '
+  'an announcement (223): while its day and points are still the post''s (first fold that sees its '
+  'column, or a question about it open or kept), a different value is asked instead, and the reader''s '
+  'own open question on that field is left standing. A column several rows are bound to applies none '
+  'of its values but restamps bb_last_seen on each (075, 084); a column whose name fits several unbound '
+  'rows binds nothing and asks which one. assignment_progress is never touched.';
+
 -- Guard: the live body carries both the announced-day rule and 220's class-day rule.
 do $$
 declare
   def text := pg_get_functiondef('public.stage_assignments(uuid,bigint)'::regprocedure);
 begin
   if position('v_from_ann := coalesce(a.source_ref like ''announcement %'', false);' in def) = 0
-     or position('and (v_ann_day is null or v_bb_day = v_ann_day) then' in def) = 0
-     or position('and not (v_from_ann and v_bb_day is distinct from v_ann_day) then' in def) = 0 then
+     or position('and (not v_ask_due or v_ann_day is null or v_bb_day = v_ann_day) then' in def) = 0
+     or position('and not (v_ask_due and v_bb_day is distinct from v_ann_day) then' in def) = 0
+     or position('if a.confidence in (''tentative'',''inferred'') and not v_ask_pts then' in def) = 0 then
     raise exception '223: stage_assignments does not carry the announced-day rule';
   end if;
   if position('class_day_knowledge_check(c.course_id, c.name, c.due_at, c.possible)' in def) = 0
