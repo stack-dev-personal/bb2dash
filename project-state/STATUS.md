@@ -276,11 +276,15 @@ Branch `feat/phase26-announcement-reader`. Migrations 210–212 in block 210–2
   `fix/phase26-announcement-dates`):** when 212 bound Quiz 5's column, Blackboard's placeholder due date ("created +
   1 day", 10/27 16:53) filled the row's empty `due_at`, so the in-class quiz of 10/22 moved to 10/27 with no question
   (Activity said only "1 tentative value(s) replaced"). Quiz 6 (`due_date` 10/27) would have been overwritten the same
-  way. 223 redefines `stage_assignments` (220's body, five patches): for a row whose `source_ref` starts `announcement `,
-  the announced day is `due_at`'s, else `due_date`, else `event_start`'s New York day; a different Blackboard day raises
-  a `due_at` conflict and leaves the row; quoted points differing are asked too; the same day, or no announced day,
-  behaves as before. Unit `phase26_223_announcement_dates.sql` (nine cases) fails at case (a) without 223, with Quiz
-  5's very date, and passes with it in a rolled-back dry run (texts fetched at the commit and their SHA-256 checked);
+  way. 223 redefines `stage_assignments` (220's body, patched by script): for a row whose `source_ref` starts
+  `announcement `, the held day is `due_at`'s, else `due_date`, else `event_start`'s New York day. While the row's
+  values are still the post's (the first fold that sees its column, or a question about it open or kept), a different
+  Blackboard day raises a `due_at` conflict and leaves the row, and differing points are asked too; the same day, or no
+  held day, fills as before; a value Blackboard filled itself then moves with Blackboard; the reader's own open question
+  on the same field is left standing. Code review round 1 found the last two (fixed in round 2); `/security-review`
+  found nothing. Unit `phase26_223_announcement_dates.sql` (thirteen cases and the stage's counts) fails at case (a)
+  without 223, with Quiz 5's very date, and passes with it in a rolled-back dry run (texts fetched at the commit and
+  their SHA-256 checked);
   the units that run the transform pass with it, except `phase16_105` (already red on `main`: IST.466's
   major-project-1 is confirmed now) and two that switch to a runner role the dry run's login cannot (`phase26_211`,
   `phase25b_205`; run through `db-test` after the apply). Quiz 5 itself is set right by Stack's own date (221, #137),
