@@ -28,26 +28,19 @@ export function dueOverrideForm(dueOverride: string | null | undefined): DueOver
 }
 
 /**
- * The clock to use when Stack picks a day but no time: Blackboard's own time
- * of day when it has one, else the end of the day.
- */
-export function defaultDueTime(blackboardDueAt: string | null | undefined): string {
-  return wallClockIn(blackboardDueAt ?? null, COURSE_TIME_ZONE)?.time ?? END_OF_DAY;
-}
-
-/**
  * The instant to store for a form, or null when the date is empty (which
  * clears the override, so Blackboard's date shows again).
  *
+ * An empty time is the end of the day. Blackboard's own clock is not borrowed:
+ * the date being overridden is usually the wrong one, and its time can be a
+ * placeholder too (Quiz 5's 4:53 PM was the minute the column was made).
+ *
  * Throws with a message the panel can show when the date or time is not one.
  */
-export function dueOverrideInstant(
-  form: DueOverrideForm,
-  blackboardDueAt: string | null | undefined,
-): string | null {
+export function dueOverrideInstant(form: DueOverrideForm): string | null {
   const date = form.due_date.trim();
   if (date === '') return null;
-  const time = form.due_time.trim() === '' ? defaultDueTime(blackboardDueAt) : form.due_time.trim();
+  const time = form.due_time.trim() === '' ? END_OF_DAY : form.due_time.trim();
   const resolved = wallClockToInstant(date, time, COURSE_TIME_ZONE);
   if (!resolved) throw new Error('Due date must be a real date (and time, if given).');
   return resolved.iso;

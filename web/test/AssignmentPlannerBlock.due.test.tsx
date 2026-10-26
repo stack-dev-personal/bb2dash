@@ -75,15 +75,31 @@ describe('AssignmentPlannerBlock — due date', () => {
     expect(screen.queryByRole('button', { name: 'Reset to Blackboard' })).toBeNull();
   });
 
-  it('saves a picked day at Blackboard’s clock when no time is given', () => {
+  it('saves a picked day at 11:59 PM when no time is given', () => {
     renderBlock(null);
     fireEvent.change(dateBox(), { target: { value: '2026-10-22' } });
     fireEvent.blur(dateBox());
     expect(mutate).toHaveBeenCalledTimes(1);
     expect(mutate.mock.calls[0][0]).toEqual({
       assignmentId: 'ECN.304/quiz-5',
-      patch: { due_override: '2026-10-22T16:53:00.000Z' },
+      patch: { due_override: '2026-10-23T03:59:00.000Z' },
     });
+  });
+
+  it('keeps the time box usable while the date’s save is in flight', () => {
+    hooks.save = { mutate, isPending: true, isError: false, error: null };
+    renderBlock('2026-10-22T19:30:00Z');
+    expect(dateBox().disabled).toBe(true);
+    expect(timeBox().disabled).toBe(false);
+  });
+
+  it('reads the stored time back when a cleared time resolves to it', () => {
+    renderBlock('2026-10-23T03:59:00Z');
+    expect(timeBox().value).toBe('23:59');
+    fireEvent.change(timeBox(), { target: { value: '' } });
+    fireEvent.blur(timeBox());
+    expect(mutate).not.toHaveBeenCalled();
+    expect(timeBox().value).toBe('23:59');
   });
 
   it('shows Stack’s stored date in New York and saves a changed time', () => {

@@ -9,7 +9,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   END_OF_DAY,
-  defaultDueTime,
   dueOverrideForm,
   dueOverrideInstant,
 } from '@/lib/due-override';
@@ -39,50 +38,35 @@ describe('dueOverrideForm', () => {
   });
 });
 
-describe('defaultDueTime', () => {
-  it('keeps Blackboard’s clock when it has one', () => {
-    expect(defaultDueTime(BLACKBOARD_QUIZ_5)).toBe('12:53');
-  });
-
-  it('falls back to the end of the day', () => {
-    expect(defaultDueTime(null)).toBe(END_OF_DAY);
-  });
-});
-
 describe('dueOverrideInstant', () => {
   it('turns a New York date and time into the UTC instant (EDT)', () => {
-    expect(
-      dueOverrideInstant({ due_date: '2026-10-22', due_time: '15:30' }, BLACKBOARD_QUIZ_5),
-    ).toBe('2026-10-22T19:30:00.000Z');
+    expect(dueOverrideInstant({ due_date: '2026-10-22', due_time: '15:30' })).toBe(
+      '2026-10-22T19:30:00.000Z',
+    );
   });
 
   it('uses the winter offset after the clocks change (EST)', () => {
-    expect(dueOverrideInstant({ due_date: '2026-12-01', due_time: '09:00' }, null)).toBe(
+    expect(dueOverrideInstant({ due_date: '2026-12-01', due_time: '09:00' })).toBe(
       '2026-12-01T14:00:00.000Z',
     );
   });
 
-  it('takes Blackboard’s clock when no time is given', () => {
-    expect(dueOverrideInstant({ due_date: '2026-10-22', due_time: '' }, BLACKBOARD_QUIZ_5)).toBe(
-      '2026-10-22T16:53:00.000Z',
-    );
-  });
-
-  it('takes 11:59 PM when neither names a time', () => {
-    expect(dueOverrideInstant({ due_date: '2026-10-22', due_time: '' }, null)).toBe(
+  it('takes 11:59 PM when no time is given, never Blackboard’s placeholder clock', () => {
+    expect(END_OF_DAY).toBe('23:59');
+    expect(dueOverrideInstant({ due_date: '2026-10-22', due_time: '' })).toBe(
       '2026-10-23T03:59:00.000Z',
     );
   });
 
   it('clears the override when the date is empty', () => {
-    expect(dueOverrideInstant({ due_date: '', due_time: '15:30' }, null)).toBeNull();
+    expect(dueOverrideInstant({ due_date: '', due_time: '15:30' })).toBeNull();
   });
 
   it('refuses something that is not a date', () => {
-    expect(() => dueOverrideInstant({ due_date: '2026-02-30', due_time: '' }, null)).toThrow(
+    expect(() => dueOverrideInstant({ due_date: '2026-02-30', due_time: '' })).toThrow(
       /real date/,
     );
-    expect(() => dueOverrideInstant({ due_date: '2026-10-22', due_time: '25:00' }, null)).toThrow(
+    expect(() => dueOverrideInstant({ due_date: '2026-10-22', due_time: '25:00' })).toThrow(
       /real date/,
     );
   });

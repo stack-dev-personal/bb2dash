@@ -50,7 +50,7 @@ Live in prod (Supabase `bb2dash`, ref `goultdzqcavefcgnifdy`):
 - **What shipped.**
   - Migration 221 adds `assignment_progress.due_override`, Stack's own due instant, which no sync writes.
   - `v_work_items` and `v_calendar_push_items` use it first. A trigger re-pushes Google Calendar when it changes.
-  - In the assignment details, "Your plan" has Due date / Due time fields. An empty time keeps Blackboard's clock, or 11:59 PM. Reset to Blackboard clears it.
+  - In the assignment details, "Your plan" has Due date / Due time fields. An empty time is 11:59 PM (Blackboard's clock is not borrowed: it can be a placeholder too). Reset to Blackboard clears it.
   - The detail page and the planner popover show "your date (Blackboard: …)".
 - **Data.** Quiz 5 was set by hand at Stack's request to 2026-10-22 15:30 New York, its class time (the row's `event_start`).
 - **Tests.**

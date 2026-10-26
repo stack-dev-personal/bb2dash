@@ -172,7 +172,7 @@ export function AssignmentPlannerBlock({
       return;
     }
     if (key === 'due_date' || key === 'due_time') {
-      commitDue({ ...form, [key]: current });
+      commitDue(key, { ...form, [key]: current });
       return;
     }
     const settle = () => dirtyFields.current.delete(key);
@@ -187,35 +187,38 @@ export function AssignmentPlannerBlock({
     commit({ [key]: current === '' ? null : current } as PlannerPatch, settle);
   }
 
-  /** Forget that the due fields were edited, so the server's copy shows again. */
-  function settleDue() {
-    dirtyFields.current.delete('due_date');
-    dirtyFields.current.delete('due_time');
-  }
-
   /**
    * Save Stack's own due date from the two fields. An empty date clears it;
-   * an empty time takes Blackboard's clock, or 11:59 PM.
+   * an empty time is 11:59 PM. Only the field that was committed settles: the
+   * other may still be mid-edit (tabbing from the date into the time).
    */
-  function commitDue(next: Pick<PlannerForm, 'due_date' | 'due_time'>) {
+  function commitDue(key: 'due_date' | 'due_time', next: Pick<PlannerForm, 'due_date' | 'due_time'>) {
     let instant: string | null;
     try {
-      instant = dueOverrideInstant(next, blackboardDue.due_at);
+      instant = dueOverrideInstant(next);
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : 'That is not a date.');
       return;
     }
+    const settle = () => dirtyFields.current.delete(key);
     if (sameInstant(instant, progress?.due_override)) {
-      settleDue();
+      // Nothing to write and no refetch will come, so show the stored value
+      // again (a cleared time that resolves to the saved one reads back as it).
+      settle();
+      const stored = dueOverrideForm(progress?.due_override);
+      setForm((f) => ({ ...f, [key]: stored[key] }));
       return;
     }
-    commit({ due_override: instant }, settleDue);
+    commit({ due_override: instant }, settle);
   }
 
   /** Go back to Blackboard's date. */
   function resetDue() {
     setForm((f) => ({ ...f, due_date: '', due_time: '' }));
-    commit({ due_override: null }, settleDue);
+    commit({ due_override: null }, () => {
+      dirtyFields.current.delete('due_date');
+      dirtyFields.current.delete('due_time');
+    });
   }
 
   const due = effectiveDue(blackboardDue, progress?.due_override);
@@ -297,7 +300,10 @@ export function AssignmentPlannerBlock({
             className={styles.control}
             type="time"
             value={form.due_time}
-            disabled={controlsDisabled || form.due_date === ''}
+            // Not locked while the date's own save is in flight: tabbing from
+            // the date to the time starts that save, and a disabled field
+            // would drop what is typed next.
+            disabled={plannerUnavailable || form.due_date === ''}
             aria-busy={pending}
             onChange={(e) => editField('due_time', e.target.value)}
             onBlur={(e) => commitField('due_time', e.target.value)}
