@@ -14,7 +14,7 @@ is) and `project-state/DECISIONS.md` (why). This folder is the record behind the
 |---|---|---|---|
 | `sprint-0-foundation/` | Sep 2 – 10, 2026 | 1–7: data syntax, Blackboard capture, search schema, embedding POC, retrieval MCP, GUI v1, retrieval polish | #1–#6 |
 | `sprint-1-hub/` | Sep 10 – 22, 2026 | 8–12b plus the V-1 and V-2 streams: course dimension, sync loop, grades (10a/10b), planner + calendar (11/11b), Electron shell (12), the page pass (12b) | #7–#23 |
-| `sprint-2/` | planned 2026-09-24, verified and decided 2026-09-27 (PR #28 merged) | `91_REQUIREMENTS_v3.md` · `research/92_*` (10) · `93_SPRINT2_RESEARCH_SYNTHESIS.md` (§5 = the question batch) · `94_SPRINT2_PHASES.md` · `briefs/95_`–`103_` (phases 15–22 and 14) · `105_BRIEF_VERIFICATION_2026-09-27.md` (three verification rounds, residual notes) · `106_SPRINT2_EXECUTION_PLAN.md` (run sheet, no calendar) | #26 (the prompt); #28 (the planning PR); the execution PR (open) |
+| `sprint-2/` | planned 2026-09-24, verified and decided 2026-09-27 (PR #28 merged) | `91_REQUIREMENTS_v3.md` · `research/92_*` (10) · `93_SPRINT2_RESEARCH_SYNTHESIS.md` (§5 = the question batch) · `94_SPRINT2_PHASES.md` · `briefs/95_`–`103_` (phases 15–22 and 14) · `105_BRIEF_VERIFICATION_2026-09-27.md` (three verification rounds, residual notes) · `106_SPRINT2_EXECUTION_PLAN.md` (run sheet, no calendar) | #26 (the prompt); #28 (the planning PR); execution #29–#139 (and bb2dash-stack #1–#10); **closed 2026-10-26**, record `121_SPRINT2_CLOSEOUT_2026-10-26.md` |
 
 **Sprint 0** predates Requirements v2. Its Sep 8 research-and-direction round
 (`10_`–`31_`) was superseded wholesale and sits under `superseded/` with a note saying so.
@@ -23,7 +23,7 @@ is) and `project-state/DECISIONS.md` (why). This folder is the record behind the
 against and `70_MVP_INDEX.md` holds Stack's MVP/DoD answers per phase. Both sit at the sprint
 root because every subfolder cites them.
 
-**Sprint 2** holds the sprint's requirements (`91_`), research (`92_*`, `93_`), phase plan (`94_`) and briefs (`95_`–`103_`), plus `82_PHASE14_containers.md` and its six research reports (the record behind Phase 14; `100_` supersedes its Contract). The used sprint 1 session prompts sit in `sprint-1-hub/104_SPRINT1_SESSION_PROMPTS.md`. `parked/` holds
+**Sprint 2** closed on 2026-10-26; `121_SPRINT2_CLOSEOUT_2026-10-26.md` is what shipped and what was carried out of it. It holds the sprint's requirements (`91_`), research (`92_*`, `93_`), phase plan (`94_`) and briefs (`95_`–`103_`), plus `82_PHASE14_containers.md` and its six research reports (the record behind Phase 14; `100_` supersedes its Contract). The used sprint 1 session prompts sit in `sprint-1-hub/104_SPRINT1_SESSION_PROMPTS.md`. `parked/` holds
 `81_PHASE13_styling.md` — Phase 13 was **skipped by Stack on 2026-09-22**; the brief stays
 because its carry-ins C-1..C-3 (phone-width overflow, rank weights per exam, favicon) are
 still open and still listed inside it.
