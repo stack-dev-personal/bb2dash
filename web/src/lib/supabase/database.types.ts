@@ -424,6 +424,7 @@ export type Database = {
       assignment_progress: {
         Row: {
           assignment_id: string
+          due_override: string | null
           effort_override: number | null
           est_minutes: number | null
           feedback: string | null
@@ -441,6 +442,7 @@ export type Database = {
         }
         Insert: {
           assignment_id: string
+          due_override?: string | null
           effort_override?: number | null
           est_minutes?: number | null
           feedback?: string | null
@@ -458,6 +460,7 @@ export type Database = {
         }
         Update: {
           assignment_id?: string
+          due_override?: string | null
           effort_override?: number | null
           est_minutes?: number | null
           feedback?: string | null
@@ -5124,11 +5127,13 @@ export type Database = {
       }
       v_work_items: {
         Row: {
+          bb_due_at: string | null
           category: string | null
           confidence: string | null
           course_id: string | null
           due_at: string | null
           due_on: string | null
+          due_overridden: boolean | null
           due_rule: string | null
           effort: number | null
           effort_source: string | null

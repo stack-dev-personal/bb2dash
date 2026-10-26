@@ -238,8 +238,7 @@
 }
 .plannerWide {
   grid-column: 1 / -1;
-}
-.field {
+}.field {
   display: flex;
   flex-direction: column;
   gap: var(--size-4);

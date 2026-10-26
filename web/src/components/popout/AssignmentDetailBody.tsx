@@ -46,6 +46,7 @@ import { AssignmentPlannerBlock } from './AssignmentPlannerBlock';
 import {
   NOT_RECORDED,
   dueDateText,
+  effectiveDue,
   formatClock,
   formatDate,
 } from './assignment-detail-format';
@@ -91,7 +92,8 @@ export function AssignmentDetailBody({ assignmentId }: { assignmentId: string })
   const series = seriesQ.data ?? [];
   const course = courseQ.data ?? null;
   const bbLink = blackboardLink(assignment, course);
-  const clock = formatClock(assignment.due_at);
+  const due = effectiveDue(assignment, progressQ.data?.due_override);
+  const clock = formatClock(due.due_at);
 
   return (
     <>
@@ -121,11 +123,10 @@ export function AssignmentDetailBody({ assignmentId }: { assignmentId: string })
           {/* Most rows record only the instant; `dueDateText` reads the day
               off it in New York rather than saying "not recorded" next to a
               perfectly good clock time (PM walk). */}
-          <span className={styles.factValue}>
-            {dueDateText(assignment.due_date, assignment.due_at)}
-          </span>
+          <span className={styles.factValue}>{dueDateText(due.due_date, due.due_at)}</span>
           <span className={styles.factNote}>
-            {clock || assignment.due_rule || 'time not recorded'}
+            {clock || due.due_rule || 'time not recorded'}
+            {due.overridden && ` · your date (Blackboard: ${due.blackboard})`}
           </span>
         </div>
         <div className={styles.fact}>

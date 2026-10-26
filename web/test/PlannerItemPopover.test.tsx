@@ -193,6 +193,20 @@ describe('PlannerItemPopover — what it holds', () => {
     expect(screen.queryByText(/Due not recorded/)).toBeNull();
   });
 
+  it('dates the row by Stack’s own due date when he set one, naming Blackboard’s (221)', () => {
+    hooks.progress = stub({
+      assignment_id: 'IST.323/lab-1',
+      status: 'in_progress',
+      due_override: '2026-09-15T19:30:00Z',
+    });
+    renderPopover(makeAnchor());
+    expect(
+      screen.getByText(
+        'Due Tue, Sep 15 · 3:30 PM · your date (Blackboard: Thu, Sep 17 · 2:00 PM)',
+      ),
+    ).toBeTruthy();
+  });
+
   it('still says "not recorded" when the row records nothing about when', () => {
     hooks.assignment = stub({ ...ASSIGNMENT, due_date: null, due_at: null, due_rule: null });
     renderPopover(makeAnchor());
