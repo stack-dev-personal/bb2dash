@@ -24,10 +24,10 @@ describe('dueOverrideForm', () => {
     });
   });
 
-  it('reads an 11:59 PM deadline on its New York day, not the UTC one', () => {
+  it('reads an 11:59 PM deadline on its New York day, with the optional time blank', () => {
     expect(dueOverrideForm('2026-09-24T03:59:00Z')).toEqual({
       due_date: '2026-09-23',
-      due_time: '23:59',
+      due_time: '',
     });
   });
 

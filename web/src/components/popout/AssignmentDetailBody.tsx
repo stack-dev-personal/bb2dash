@@ -197,11 +197,7 @@ export function AssignmentDetailBody({ assignmentId }: { assignmentId: string })
         )}
       </section>
 
-      <AssignmentPlannerBlock
-        assignmentId={assignmentId}
-        progressQ={progressQ}
-        blackboardDue={assignment}
-      />
+      <AssignmentPlannerBlock assignmentId={assignmentId} progressQ={progressQ} />
 
       {/* Its own <section>; the popout's `.block` spacing lives inside it. */}
       <SubmissionBlock

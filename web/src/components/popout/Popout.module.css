@@ -238,17 +238,7 @@
 }
 .plannerWide {
   grid-column: 1 / -1;
-}
-/* Blackboard's date beside Stack's own (221), and the way back to it. */
-.dueHint {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  font-size: var(--text-xs);
-  color: var(--color-neutral-500);
-}
-.field {
+}.field {
   display: flex;
   flex-direction: column;
   gap: var(--size-4);

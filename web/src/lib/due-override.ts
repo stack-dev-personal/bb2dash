@@ -21,10 +21,15 @@ export interface DueOverrideForm {
   due_time: string;
 }
 
-/** Read a stored override into the form's two fields. */
+/**
+ * Read a stored override into the form's two fields. The time is optional:
+ * a blank time is stored as the end of the day, so the end of the day reads
+ * back as blank.
+ */
 export function dueOverrideForm(dueOverride: string | null | undefined): DueOverrideForm {
   const wall = wallClockIn(dueOverride ?? null, COURSE_TIME_ZONE);
-  return wall ? { due_date: wall.date, due_time: wall.time } : { due_date: '', due_time: '' };
+  if (!wall) return { due_date: '', due_time: '' };
+  return { due_date: wall.date, due_time: wall.time === END_OF_DAY ? '' : wall.time };
 }
 
 /**

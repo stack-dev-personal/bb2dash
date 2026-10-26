@@ -1,9 +1,10 @@
 /**
- * The "Due date" fields of the planner block (migration 221).
+ * The "Due date" fields of the planner block (migration 221; reshaped on
+ * Stack's review, 2026-10-26).
  *
- * Stack sets his own due date when Blackboard's is wrong; it is saved to
- * `assignment_progress.due_override` and a Reset puts Blackboard's back.
- * The save hook is a stub; nothing here reaches Supabase.
+ * Two boxes: a date, and an optional time (blank = end of the day). Clearing
+ * the date puts Blackboard's date back. Planned start and finish are gone from
+ * the form. The save hook is a stub; nothing here reaches Supabase.
  */
 
 import { fireEvent, render, screen } from '@testing-library/react';
@@ -22,14 +23,12 @@ vi.mock('@/lib/queries.popout', async (importOriginal) => {
 
 const { AssignmentPlannerBlock } = await import('@/components/popout/AssignmentPlannerBlock');
 
-const BLACKBOARD = { due_date: null, due_at: '2026-10-27T16:53:23.005Z', due_rule: null };
-
 const BASE_PROGRESS = {
   assignment_id: 'ECN.304/quiz-5',
   status: 'not_started',
   priority: 'normal',
-  planned_start: null,
-  planned_finish: null,
+  planned_start: '2026-10-20',
+  planned_finish: '2026-10-21',
   est_minutes: null,
   notes: null,
   due_override: null as string | null,
@@ -49,16 +48,12 @@ const mutate = vi.fn();
 
 function renderBlock(due_override: string | null) {
   return render(
-    <AssignmentPlannerBlock
-      assignmentId="ECN.304/quiz-5"
-      progressQ={progressQ(due_override)}
-      blackboardDue={BLACKBOARD}
-    />,
+    <AssignmentPlannerBlock assignmentId="ECN.304/quiz-5" progressQ={progressQ(due_override)} />,
   );
 }
 
 const dateBox = () => screen.getByLabelText('Due date') as HTMLInputElement;
-const timeBox = () => screen.getByLabelText('Due time') as HTMLInputElement;
+const timeBox = () => screen.getByLabelText('Due time (optional)') as HTMLInputElement;
 
 beforeEach(() => {
   mutate.mockReset();
@@ -67,11 +62,17 @@ beforeEach(() => {
 });
 
 describe('AssignmentPlannerBlock — due date', () => {
-  it('starts empty, with Blackboard’s date as the hint and the time locked', () => {
+  it('starts with both boxes empty and usable', () => {
     renderBlock(null);
     expect(dateBox().value).toBe('');
-    expect(timeBox().disabled).toBe(true);
-    expect(screen.getByText(/Blackboard: Tue, Oct 27 · 12:53 PM/)).toBeTruthy();
+    expect(timeBox().value).toBe('');
+    expect(timeBox().disabled).toBe(false);
+  });
+
+  it('no longer offers planned start or finish', () => {
+    renderBlock(null);
+    expect(screen.queryByLabelText('Planned start')).toBeNull();
+    expect(screen.queryByLabelText('Planned finish')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Reset to Blackboard' })).toBeNull();
   });
 
@@ -86,28 +87,29 @@ describe('AssignmentPlannerBlock — due date', () => {
     });
   });
 
-  it('keeps the time box usable while the date’s save is in flight', () => {
-    hooks.save = { mutate, isPending: true, isError: false, error: null };
-    renderBlock('2026-10-22T19:30:00Z');
-    expect(dateBox().disabled).toBe(true);
-    expect(timeBox().disabled).toBe(false);
-  });
-
-  it('reads the stored time back when a cleared time resolves to it', () => {
+  it('shows an end-of-day date with the optional time left blank', () => {
     renderBlock('2026-10-23T03:59:00Z');
-    expect(timeBox().value).toBe('23:59');
-    fireEvent.change(timeBox(), { target: { value: '' } });
-    fireEvent.blur(timeBox());
-    expect(mutate).not.toHaveBeenCalled();
-    expect(timeBox().value).toBe('23:59');
+    expect(dateBox().value).toBe('2026-10-22');
+    expect(timeBox().value).toBe('');
   });
 
-  it('shows Stack’s stored date in New York and saves a changed time', () => {
+  it('shows a stored time and saves a changed one', () => {
     renderBlock('2026-10-22T16:53:00Z');
     expect(dateBox().value).toBe('2026-10-22');
     expect(timeBox().value).toBe('12:53');
     fireEvent.change(timeBox(), { target: { value: '15:30' } });
     fireEvent.blur(timeBox());
+    expect(mutate.mock.calls[0][0].patch).toEqual({ due_override: '2026-10-22T19:30:00.000Z' });
+  });
+
+  it('keeps a time typed before any date, and saves it with the date', () => {
+    renderBlock(null);
+    fireEvent.change(timeBox(), { target: { value: '15:30' } });
+    fireEvent.blur(timeBox());
+    expect(mutate).not.toHaveBeenCalled();
+    expect(timeBox().value).toBe('15:30');
+    fireEvent.change(dateBox(), { target: { value: '2026-10-22' } });
+    fireEvent.blur(dateBox());
     expect(mutate.mock.calls[0][0].patch).toEqual({ due_override: '2026-10-22T19:30:00.000Z' });
   });
 
@@ -118,18 +120,17 @@ describe('AssignmentPlannerBlock — due date', () => {
     expect(mutate).not.toHaveBeenCalled();
   });
 
-  it('resets to Blackboard’s date', () => {
-    renderBlock('2026-10-22T19:30:00Z');
-    expect(screen.getByText(/Your date\./)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Reset to Blackboard' }));
-    expect(mutate.mock.calls[0][0].patch).toEqual({ due_override: null });
-    expect(dateBox().value).toBe('');
-  });
-
-  it('clearing the date is the same as a reset', () => {
+  it('clearing the date puts Blackboard’s date back', () => {
     renderBlock('2026-10-22T19:30:00Z');
     fireEvent.change(dateBox(), { target: { value: '' } });
     fireEvent.blur(dateBox());
     expect(mutate.mock.calls[0][0].patch).toEqual({ due_override: null });
+  });
+
+  it('keeps the time box usable while the date’s save is in flight', () => {
+    hooks.save = { mutate, isPending: true, isError: false, error: null };
+    renderBlock('2026-10-22T19:30:00Z');
+    expect(dateBox().disabled).toBe(true);
+    expect(timeBox().disabled).toBe(false);
   });
 });

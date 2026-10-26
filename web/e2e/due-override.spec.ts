@@ -1,16 +1,16 @@
 /**
  * Shots for the due-date override (migration 221), for Stack's review page.
  *
- * Read-only: every write is refused (`guardWrites`). ECN.304 Quiz 5 already
+ * Read-only: walk22.lib's `test` refuses every write. ECN.304 Quiz 5 already
  * carries Stack's date in prod (Thu 10/22, 3:30 PM; Blackboard says Tue 10/27),
  * so each surface shows the overridden state.
  *
  * Run: node scripts/walk-box.mjs due-override.spec.ts --url <preview origin>  (WALK_SHOTS=1)
  */
 
-import { expect, test, type Page } from '@playwright/test';
-import { assertNoWrites, dismissNativeDialogs, guardWrites, openSignedIn } from './walk';
-import { shotPath22 } from './walk22.lib';
+import type { Page } from '@playwright/test';
+import { dismissNativeDialogs, openSignedIn } from './walk';
+import { expect, shotPath22, test } from './walk22.lib';
 
 const THEMES = ['dark', 'light'] as const;
 const WIDTHS = [
@@ -30,7 +30,6 @@ async function settle(page: Page): Promise<void> {
 for (const theme of THEMES) {
   for (const size of WIDTHS) {
     test(`due override · ${theme} · ${size.name}`, async ({ page, context }) => {
-      const writes = await guardWrites(context);
       dismissNativeDialogs(page);
       await context.addInitScript((t) => {
         try {
@@ -66,10 +65,9 @@ for (const theme of THEMES) {
       const dueField = dialog.getByLabel('Due date');
       await dueField.scrollIntoViewIfNeeded();
       await expect(dueField).toHaveValue('2026-10-22');
-      await expect(dialog.getByLabel('Due time')).toHaveValue('15:30');
+      await expect(dialog.getByLabel('Due time (optional)')).toHaveValue('15:30');
       await page.screenshot({ path: shotPath22(`04-detail-plan-${tag}.png`) });
 
-      assertNoWrites(writes);
     });
   }
 }
