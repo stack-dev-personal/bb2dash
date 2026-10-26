@@ -20,10 +20,15 @@
 --        l. ann, confirmed, event_start 10/22, Blackboard 10/27        -> unchanged, conflict naming 10/22
 --        m. ann, points Blackboard gave before (history), moved        -> overwritten, as under 220
 --        n. ann, confirmed by "Keep mine" for 10/28, Blackboard now 10/29 -> unchanged, a new conflict
---        o. not ann, confirmed, the reader's due_date question open   -> unchanged, that item untouched
---        p. ann, the reader's due_date question open, Blackboard out of term -> that item untouched
+--        o. not ann, confirmed, the reader's due_date question open   -> unchanged, that item untouched,
+--                                                                      the transform's due_at question beside it
+--        p. ann, the reader's due_date question open, Blackboard out of term -> that item untouched,
+--                                                                      the out-of-term question beside it
 --        q. ann, event_start 10/22 only, Blackboard out of term        -> conflict naming 10/22
---      and the stage's counts: 10 conflicts (3 of them holds), 4 overwritten, 1 settled, 3 filled.
+--        r. not ann, tentative, the reader's due_date question open    -> not moved to Blackboard's day, asked
+--        s. ann, the reader's points question open, Blackboard 6       -> points held, that item untouched
+--      and the stage's counts: 10 conflicts, 2 held for the reader, 4 overwritten, 1 settled, 3 filled.
+--      Nothing is counted as a disagreement for a held field.
 --
 -- RUN IT: `node scripts/db-test.mjs --only phase26_223_announcement_dates.sql`.
 -- NOTHING IS COMMITTED: the last statement is `rollback`.
@@ -36,8 +41,8 @@ begin;
 do $$
 declare def text := pg_get_functiondef('public.stage_assignments(uuid,bigint)'::regprocedure);
 begin
-  if position('if c.due_at is not null and v_reader_due then' in def) = 0
-     or position('and (not v_post_day or v_bb_day = v_ann_day) then' in def) = 0 then
+  if position('if c.due_at is not null and v_reader_at then' in def) = 0
+     or position('and (coalesce(v_bb_day = v_ann_day, false) or not (v_post_day or v_reader_day)) then' in def) = 0 then
     raise exception 'FAIL phase26_223: migration 223 is not applied (stage_assignments has no announced-day rule)';
   end if;
   if position('class_day_knowledge_check(c.course_id, c.name, c.due_at, c.possible)' in def) = 0 then
@@ -85,7 +90,11 @@ values
   ('ECN.304/t223-oot',   'ECN.304', 'T223 out of term asked', 'quiz', null, null, '2026-10-22 19:30+00', null,
    'blackboard', 'announcement _t223_ot (2026-10-19)', 'tentative', '_t223_oot'),
   ('ECN.304/t223-ootq',  'ECN.304', 'T223 out of term',   'quiz',  null, null, '2026-10-22 19:30+00', null,
-   'blackboard', 'announcement _t223_oq (2026-10-19)', 'tentative', '_t223_ootq');
+   'blackboard', 'announcement _t223_oq (2026-10-19)', 'tentative', '_t223_ootq'),
+  ('ECN.304/t223-trdr',  'ECN.304', 'T223 tentative asked', 'paper', null, '2026-11-21', null, null,
+   'syllabus',   'syllabus p. 5', 'tentative', '_t223_trdr'),
+  ('ECN.304/t223-prdr',  'ECN.304', 'T223 points asked',  'quiz',  null, null, null, 5,
+   'blackboard', 'announcement _t223_pr (2026-10-19)', 'tentative', '_t223_prdr');
 
 -- Cases k and m: an earlier crawl in which Blackboard gave the held value itself.
 insert into bb_gradebook (run_id, course_id, column_id, name, column_kind, due_at, possible, seen_at, raw)
@@ -115,7 +124,13 @@ values
    '{"source":"announcement","quote":"T223 moved to 11/12"}'::jsonb),
   ('conflict', 'ECN.304', 'assignment', 'ECN.304/t223-oot',  'due_date', to_jsonb('2026-10-22'::text),
    to_jsonb('2026-10-23'::text), 'T223 fixture: the reader asks (p)', 'open',
-   '{"source":"announcement","quote":"T223 moved to 10/23"}'::jsonb);
+   '{"source":"announcement","quote":"T223 moved to 10/23"}'::jsonb),
+  ('conflict', 'ECN.304', 'assignment', 'ECN.304/t223-trdr', 'due_date', to_jsonb('2026-11-21'::text),
+   to_jsonb('2026-11-22'::text), 'T223 fixture: the reader asks (r)', 'open',
+   '{"source":"announcement","quote":"T223 moved to 11/22"}'::jsonb),
+  ('conflict', 'ECN.304', 'assignment', 'ECN.304/t223-prdr', 'points_possible', to_jsonb(5),
+   to_jsonb(7), 'T223 fixture: the reader asks (s)', 'open',
+   '{"source":"announcement","quote":"T223 worth 7 points"}'::jsonb);
 
 -- =============================================================================================
 -- 1. run_transform on a fixture crawl
@@ -148,7 +163,9 @@ begin
     jsonb_build_object('columnId', '_t223_kmov',  'name', 'T223 kept then moved', 'due', '2026-10-29T16:00:00Z', 'isCalc', false),
     jsonb_build_object('columnId', '_t223_srdr',  'name', 'T223 syllabus asked', 'due', '2026-11-11T21:00:00Z', 'isCalc', false),
     jsonb_build_object('columnId', '_t223_oot',   'name', 'T223 out of term asked', 'due', '2025-10-27T16:00:00Z', 'isCalc', false),
-    jsonb_build_object('columnId', '_t223_ootq',  'name', 'T223 out of term',  'due', '2025-10-27T16:00:00Z', 'isCalc', false))));
+    jsonb_build_object('columnId', '_t223_ootq',  'name', 'T223 out of term',  'due', '2025-10-27T16:00:00Z', 'isCalc', false),
+    jsonb_build_object('columnId', '_t223_trdr',  'name', 'T223 tentative asked', 'due', '2026-11-24T21:00:00Z', 'isCalc', false),
+    jsonb_build_object('columnId', '_t223_prdr',  'name', 'T223 points asked', 'possible', '6', 'isCalc', false))));
 
   v_id := run_transform(v_run, 'manual');
   if v_id is null then raise exception 'FAIL 1: run_transform returned null'; end if;
@@ -277,21 +294,24 @@ begin
     raise exception 'FAIL 1n: no new conflict after Blackboard moved past the kept answer';
   end if;
 
-  -- o. a row the reader did not make: its open due_date question stands, the row waits.
+  -- o. a row the reader did not make: its open due_date question stands, the row waits, and the
+  --    transform's own due_at question (a separate item) shows what Blackboard says.
   if (select due_at from assignments where id = 'ECN.304/t223-srdr') is distinct from '2026-11-10 21:00+00'::timestamptz then
     raise exception 'FAIL 1o: the syllabus row moved while the reader asked';
   end if;
-  if (select count(*) from attention_items where ref = 'ECN.304/t223-srdr' and state = 'open') <> 1
-     or not exists (select 1 from attention_items where ref = 'ECN.304/t223-srdr' and state = 'open'
-                       and question = 'T223 fixture: the reader asks (o)' and suggested->>'source' = 'announcement') then
-    raise exception 'FAIL 1o: the reader''s open question on a syllabus row was overwritten or doubled';
+  if not exists (select 1 from attention_items where ref = 'ECN.304/t223-srdr' and state = 'open' and field = 'due_date'
+                    and question = 'T223 fixture: the reader asks (o)' and suggested->>'source' = 'announcement')
+     or not exists (select 1 from attention_items where ref = 'ECN.304/t223-srdr' and state = 'open' and field = 'due_at'
+                       and to_value = to_jsonb('2026-11-11 21:00+00'::timestamptz)) then
+    raise exception 'FAIL 1o: the reader''s question was overwritten, or the transform''s due_at question is missing';
   end if;
 
-  -- p. an out-of-term date does not overwrite the reader's open question.
-  if (select count(*) from attention_items where ref = 'ECN.304/t223-oot' and state = 'open') <> 1
-     or not exists (select 1 from attention_items where ref = 'ECN.304/t223-oot' and state = 'open'
-                       and question = 'T223 fixture: the reader asks (p)') then
-    raise exception 'FAIL 1p: the out-of-term branch overwrote or doubled the reader''s question';
+  -- p. an out-of-term date does not overwrite the reader's open due_date question.
+  if not exists (select 1 from attention_items where ref = 'ECN.304/t223-oot' and state = 'open' and field = 'due_date'
+                    and question = 'T223 fixture: the reader asks (p)')
+     or not exists (select 1 from attention_items where ref = 'ECN.304/t223-oot' and state = 'open' and field = 'due_at'
+                       and question like '%outside the term%') then
+    raise exception 'FAIL 1p: the reader''s question was overwritten, or the out-of-term question is missing';
   end if;
 
   -- q. out of term on an in-class row: the question names the held day, not "no date".
@@ -301,9 +321,31 @@ begin
     raise exception 'FAIL 1q: the out-of-term question does not name the held day';
   end if;
 
-  -- The stage's counts: a b g h l n q asked, j o p held; f i k m overwritten; e settled; c d g filled.
+  -- r. a tentative row the reader asks about is not moved to Blackboard's other day; it is asked.
+  if (select due_date from assignments where id = 'ECN.304/t223-trdr') <> date '2026-11-21'
+     or (select due_at from assignments where id = 'ECN.304/t223-trdr') is not null then
+    raise exception 'FAIL 1r: the tentative row moved to Blackboard''s day while the reader asked';
+  end if;
+  if not exists (select 1 from attention_items where ref = 'ECN.304/t223-trdr' and state = 'open' and field = 'due_date'
+                    and question = 'T223 fixture: the reader asks (r)')
+     or not exists (select 1 from attention_items where ref = 'ECN.304/t223-trdr' and state = 'open' and field = 'due_at') then
+    raise exception 'FAIL 1r: the reader''s question was overwritten, or the transform''s due_at question is missing';
+  end if;
+
+  -- s. the reader's open points question holds the points: nothing written, nothing raised.
+  if (select points_possible from assignments where id = 'ECN.304/t223-prdr') <> 5 then
+    raise exception 'FAIL 1s: the points moved while the reader asked';
+  end if;
+  if (select count(*) from attention_items where ref = 'ECN.304/t223-prdr' and state = 'open') <> 1
+     or not exists (select 1 from attention_items where ref = 'ECN.304/t223-prdr' and state = 'open'
+                       and question = 'T223 fixture: the reader asks (s)' and to_value = to_jsonb(7)) then
+    raise exception 'FAIL 1s: the reader''s points question was overwritten or doubled';
+  end if;
+
+  -- The stage's counts: a b g h l n o p q r asked; j s held; f i k m overwritten; e settled; c d g filled.
   select counts into v_cnt from sync_stage_runs where sync_run_id = v_id and stage = 'assignments';
-  if (v_cnt->>'conflicts')::int <> 10 or (v_cnt->>'fields_overwritten')::int <> 4
+  if (v_cnt->>'conflicts')::int <> 10 or (v_cnt->>'held_for_reader')::int <> 2
+     or (v_cnt->>'fields_overwritten')::int <> 4
      or (v_cnt->>'conflicts_settled')::int <> 1 or (v_cnt->>'fields_filled')::int <> 3 then
     raise exception 'FAIL 1: the assignments stage counts read %', v_cnt;
   end if;

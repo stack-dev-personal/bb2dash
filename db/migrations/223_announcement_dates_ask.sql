@@ -23,9 +23,12 @@
 --     Blackboard" / "Keep mine"; a kept answer stands through attention_keep_stands);
 --   * Blackboard's day equal to the held day, or no held day: filled, as under 220;
 --   * a held value Blackboard gave before moves with Blackboard, as under 220.
--- For any matched row, while the reader's own question (suggested.source = 'announcement') about its
--- date (due_at or due_date) or points is open, that field is not written and nothing is raised on it:
--- raise_attention keeps one open item per field and would overwrite the post's question.
+-- For any matched row, while the reader's own question (suggested.source = 'announcement') is open:
+--   * on due_at or points_possible: that field is held, nothing written and nothing raised, because
+--     raise_attention keeps one open item per (kind, course, ref, field) and would overwrite the
+--     post's question; counted as held_for_reader, not as a disagreement;
+--   * on due_date: no write to another day; the transform's own due_at question (another item) is
+--     still raised, so Stack sees what Blackboard says beside the post.
 -- Every other case behaves exactly as under 220.
 --
 -- SHAPE: stage_assignments(uuid, bigint) is 220's body, copied by script and patched: declarations,
@@ -36,6 +39,10 @@
 -- Known and unchanged (as for a confirmed row since 042): "Accept Blackboard" on a day-only row
 -- writes due_at only, so due_date keeps the old day; every reader takes due_at first. A dismissed
 -- conflict is raised again on the next fold, as for a confirmed row.
+-- Known, and erring toward asking or toward agreement: when Blackboard's placeholder lands on the
+-- held day, the day is filled with its clock time and from then on counts as Blackboard's too; a
+-- column re-created under a new id has no history, so a day Blackboard gave the old column is asked
+-- about once; rows from other sources keep 220's rule (the placeholder itself is not detected).
 -- Quiz 5's present 10/27 is not repaired here (Blackboard gave it, so it now moves with Blackboard);
 -- Stack's own date (221) covers it.
 
@@ -62,8 +69,10 @@ declare
   v_bb_day date;                           -- 223: Blackboard's due day, in New York
   v_post_day boolean;                      -- 223: the held day is the post's, never Blackboard's
   v_post_pts boolean;                      -- 223: the held points are the post's, never Blackboard's
-  v_reader_due boolean;                    -- 223: the reader's question on the date is open
-  v_reader_pts boolean;                    -- 223: the reader's question on the points is open
+  v_reader_at boolean;                     -- 223: the reader's due_at question is open
+  v_reader_day boolean;                    -- 223: the reader's due_date question is open
+  v_reader_pts boolean;                    -- 223: the reader's points question is open
+  v_held int := 0;                         -- 223: fields held for the reader's open question
   c record; a assignments%rowtype;
 begin
   begin
@@ -277,33 +286,38 @@ begin
       -- is asked, never written over. A held value Blackboard gave before moves with Blackboard, as
       -- under 220. The held day is due_at's, else due_date, else event_start's (an in-class row).
       v_bb_day   := (c.due_at at time zone 'America/New_York')::date;
-      v_ann_day  := case when a.source_ref like 'announcement %' then
-                      coalesce((a.due_at at time zone 'America/New_York')::date, a.due_date,
-                               (a.event_start at time zone 'America/New_York')::date) end;
-      v_post_day := v_ann_day is not null and not exists (
-                      select 1 from bb_gradebook g
-                       where g.course_id = c.course_id and g.column_id = c.column_id and g.run_id <> p_run_id
-                         and (g.due_at at time zone 'America/New_York')::date = v_ann_day);
-      v_post_pts := a.source_ref like 'announcement %' and a.points_possible is not null and not exists (
-                      select 1 from bb_gradebook g
-                       where g.course_id = c.course_id and g.column_id = c.column_id and g.run_id <> p_run_id
-                         and g.possible = a.points_possible);
-      -- 223: while the reader's own question about this row's date or points is open (any row: the
-      -- reader also asks on rows it did not make), that field is not written and nothing is raised on
-      -- it - raise_attention keeps one open item per field and would overwrite the post's question.
-      select coalesce(bool_or(ai.field in ('due_at', 'due_date')), false),
+      v_ann_day  := null; v_post_day := false; v_post_pts := false;
+      if a.source_ref like 'announcement %' then
+        v_ann_day := coalesce((a.due_at at time zone 'America/New_York')::date, a.due_date,
+                              (a.event_start at time zone 'America/New_York')::date);
+        select coalesce(v_ann_day is not null
+                        and not bool_or((g.due_at at time zone 'America/New_York')::date = v_ann_day), v_ann_day is not null),
+               coalesce(a.points_possible is not null and not bool_or(g.possible = a.points_possible),
+                        a.points_possible is not null)
+          into v_post_day, v_post_pts
+          from bb_gradebook g
+         where g.course_id = c.course_id and g.column_id = c.column_id and g.run_id <> p_run_id;
+      end if;
+      -- 223: the reader's own open question on this row (any row: the reader also asks on rows it did
+      -- not make). On due_at or points it holds that field: nothing written, nothing raised, because
+      -- raise_attention keeps one open item per (kind, course, ref, field) and would overwrite the
+      -- post's question. On due_date it stops a write to another day; the transform's own due_at
+      -- question is a separate item and is still raised. Reads 183's open-item index.
+      select coalesce(bool_or(ai.field = 'due_at'), false),
+             coalesce(bool_or(ai.field = 'due_date'), false),
              coalesce(bool_or(ai.field = 'points_possible'), false)
-        into v_reader_due, v_reader_pts
+        into v_reader_at, v_reader_day, v_reader_pts
         from attention_items ai
-       where ai.kind = 'conflict' and ai.state = 'open' and ai.ref = a.id
-         and coalesce(ai.course_id, '') = c.course_id
+       where ai.kind = 'conflict' and ai.state = 'open'
+         and coalesce(ai.course_id, '') = c.course_id and coalesce(ai.ref, '') = a.id
+         and coalesce(ai.field, '') in ('due_at', 'due_date', 'points_possible')
          and ai.suggested->>'source' = 'announcement';
 
       -- ------------------------------------------------------------------------------------
       -- due_at
       -- ------------------------------------------------------------------------------------
-      if c.due_at is not null and v_reader_due then
-        v_conflicts := v_conflicts + 1;         -- 223: held for the reader's open question
+      if c.due_at is not null and v_reader_at then
+        v_held := v_held + 1;                   -- 223: held for the reader's open question
       elsif c.due_at is not null then
         if not bb_date_in_term(c.due_at) then
           if a.due_at is distinct from c.due_at then
@@ -324,7 +338,7 @@ begin
           end if;
 
         elsif a.due_at is null and a.due_date is null
-              and (not v_post_day or v_bb_day = v_ann_day) then
+              and (coalesce(v_bb_day = v_ann_day, false) or not (v_post_day or v_reader_day)) then
           update assignments set due_at = c.due_at where id = a.id;
           v_filled := v_filled + 1;
 
@@ -334,7 +348,7 @@ begin
           if v_bb_day = a.due_date then
             update assignments set due_at = c.due_at where id = a.id;
             v_filled := v_filled + 1;
-          elsif a.confidence in ('tentative','inferred') and not v_post_day then
+          elsif a.confidence in ('tentative','inferred') and not (v_post_day or v_reader_day) then
             update assignments
                set due_at = c.due_at,
                    due_date = v_bb_day
@@ -355,7 +369,9 @@ begin
 
         elsif a.due_at is distinct from c.due_at then
           if a.confidence in ('tentative','inferred')
-             and not (v_post_day and v_bb_day is distinct from v_ann_day) then
+             and not (v_post_day and v_bb_day is distinct from v_ann_day)
+             and not (v_reader_day
+                      and v_bb_day is distinct from (a.due_at at time zone 'America/New_York')::date) then
             update assignments set due_at = c.due_at where id = a.id;
             v_overwritten := v_overwritten + 1;
           elsif attention_keep_stands(c.course_id, a.id, 'due_at', to_jsonb(c.due_at)) then
@@ -378,7 +394,7 @@ begin
       -- points_possible
       -- ------------------------------------------------------------------------------------
       if c.possible is not null and v_reader_pts then
-        v_conflicts := v_conflicts + 1;         -- 223: held for the reader's open question
+        v_held := v_held + 1;                   -- 223: held for the reader's open question
       elsif c.possible is not null then
         if a.points_possible is null then
           update assignments set points_possible = c.possible where id = a.id;
@@ -470,7 +486,8 @@ begin
       'resolutions_applied_value',      coalesce((v_res->>'applied_value')::int, 0),
       'resolutions_unapplicable',       coalesce((v_res->>'unapplicable')::int, 0),
       'resolutions_unapplied',          coalesce((v_res->>'unapplied')::int, 0),
-      'attention_raised',    v_raised);
+      'attention_raised',    v_raised,
+      'held_for_reader',     v_held);
   exception when others then
     v_status := 'failed';
     v_error  := left(sqlstate || ' ' || sqlerrm, 1000);
@@ -492,7 +509,7 @@ comment on function public.stage_assignments(uuid, bigint) is
   'answer since (conflicts_settled). A tentative row takes Blackboard''s value, except on a row made '
   'from an announcement whose held day or points Blackboard never gave for that column (223): that '
   'difference is asked. While the announcement reader''s own question on a row''s date or points is '
-  'open, that field is neither written nor asked. A column several rows are bound to applies none of '
+  'open, that field is held (due_at, points) or kept from moving to another day (due_date). A column several rows are bound to applies none of '
   'its values but restamps bb_last_seen on each (075, 084); a column whose name fits several unbound '
   'rows binds nothing and asks which one. assignment_progress is never touched.';
 
@@ -501,9 +518,9 @@ do $$
 declare
   def text := pg_get_functiondef('public.stage_assignments(uuid,bigint)'::regprocedure);
 begin
-  if position('if c.due_at is not null and v_reader_due then' in def) = 0
-     or position('and (not v_post_day or v_bb_day = v_ann_day) then' in def) = 0
-     or position('and not (v_post_day and v_bb_day is distinct from v_ann_day) then' in def) = 0
+  if position('if c.due_at is not null and v_reader_at then' in def) = 0
+     or position('and (coalesce(v_bb_day = v_ann_day, false) or not (v_post_day or v_reader_day)) then' in def) = 0
+     or position('and not (v_post_day and v_bb_day is distinct from v_ann_day)' in def) = 0
      or position('if a.confidence in (''tentative'',''inferred'') and not v_post_pts then' in def) = 0
      or position('if c.possible is not null and v_reader_pts then' in def) = 0 then
     raise exception '223: stage_assignments does not carry the announced-day rule';
