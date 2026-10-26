@@ -163,8 +163,9 @@ declare
 begin
   select count(*) into n_cols from information_schema.columns
    where table_schema = 'public' and table_name = 'v_work_items';
-  if n_cols <> 24 then
-    raise exception 'FAIL v_work_items has % columns, expected 24', n_cols;
+  -- 24 from 089, plus bb_due_at and due_overridden appended by 221.
+  if n_cols <> 26 then
+    raise exception 'FAIL v_work_items has % columns, expected 26', n_cols;
   end if;
 
   if not exists (select 1 from pg_options_to_table(
