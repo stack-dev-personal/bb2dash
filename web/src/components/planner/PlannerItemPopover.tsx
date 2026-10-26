@@ -40,7 +40,7 @@ import {
   type AssignmentProgress,
 } from '@/lib/queries.popout';
 import { isQueryUnresolved, queryStateText } from '@/components/shared/QueryState';
-import { formatDue } from '@/components/popout/assignment-detail-format';
+import { effectiveDue, formatDue } from '@/components/popout/assignment-detail-format';
 import { MARK_CHAR, Mark } from '@/components/shell/icons';
 import styles from './PlannerItemPopover.module.css';
 
@@ -120,6 +120,8 @@ export function PlannerItemPopover({
   const progress = progressQ.data ?? null;
   const status = progress?.status ?? 'not_started';
   const title = assignment?.title ?? LOADING_TITLE;
+  // Stack's own due date (221) wins over Blackboard's when he set one.
+  const due = assignment ? effectiveDue(assignment, progress?.due_override) : null;
 
   const measure = useCallback(() => {
     const panel = panelRef.current;
@@ -261,9 +263,12 @@ export function PlannerItemPopover({
       ) : (
         assignment && (
           <>
-            <p className={styles.line}>
-              Due {formatDue(assignment.due_date, assignment.due_at, assignment.due_rule)}
-            </p>
+            {due && (
+              <p className={styles.line}>
+                Due {formatDue(due.due_date, due.due_at, due.due_rule)}
+                {due.overridden && ` · your date (Blackboard: ${due.blackboard})`}
+              </p>
+            )}
 
             {points !== null && (
               <p className={styles.line} title="Blackboard's own figures — nothing is computed here.">
