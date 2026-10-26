@@ -336,7 +336,9 @@ begin
   if (select points_possible from assignments where id = 'ECN.304/t223-prdr') <> 5 then
     raise exception 'FAIL 1s: the points moved while the reader asked';
   end if;
-  if (select count(*) from attention_items where ref = 'ECN.304/t223-prdr' and state = 'open') <> 1
+  -- (the row has no date, so the gaps stage may file its own item there: only points questions count)
+  if (select count(*) from attention_items where ref = 'ECN.304/t223-prdr' and state = 'open'
+         and kind = 'conflict' and field = 'points_possible') <> 1
      or not exists (select 1 from attention_items where ref = 'ECN.304/t223-prdr' and state = 'open'
                        and question = 'T223 fixture: the reader asks (s)' and to_value = to_jsonb(7)) then
     raise exception 'FAIL 1s: the reader''s points question was overwritten or doubled';
