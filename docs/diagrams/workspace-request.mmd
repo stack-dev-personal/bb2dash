@@ -1,0 +1,34 @@
+sequenceDiagram
+  actor Person
+  participant Web as Workspace page
+  participant DB as Supabase database
+  participant Runner as Workspace runner
+  participant Model as Claude provider
+  participant MCP as Gated tools
+  Person->>Web: Ask with course, depth and attachments
+  Web->>DB: workspace_ask_with
+  Runner->>DB: workspace_claim_v3
+  DB-->>Runner: Claimed request and scoped context
+  opt Planning turn for a deeper question
+    Runner->>Model: Request a search plan with tools off
+    Model-->>Runner: Search plan
+  end
+  Runner->>DB: Retrieve passages and rebuild context
+  Runner->>Model: Answer from fenced context
+  Model->>MCP: Allowed material read or planner proposal
+  alt Material read
+    MCP->>DB: Bounded retrieval through material service
+    DB-->>MCP: Scoped material text
+    MCP-->>Model: Material result
+  else Planner proposal
+    MCP->>Runner: Forward over per-turn socket
+    Runner->>DB: workspace_propose
+    DB-->>Web: Proposal card and Inbox item
+  end
+  Model-->>Runner: Answer with sources
+  Runner->>DB: Store answer and stream state
+  DB-->>Web: Read answer and sources
+  Person->>Web: Approve, edit or reject proposal
+  Web->>DB: workspace_proposal_decide as signed-in person
+  DB->>DB: Check current value and row security
+  DB-->>Web: Apply approved value or mark stale

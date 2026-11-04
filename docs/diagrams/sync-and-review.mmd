@@ -1,0 +1,21 @@
+flowchart TB
+  Request[Sync request] --> Claim[Sync worker claims and registers run]
+  Claim --> Crawl[Run crawler in logged-in Blackboard tab]
+  Crawl --> Raw[(bb_raw)]
+  Raw --> Fold[Database fold and typed transforms]
+  Fold --> Facts[(Course facts and mirrored scores)]
+  Fold --> Review[(Inbox questions)]
+  Fold --> Files[Pull files, extract text and embed]
+  Files --> Close{Sync closes done?}
+  Close -->|yes| Queues[Request Inbox apply and announcement review]
+  Close -->|no| Report[Record failure for inspection]
+  Answer[Person answers an Inbox question] --> Review
+  Review --> Apply[Apply worker handles answered items]
+  Queues --> Apply
+  Apply -->|allowed, logged writes| Facts
+  Apply -->|narrow answered-item changes| Progress[(Planner progress)]
+  Queues --> Announce[Apply worker reviews new or edited announcements]
+  Announce -->|quoted evidence for missing work| Tentative[Tentative assignment]
+  Tentative --> Facts
+  Announce -->|changes need confirmation| Review
+  Facts -->|new or changed posted score, forward only| Progress
