@@ -1,0 +1,5 @@
+{
+  "source": ".claude/skills/bb2dash-pm",
+  "sha256": "9c45be3da8f7448ab9faba19e3ca3c15201167c320643485fca766fa48c63872",
+  "generator": "claude-config/scripts/sync-codex.mjs"
+}

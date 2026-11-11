@@ -1,0 +1,5 @@
+{
+  "source": ".claude/skills/checkpoint",
+  "sha256": "ae48cc0ea409d837db372125517bac49f36879a2476d88598658c80f683c0bc3",
+  "generator": "claude-config/scripts/sync-codex.mjs"
+}
