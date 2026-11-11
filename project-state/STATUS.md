@@ -44,7 +44,7 @@ Live in prod (Supabase `bb2dash`, ref `goultdzqcavefcgnifdy`):
 | Due-date override (221, 2026-10-26) | `assignment_progress.due_override` (timestamptz, app-owned, no sync writes it) wins over Blackboard's date in `v_work_items` (new columns `bb_due_at`, `due_overridden`) and `v_calendar_push_items`; a statement trigger marks the Google calendar dirty when it changes. Set from the assignment details ("Your plan" → Due date + optional Due time; clearing the date resets it; Planned start/finish removed from the form on his review); the detail page and the planner popover read "your date (Blackboard: …)". One row set by hand at Stack's request: ECN.304/quiz-5 = 2026-10-22 15:30 New York |
 | Auth | one user (`emstacho@syr.edu`, uid `fd0b7c9d…`) created; **RLS owner-scoped** (migration 020, W-9 done) — every authenticated policy is `auth.uid() = public.app_owner()`, owner resolved by email; signups disabled 2026-09-10 per Stack (a dashboard setting SQL cannot read; 1 auth user on 2026-09-24) |
 
-## Desktop updates failing since 2026-10-14, fixed 2026-11-11 on `fix/desktop-build-web-tokens`
+## Desktop updates failing since 2026-10-14: fixed, MERGED as #143 (`987abac`), live 2026-11-11 (build `c23e3c9`)
 
 * **Symptom:** every desktop build since Phase 22's merge (2026-10-14) failed (`logon-build.log`: 4 test files,
   11 tests), so the app stayed on build `f37723a` (2026-10-05) and the account menu's Update ended "builder exited 3".
@@ -53,7 +53,7 @@ Live in prod (Supabase `bb2dash`, ref `goultdzqcavefcgnifdy`):
   `desktop/` they do not exist in the container, so `npm test` failed there while passing on a developer machine.
 * **Fix:** `desktop/launch/compose.build.yaml` mounts the whole build worktree read-only at `/repo` and `desktop/`
   writable at `/repo/desktop`. Proven by running the same compose file from the branch: 49 files / 892 tests pass and
-  `win-unpacked/bb2dash.exe` is written. The live proof is the next logon build or an Update press after the merge.
+  `win-unpacked/bb2dash.exe` is written. Live: Stack pressed Update on 2026-11-11 and the app relaunched on build `c23e3c9` (12:54 New York).
 
 ## Inbox crash follow-ups, 2026-11-11: error screens and the cache guard, MERGED as #142 (`bc55a5b`)
 
@@ -991,6 +991,20 @@ holds `main`'s version, so `/bb-sync` keeps running the old step 4b until that c
 from this branch — deliberately untouched, because overwriting it from an unmerged branch is the
 merging session's call. (2026-09-30: PR #32 merged; Phase 18 rebuilt `--restale` and merged too. The live proof is
 still owed, now to the first `/bb-sync` on `main`, after the installed copy is refreshed from `main`; row 19.)
+
+## Sprint 3 — planning opened 2026-09-29 (research phase, nothing built; merged to main 2026-11-11)
+
+One goal, Stack's: **an explicit Blackboard MCP server in place of the crawler feature** (`ingest/bb_crawler.js` pasted into a
+logged-in tab by a Claude session; bb-sync steps 1, 3 and the browser half of 4b). Intake `docs/planning/sprint-3-blackboard-mcp/107_SPRINT3_INTAKE.md`:
+the record's facts, the desk-level feasibility read (official REST needs an SU admin to register an integration, so it is not
+the plan; a cookie-session REST client from Node outside any browser is proven elsewhere on a Microsoft-SSO tenant by
+`alejooroncoy/campus-cli`; the SU login and its lifetime are unchanged by any of it, Task 0 stays the measurement), the
+collision with sprint 2's Phases 14 (sync half), 18 (crawler v5 tasks) and 19, and the **question batch §6 (17 items, a
+default each) that Stack answers before anything is built**. Charter `108_` and three Sonnet research streams
+(`research/109_*`: access-routes, comparables-and-parity, mcp-architecture); synthesis `110_` carries the go/no-go.
+Stack's one live step: `scripts/bb-probe.mjs` with a cookie header from Chrome DevTools (status codes and key names only; no
+bodies, no cookie printed). **Corrected 2026-11-11, when this branch merged:** 150–159 went to Phase 17's overflow the same day, sprint 2
+closed on 2026-10-26 at migration 223, and the synthesis `110_` was never written; sprint 3 is still research only.
 
 ## Lecture-number session links (2026-10-02)
 

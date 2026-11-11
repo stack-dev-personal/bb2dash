@@ -2,13 +2,13 @@
   "name": "bb2dash-scripts",
   "private": true,
   "version": "0.0.0",
-  "description": "Node helpers that run from the repo root: the SQL test runner for db/tests, the Google consent helper, and the inbox-decisions exporter.",
+  "description": "Node helpers that run from the repo root: the SQL test runner for db/tests, the Google consent helper, the inbox-decisions exporter, and the sprint 3 Blackboard cookie probe.",
   "type": "module",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "test": "node --test db-test.test.mjs google-consent.test.mjs sync-on-sonnet.test.mjs inbox-decision-render.test.mjs inbox-decisions-export.test.mjs inbox-decisions-pr.test.mjs exports-run.test.mjs register-exports.test.mjs accept-proofs.test.mjs accept-proofs-cli.test.mjs accept-proofs-db.test.mjs accept-proofs-db23.test.mjs accept-proofs-db24.test.mjs walk-box.test.mjs",
+    "test": "node --test db-test.test.mjs google-consent.test.mjs sync-on-sonnet.test.mjs inbox-decision-render.test.mjs inbox-decisions-export.test.mjs inbox-decisions-pr.test.mjs exports-run.test.mjs register-exports.test.mjs accept-proofs.test.mjs accept-proofs-cli.test.mjs accept-proofs-db.test.mjs accept-proofs-db23.test.mjs accept-proofs-db24.test.mjs walk-box.test.mjs bb-probe.test.mjs",
     "db-test": "node db-test.mjs"
   },
   "dependencies": {
