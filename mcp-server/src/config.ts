@@ -15,7 +15,9 @@
  * guaranteed by construction; this process never touches a model.
  */
 
+import { SERVICE_ROLE_FILE_VAR, readSecretFile } from './env-file.js';
 import { ConfigError } from './errors.js';
+import { type Limits, readLimits } from './limits.js';
 
 export const BB2DASH_PROJECT_REF = 'goultdzqcavefcgnifdy';
 export const HARNESS_PROJECT_REF = 'hqkytnyiiuxovnnyixye';
@@ -56,6 +58,8 @@ export interface Config {
     /** Null disables the floor. */
     readonly minSimilarity: number | null;
   };
+  /** Per-answer limits and course scope (Workspace); none set means no limit. */
+  readonly limits: Limits;
 }
 
 type Env = Record<string, string | undefined>;
@@ -117,12 +121,21 @@ function resolveUrl(env: Env): string {
   return raw.replace(/\/+$/, '');
 }
 
+/**
+ * The key file, when named, is the only source: it wins over the plain
+ * variables, and a bad file fails rather than falling back to them (brief 100:
+ * the key lives only in `bb2dash_mcp_service_key`). Without it, the plain
+ * variables keep today's host registration working until the cut-over.
+ */
 function resolveKey(env: Env): string {
+  const keyFile = readOptional(env, SERVICE_ROLE_FILE_VAR);
+  if (keyFile) return readSecretFile(keyFile, SERVICE_ROLE_FILE_VAR);
+
   const key = readOptional(env, 'SUPABASE_SERVICE_ROLE') ?? readOptional(env, 'SUPABASE_SERVICE_KEY');
   if (!key) {
     throw new ConfigError(
       'SUPABASE_SERVICE_ROLE is not set.',
-      'Set SUPABASE_SERVICE_ROLE (the sb_secret_… key) in the MCP server env block. It is server-side only: this is a local stdio process, never a browser. SUPABASE_SERVICE_KEY is accepted as a legacy alias.',
+      `Set ${SERVICE_ROLE_FILE_VAR} to the path of a file holding the sb_secret_… key (the image reads /run/secrets/bb2dash_mcp_service_key), or set SUPABASE_SERVICE_ROLE itself. It is server-side only: this is a local stdio process, never a browser. SUPABASE_SERVICE_KEY is accepted as a legacy alias.`,
     );
   }
   return key;
@@ -156,5 +169,6 @@ export function loadConfig(env: Env = process.env): Config {
       maxLimit,
       minSimilarity: readSimilarity(env, 'BB2DASH_MIN_SIMILARITY', DEFAULT_MIN_SIMILARITY),
     },
+    limits: readLimits(env),
   };
 }

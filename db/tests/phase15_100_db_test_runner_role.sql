@@ -12,8 +12,9 @@
 --
 -- WHEN A LATER MIGRATION GRANTS A FURTHER MEMBERSHIP, extend the expected list in section 3 in the
 -- same PR (brief 95 §Seams, "Phases 14 and 21 (memberships)"): brief 100's
--- `094_sync_runner_test_membership.sql` adds `sync_runner`, and brief 102's 142 adds
--- `workspace_runner`, each with inherit false.
+-- `094_sync_runner_test_membership.sql` adds `sync_runner`, brief 102's 142 adds
+-- `workspace_runner`, Phase 23's 181 adds `inbox_apply_runner`, and Phase 24a's 193 adds
+-- `workspace_ingest_runner`, each with inherit false.
 
 begin;
 
@@ -73,7 +74,7 @@ end $$;
 -- =============================================================================================
 do $$
 declare
-  v_expected text := 'anon(inherit=f,set=t), authenticated(inherit=f,set=t)';
+  v_expected text := 'anon(inherit=f,set=t), authenticated(inherit=f,set=t), inbox_apply_runner(inherit=f,set=t), sync_runner(inherit=f,set=t), workspace_ingest_runner(inherit=f,set=t), workspace_runner(inherit=f,set=t)';
   v_got      text;
   v_bad      text;
 begin
@@ -142,14 +143,14 @@ declare
   v_got  text;
   v_have text;
 begin
-  -- 100 grants USAGE on two schemas and no others. Anything else the role can reach, it reaches
-  -- through PUBLIC.
+  -- 100 grants USAGE on two schemas; 117 (Phase 17) adds `private`, for 113's heartbeat test.
+  -- No others. Anything else the role can reach, it reaches through PUBLIC.
   select coalesce(string_agg(n.nspname, ', ' order by n.nspname), '<none>') into v_got
     from pg_namespace n, aclexplode(n.nspacl) a
    where a.grantee = 'db_test_runner'::regrole
      and a.privilege_type = 'USAGE';
-  if v_got <> 'extensions, public' then
-    raise exception 'FAIL 100 grants db_test_runner USAGE on %, expected extensions, public', v_got;
+  if v_got <> 'extensions, private, public' then
+    raise exception 'FAIL 100/117 grant db_test_runner USAGE on %, expected extensions, private, public', v_got;
   end if;
 
   -- The four it must not reach at all. `net` is deliberately absent: PUBLIC holds usage on it, so

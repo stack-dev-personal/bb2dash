@@ -45,6 +45,7 @@ import {
 } from '@/lib/queries.today';
 import type { ProgressStatus } from '@/lib/queries';
 import { itemQuery } from '@/lib/queries.popout';
+import { useHorizontalScroll } from '@/lib/use-horizontal-scroll';
 import { StatusSelect } from './StatusSelect';
 import {
   DEFAULT_HORIZON_DAYS,
@@ -64,6 +65,7 @@ import {
   MONTH_LABELS,
   type TrackerDay,
 } from './anchor';
+import { Mark } from '@/components/shell/icons';
 import styles from './UpcomingTracker.module.css';
 
 /* ---------------------------------------------------------------------------
@@ -78,6 +80,11 @@ export interface UpcomingTrackerProps {
    * beyond the fetch would render empty and read as "nothing due".
    */
   horizonDays?: number;
+  /**
+   * R3-1: the first day the strip reaches back to (the term start), when the
+   * caller fetched from there. The strip still opens on today. Additive.
+   */
+  startIso?: string | null;
   /** Day columns on screen at once. The strip scrolls; this is the viewport. */
   visibleDays?: number;
   /** 'YYYY-MM-DD' first visible day. Defaults to today; clamped to the range. */
@@ -131,13 +138,28 @@ const SUBMISSION_LABEL: Record<string, string> = {
   email: 'email',
 };
 
+/** Most urgent first: the legend reads in this order and a day's bars are stacked by it. */
 const LEGEND: { category: WorkCategory; glyph: string; label: string }[] = [
-  { category: 'reading', glyph: 'R', label: 'reading' },
-  { category: 'assignment', glyph: 'A', label: 'assignment' },
-  { category: 'quiz', glyph: 'Q', label: 'quiz' },
-  { category: 'project', glyph: 'P', label: 'project' },
   { category: 'exam', glyph: 'E', label: 'exam' },
+  { category: 'project', glyph: 'P', label: 'project' },
+  { category: 'quiz', glyph: 'Q', label: 'quiz' },
+  { category: 'assignment', glyph: 'A', label: 'assignment' },
+  { category: 'reading', glyph: 'R', label: 'reading' },
 ];
+
+/** How urgent a kind is: 0 is the most urgent. Read from the legend, so the two cannot disagree. */
+const URGENCY_RANK: Record<WorkCategory, number> = Object.fromEntries(
+  LEGEND.map((entry, index) => [entry.category, index]),
+) as Record<WorkCategory, number>;
+
+/**
+ * A day's items for drawing. The bar area is column-reverse, so the LAST child is the top bar:
+ * the least urgent come first. The sort is stable, so two items of one kind keep the order they
+ * arrived in. Returns a new array; the caller's is not touched.
+ */
+function barOrder(items: readonly WorkItem[]): WorkItem[] {
+  return [...items].sort((a, b) => URGENCY_RANK[b.category] - URGENCY_RANK[a.category]);
+}
 
 /* ---------------------------------------------------------------------------
  * Row-level display helpers (pure)
@@ -185,6 +207,7 @@ export function UpcomingTracker({
   items,
   horizonDays = DEFAULT_HORIZON_DAYS,
   visibleDays = DEFAULT_VISIBLE_DAYS,
+  startIso = null,
   anchor,
   onAnchorChange,
   selectedDay,
@@ -202,6 +225,8 @@ export function UpcomingTracker({
   const programmatic = useRef(false);
   /** The timer that releases that guard, so it can be cleared and cleaned up. */
   const releaseTimer = useRef<number | null>(null);
+  /** S2-home-1: a plain mouse wheels and drags the strip (P-69). */
+  useHorizontalScroll(scrollerRef);
 
   /**
    * Anchor and selection are self-managed as `null` = "follow today", not as a
@@ -232,12 +257,14 @@ export function UpcomingTracker({
   const range = useMemo(
     () =>
       trackerRange({
-        dueDates: items.map((item) => item.due_on),
+        // The term start rides along as one more date, so the strip begins at
+        // it (never after the first item) without changing the range rules.
+        dueDates: [...(startIso ? [startIso] : []), ...items.map((item) => item.due_on)],
         today,
         horizonDays,
         visibleDays,
       }),
-    [items, today, horizonDays, visibleDays],
+    [items, startIso, today, horizonDays, visibleDays],
   );
 
   const strip = useMemo(
@@ -280,9 +307,20 @@ export function UpcomingTracker({
     [range.firstIso, columnsInView],
   );
 
+  /**
+   * A new anchor forgets the reader's free scroll. Done while rendering, from
+   * the previous anchor, rather than in the scroll effect below (T-23: a set
+   * state inside an effect renders twice). `moveAnchor` clears it itself for
+   * the paging case where the anchor does not change.
+   */
+  const [anchorSeen, setAnchorSeen] = useState(strip.anchor);
+  if (anchorSeen !== strip.anchor) {
+    setAnchorSeen(strip.anchor);
+    setScrolledFirst(null);
+  }
+
   /** Scroll to the anchor when it moves — or when something asks again. */
   useEffect(() => {
-    setScrolledFirst(null);
     scrollToDay(strip.anchor);
   }, [strip.anchor, scrollRequest, scrollToDay]);
 
@@ -435,7 +473,7 @@ export function UpcomingTracker({
             title="Earlier"
             aria-label="Earlier days"
           >
-            ◂
+            <Mark name="caretLeft" />
           </button>
           <button
             type="button"
@@ -445,7 +483,7 @@ export function UpcomingTracker({
             title="Later"
             aria-label="Later days"
           >
-            ▸
+            <Mark name="caretRight" />
           </button>
         </span>
       </div>
@@ -455,6 +493,7 @@ export function UpcomingTracker({
         className={styles.tracker}
         role="tablist"
         aria-label="Effort by day"
+        title="line = Monday · click a day for detail"
         onScroll={handleScroll}
         style={{ ['--tracker-columns' as string]: String(columnsInView) }}
       >
@@ -472,20 +511,16 @@ export function UpcomingTracker({
 
       <div className={styles.windowSummary}>
         <span>Window · {formatDayRange(view.firstIso, view.lastIso)}</span>
-        <span>
-          Scrolls {formatDayRange(strip.firstIso, strip.lastIso)} · line = Monday · click a day for
-          detail
-        </span>
+        <span>Scrolls {formatDayRange(strip.firstIso, strip.lastIso)}</span>
       </div>
 
       <div className={styles.detail}>
         <div className={styles.detailHead}>
-          <span className={styles.detailTitle}>
+          <span className={styles.detailTitle} title="status is click-to-edit">
             {activeSelected === today ? 'Today' : DOW_LABELS[selectedDate.getDay()]},{' '}
             {MONTH_LABELS[selectedDate.getMonth()]} {selectedDate.getDate()}
           </span>
           <span className={styles.sub}>{detailSub}</span>
-          <span className={styles.detailHint}>status is click-to-edit</span>
         </div>
 
         {error !== null && (
@@ -571,11 +606,11 @@ function DayColumn({
       <span className={styles.monthLabel}>{day.monthLabel}</span>
       <span className={styles.dayCount}>{items.length || ''}</span>
       <span className={styles.barArea}>
-        {items.map((item) => (
+        {barOrder(items).map((item) => (
           <span
             key={`${item.item_kind}:${item.item_id}`}
             className={`${styles.seg} ${SEG_CLASS[item.category]}`}
-            style={{ height: `${Math.max(3, toNumber(item.effort) * scale)}px` }}
+            style={{ ['--seg-height' as string]: `${Math.max(3, toNumber(item.effort) * scale)}px` }}
             title={`${item.title} · ${effortLabel(toNumber(item.effort))}`}
           />
         ))}

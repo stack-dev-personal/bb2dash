@@ -2,23 +2,30 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useCallback, useEffect, useRef, type KeyboardEvent } from 'react';
+import { getDesktopUpdater } from '@/lib/desktop-bridge';
 import { clearPersistedQueryCache } from '@/lib/query-provider';
 import { SIDEBAR_ID } from '@/lib/sidebar-preference';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
-import { HamburgerIcon, SearchIcon, UserIcon } from './icons';
+import tokens from '@/styles/tokens.module.css';
+import { HamburgerIcon, UserIcon } from './icons';
 import { ActivityMenu } from './ActivityMenu';
 import { Bell } from './Bell';
+import { NavSearch } from './NavSearch';
+import { ThemeMenu } from './ThemeMenu';
 import { useSidebar } from './SidebarProvider';
 import { SyncButton } from './SyncButton';
+import { useEscapeFocus } from './useEscapeFocus';
+import { useExit } from './useExit';
 import { usePopover } from './usePopover';
+import { isUpdateLocked, updateLabel, useDesktopUpdate } from './useDesktopUpdate';
 import styles from './TopNav.module.css';
 
 /**
  * The persistent top bar — GUI decision 1c.
  *
  *   bb2dash mark · Home · Planner · Inbox · Grades · Materials
- *   … cmd-K affordance · Sync … ☰ Courses · activity · bell · user
+ *   … Sync · search icon · ☰ Courses · activity · bell · user   (right-aligned)
  *
  * ☰ no longer opens a pop-down list: it toggles the course sidebar below the
  * bar (`CourseSidebar`). The pop-down capped the content column at
@@ -29,6 +36,16 @@ import styles from './TopNav.module.css';
  * Phase 9 added the Inbox link (between Planner and Grades), the Sync button
  * next to ⌘K, and the Activity pop-down. Phase 11 replaced the disabled bell
  * placeholder with the real one (`Bell.tsx`).
+ *
+ * 2026-09-30: the wide "Search ⌘K" button became a search icon that expands
+ * in place into a field (`NavSearch.tsx`), with the results in a popover.
+ * Stack's walk the same day moved it and Sync into the right-hand group:
+ * Sync → search → ☰ → activity → bell → account.
+ *
+ * Stack, 2026-09-30: inside the desktop shell the account menu also offers
+ * "Update desktop app" (feature-detected on `window.bb2dashDesktop`; a normal
+ * browser never shows it). It reports its state in place: checking, up to
+ * date, restarting, or the failure reason.
  */
 
 const NAV_LINKS = [
@@ -37,20 +54,77 @@ const NAV_LINKS = [
   { href: '/inbox', label: 'Inbox' },
   { href: '/grades', label: 'Grades' },
   { href: '/materials', label: 'Materials' },
+  { href: '/workspace', label: 'Workspace' },
 ] as const;
+
+/** The phone-width menu's panel: what the Menu button controls. */
+const NAV_MENU_ID = 'primary-nav-menu';
+
+/** The rows of an open menu that can take focus: the menu items and the radio rows. */
+function menuItemsOf(menu: HTMLElement | null): HTMLElement[] {
+  if (menu === null) return [];
+  return [...menu.querySelectorAll<HTMLElement>('[role^="menuitem"]:not(:disabled)')];
+}
 
 export function TopNav({ userEmail }: { userEmail: string | null }) {
   const pathname = usePathname();
   const router = useRouter();
 
-  const user = usePopover<HTMLSpanElement>();
-  const sidebar = useSidebar();
+  const [user, userAnchor] = usePopover<HTMLSpanElement>();
+  // The phone-width menu (≤720px): the same six pages in a panel under the bar.
+  const [menu, menuAnchor] = usePopover<HTMLSpanElement>();
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const accountButtonRef = useRef<HTMLButtonElement>(null);
+  const accountMenuRef = useRef<HTMLDivElement | null>(null);
+  // Both panels stay for one exit, marked data-leaving (task 29).
+  const [userExit, userExitRef] = useExit(user.open);
+  const [menuExit, menuExitRef] = useExit(menu.open);
+  const desktopUpdate = useDesktopUpdate();
+  // Read only while the menu is open, which is always after hydration.
+  const showDesktopUpdate = userExit.present && getDesktopUpdater() !== null;
+  // Destructured, not read off the context object: `toggleRef` reaches a `ref`
+  // prop, and the React Compiler would otherwise treat the whole object as a ref.
+  const { open: sidebarOpen, toggle: toggleSidebar, toggleRef: sidebarToggleRef } = useSidebar();
 
-  // Close the user menu on navigation.
+  // Close the user menu and the phone menu on navigation.
   useEffect(() => {
     user.close();
+    menu.close();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
+
+  // usePopover closes on Escape and returns no focus; each menu returns it to its own button.
+  useEscapeFocus(menu.open, menuButtonRef);
+  useEscapeFocus(user.open, accountButtonRef);
+
+  // The account menu acts as a menu: opening it puts focus on its first row.
+  useEffect(() => {
+    if (user.open) menuItemsOf(accountMenuRef.current)[0]?.focus();
+  }, [user.open]);
+
+  // One ref callback for the exit hook and for the arrow keys below.
+  const accountMenuNode = useCallback(
+    (node: HTMLDivElement | null) => {
+      accountMenuRef.current = node;
+      userExitRef(node);
+    },
+    [userExitRef],
+  );
+
+  /** Down and Up move between the rows and wrap; Home and End jump. */
+  function onAccountMenuKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    const rows = menuItemsOf(event.currentTarget);
+    if (rows.length === 0) return;
+    const at = rows.indexOf(document.activeElement as HTMLElement);
+    let target: HTMLElement | undefined;
+    if (event.key === 'ArrowDown') target = rows[(at + 1) % rows.length];
+    else if (event.key === 'ArrowUp') target = rows[(at - 1 + rows.length) % rows.length];
+    else if (event.key === 'Home') target = rows[0];
+    else if (event.key === 'End') target = rows[rows.length - 1];
+    if (target === undefined) return;
+    event.preventDefault();
+    target.focus();
+  }
 
   function isActive(href: string): boolean {
     if (href === '/') return pathname === '/';
@@ -65,15 +139,11 @@ export function TopNav({ userEmail }: { userEmail: string | null }) {
     router.refresh();
   }
 
-  function openCommandPalette() {
-    window.dispatchEvent(new CustomEvent('bb2dash:command-palette'));
-  }
-
   return (
     <nav className={styles.bar} aria-label="Primary">
       <Link href="/" className={styles.brand}>
         <span className={styles.mark} aria-hidden="true" />
-        bb2dash
+        <span className={styles.brandName}>bb2dash</span>
       </Link>
 
       <span className={styles.links}>
@@ -89,28 +159,65 @@ export function TopNav({ userEmail }: { userEmail: string | null }) {
         ))}
       </span>
 
-      {/* cmd-K mount point — W-8 replaces the handler with the real palette. */}
-      <button type="button" className={styles.cmdk} onClick={openCommandPalette}>
-        <SearchIcon />
-        Search
-        <span className={styles.kbd}>⌘K</span>
-      </button>
+      {/* Menu — at ≤720px the links give way to this button and its panel (R-46). The panel
+          and its links are in the DOM only while it is open. */}
+      <span ref={menuAnchor} className={styles.menuWrap}>
+        <button
+          type="button"
+          ref={menuButtonRef}
+          className={menu.open ? styles.menuOpen : styles.menu}
+          onClick={() => {
+            user.close();
+            menu.toggle();
+          }}
+          aria-expanded={menu.open}
+          aria-controls={NAV_MENU_ID}
+        >
+          Menu
+        </button>
 
-      <SyncButton />
+        {menuExit.present && (
+          <div
+            id={NAV_MENU_ID}
+            ref={menuExitRef}
+            className={styles.navMenu}
+            data-leaving={menuExit.leaving ? '' : undefined}
+          >
+            {NAV_LINKS.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={isActive(item.href) ? styles.navMenuLinkActive : styles.navMenuLink}
+                aria-current={isActive(item.href) ? 'page' : undefined}
+                onClick={menu.close}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </div>
+        )}
+      </span>
 
       <span className={styles.right}>
+        <SyncButton />
+
+        {/* Search — an icon whose field grows leftward (Sync slides left);
+            ⌘K / Ctrl+K opens it too. */}
+        <NavSearch />
+
         {/* ☰ — the course sidebar toggle */}
         <button
           type="button"
-          ref={sidebar.toggleRef}
-          className={styles.icToggle}
+          ref={sidebarToggleRef}
+          className={`${styles.icToggle} ${tokens.tip}`}
           onClick={() => {
             user.close();
-            sidebar.toggle();
+            menu.close();
+            toggleSidebar();
           }}
-          aria-expanded={sidebar.open}
+          aria-expanded={sidebarOpen}
           aria-controls={SIDEBAR_ID}
-          title="Courses sidebar"
+          data-tip="Courses sidebar"
         >
           <HamburgerIcon />
           <span className="sr-only">Courses sidebar</span>
@@ -123,27 +230,50 @@ export function TopNav({ userEmail }: { userEmail: string | null }) {
         <Bell />
 
         {/* User menu */}
-        <span ref={user.ref} style={{ display: 'contents' }}>
+        <span ref={userAnchor} className={styles.anchor}>
           <button
             type="button"
-            className={user.open ? styles.icOpen : styles.ic}
-            onClick={() => user.toggle()}
+            ref={accountButtonRef}
+            className={`${user.open ? styles.icOpen : styles.ic} ${tokens.tip} ${styles.iconEnd}`}
+            onClick={() => {
+              menu.close();
+              user.toggle();
+            }}
             aria-expanded={user.open}
             aria-haspopup="menu"
-            title="Account"
+            data-tip="Account"
           >
             <UserIcon />
             <span className="sr-only">Account</span>
           </button>
 
-          {user.open && (
-            <div className={styles.ddUser} role="menu">
+          {userExit.present && (
+            <div
+              ref={accountMenuNode}
+              className={styles.ddUser}
+              role="menu"
+              onKeyDown={onAccountMenuKeyDown}
+              data-leaving={userExit.leaving ? '' : undefined}
+            >
               <div className={styles.ddIdentity}>
-                <span className={styles.ddHead} style={{ padding: 0 }}>
+                <span className={styles.ddHeadFlush}>
                   Signed in
                 </span>
                 <span className={styles.ddEmail}>{userEmail ?? 'unknown'}</span>
               </div>
+              {showDesktopUpdate && (
+                <button
+                  type="button"
+                  className={styles.ddRow}
+                  role="menuitem"
+                  onClick={desktopUpdate.start}
+                  disabled={isUpdateLocked(desktopUpdate.state)}
+                  aria-busy={desktopUpdate.state.status === 'pending'}
+                >
+                  {updateLabel(desktopUpdate.state)}
+                </button>
+              )}
+              <ThemeMenu />
               <button type="button" className={styles.ddRow} role="menuitem" onClick={signOut}>
                 Sign out
               </button>

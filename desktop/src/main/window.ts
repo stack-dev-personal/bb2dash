@@ -15,12 +15,16 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { BrowserWindow, screen } from 'electron';
+import { BrowserWindow, Menu, screen } from 'electron';
 import { app } from 'electron';
 
+import { contextMenuTemplate } from './context-menu';
+import { failedLoadDataUrl, showsLoadFailed } from './load-failed';
 import { log, logError } from './log';
 import { resourcePath } from './resources';
-import { recordEvent } from './test-hook';
+import { IS_TEST_MODE, recordEvent } from './test-hook';
+import { MIN_WIDTH, overlayFor, themeOfColour, DARK_OVERLAY, widenToMinimum } from './title-bar';
+import { windowBackground } from './window-background';
 
 const STATE_FILE = 'window-state.json';
 const SAVE_DEBOUNCE_MS = 500;
@@ -136,6 +140,14 @@ function trackWindowState(window: BrowserWindow): void {
   });
 }
 
+/** Windows that are showing the failed-load page (task 27): they have no app in them. */
+const failedPages = new WeakSet<BrowserWindow>();
+/** Windows whose failed-load page is scheduled but not yet loading (see wireChrome). */
+const failedPageQueued = new WeakSet<BrowserWindow>();
+const failedPageTimers = new WeakMap<BrowserWindow, NodeJS.Timeout>();
+/** If loading never reports that it stopped, the failed-load page is shown this long after the failure. */
+const FAILED_PAGE_FALLBACK_MS = 1_000;
+
 /**
  * R2-7 — is this window showing the app, or is it blank?
  *
@@ -146,7 +158,8 @@ function trackWindowState(window: BrowserWindow): void {
 export function needsReload(window: BrowserWindow): boolean {
   if (window.isDestroyed()) return false;
   try {
-    return window.webContents.isCrashed() || window.webContents.getURL() === '';
+    // The failed-load page is a page, so its URL is not empty; the window still has no app in it.
+    return failedPages.has(window) || window.webContents.isCrashed() || window.webContents.getURL() === '';
   } catch {
     return false;
   }
@@ -154,6 +167,17 @@ export function needsReload(window: BrowserWindow): boolean {
 
 /** Every window's loader, so `showWindow` and the retry timer share one implementation. */
 const loaders = new WeakMap<BrowserWindow, () => void>();
+
+/** The first `loadURL` of every window, so a deep link can wait on a window it just built. */
+const firstLoads = new WeakMap<BrowserWindow, Promise<void>>();
+
+/**
+ * R2-8 for a rebuilt window: the promise of its first load, rejecting with that load's own
+ * error even when the loader goes on to retry. Resolves at once for an unknown window.
+ */
+export function firstLoad(window: BrowserWindow): Promise<void> {
+  return firstLoads.get(window) ?? Promise.resolve();
+}
 
 /**
  * R2-7 — load `appUrl`, and keep trying on the backoff if it will not load.
@@ -165,10 +189,13 @@ export function ensureLoaded(window: BrowserWindow): void {
   loaders.get(window)?.();
 }
 
-function attachLoader(window: BrowserWindow, appUrl: string): void {
+function attachLoader(window: BrowserWindow, appUrl: string, initialUrl: string = appUrl): void {
   let attempt = 0;
   let timer: NodeJS.Timeout | null = null;
   let loading = false;
+  // A window rebuilt for a toast click opens at that route (2026-09-30), and retries it;
+  // once anything has loaded, every later reload (crash, tray Open) is the app root again.
+  let target = initialUrl;
 
   const clear = (): void => {
     if (timer !== null) clearTimeout(timer);
@@ -179,15 +206,22 @@ function attachLoader(window: BrowserWindow, appUrl: string): void {
     if (window.isDestroyed() || loading) return;
     loading = true;
     clear();
-    window.webContents.loadURL(appUrl).then(
+    const url = target;
+    const pending = window.webContents.loadURL(url);
+    if (!firstLoads.has(window)) firstLoads.set(window, pending);
+    pending.then(
       () => {
         loading = false;
         attempt = 0;
-        log(`loaded ${new URL(appUrl).origin}`);
+        target = appUrl;
+        failedPages.delete(window);
+        log(`loaded ${new URL(url).origin}`);
       },
       (error: unknown) => {
         loading = false;
-        logError(`could not load ${appUrl}`, error);
+        logError(`could not load ${url}`, error);
+        // What the load's own promise rejected with, for the e2e suite (a no-op outside the test variable).
+        recordEvent('load-rejected', { url, message: error instanceof Error ? error.message : String(error) });
         const delay = LOAD_RETRY_DELAYS_MS[Math.min(attempt, LOAD_RETRY_DELAYS_MS.length - 1)];
         attempt += 1;
         if (attempt > LOAD_RETRY_DELAYS_MS.length) {
@@ -213,6 +247,7 @@ function attachLoader(window: BrowserWindow, appUrl: string): void {
     recordEvent('render-process-gone', { reason: details.reason });
     attempt = 0;
     loading = false;
+    target = appUrl;
     load();
   });
 
@@ -220,36 +255,200 @@ function attachLoader(window: BrowserWindow, appUrl: string): void {
   load();
 }
 
-/** Create the window. It is created once per run and reused (C-12). */
-export function createWindow(appUrl: string): BrowserWindow {
+/**
+ * The shell's own chrome (task 27), all of it inside listeners: the title-bar overlay follows the
+ * page's theme, the right-click menu, and the page shown when the app cannot be loaded.
+ */
+function wireChrome(window: BrowserWindow, appUrl: string): void {
+  const contents = window.webContents;
+
+  // The page rewrites its theme-color meta at boot, on a pick and on a system change; Electron
+  // reports it here. There is no IPC for this: the page never talks to main.
+  contents.on('did-change-theme-color', (_event, color) => {
+    const overlay = overlayFor(color);
+    recordEvent('title-bar-overlay', { color: color ?? null, theme: themeOfColour(color), overlay: { ...overlay } });
+    try {
+      if (!window.isDestroyed()) window.setTitleBarOverlay({ ...overlay });
+    } catch (error) {
+      logError('the title bar overlay could not be set', error);
+    }
+  });
+
+  contents.on('context-menu', (_event, params) => {
+    const template = contextMenuTemplate(params);
+    if (template.length === 0) return;
+    recordEvent('context-menu', { roles: template.map((item) => item.role ?? null) });
+    // Under the test variable the roles are recorded and no native menu is popped.
+    if (IS_TEST_MODE) return;
+    Menu.buildFromTemplate(template).popup({ window });
+  });
+
+  // Only a real failure of the main frame: never an aborted load (code -3), never a subframe.
+  contents.on('did-fail-load', (_event, errorCode, _description, _url, isMainFrame) => {
+    if (!showsLoadFailed(errorCode, isMainFrame)) return;
+    // Already showing it, or about to: a retry that fails again leaves the page as it is.
+    if (failedPages.has(window) && (failedPageQueued.has(window) || contents.getURL().startsWith('data:'))) return;
+    failedPages.add(window);
+    failedPageQueued.add(window);
+    recordEvent('load-failed', { errorCode });
+    // Not now. Electron settles the failing load's promise when loading stops (did-stop-loading),
+    // with the error it recorded; a navigation started before that supersedes it, and the promise
+    // rejects with ERR_ABORTED (-3) in place of the real code. deeplink.ts treats -3 as benign, so an
+    // offline deep link would be reported as a success and the log would lose the cause (S-2, observed
+    // in test/e2e/chrome.spec.ts). So the page is shown on the turn after loading has stopped, and a
+    // timer shows it anyway if loading never reports that it stopped.
+    const fallback = setTimeout(showFailedPage, FAILED_PAGE_FALLBACK_MS);
+    fallback.unref?.();
+    failedPageTimers.set(window, fallback);
+  });
+
+  const showFailedPage = (): void => {
+    const timer = failedPageTimers.get(window);
+    if (timer !== undefined) clearTimeout(timer);
+    failedPageTimers.delete(window);
+    setImmediate(() => {
+      failedPageQueued.delete(window);
+      if (window.isDestroyed() || !failedPages.has(window)) return;
+      contents.loadURL(failedLoadDataUrl(appUrl)).catch((error: unknown) => {
+        logError('the failed-load page could not be shown', error);
+      });
+    });
+  };
+
+  contents.on('did-stop-loading', () => {
+    if (failedPageQueued.has(window) && failedPageTimers.has(window)) showFailedPage();
+  });
+
+  // The app loaded over the page (the Retry link, or the backoff): the window has an app in it again.
+  contents.on('did-finish-load', () => {
+    try {
+      // A failed load also finishes (on Chromium's own error page, while getURL still names the address
+      // that failed), so a finish while the failed-load page is still being scheduled is the failure
+      // and not the app. Only an http(s) page after that counts.
+      if (!failedPageQueued.has(window) && /^https?:/.test(contents.getURL())) failedPages.delete(window);
+    } catch {
+      // A destroyed window has nothing to clear.
+    }
+  });
+}
+
+/**
+ * Create the window. Closing it destroys it (2026-09-30), and `window-controller.ts`
+ * builds a new one on the next open; `initialUrl` is that window's first load when a
+ * toast click is what opened it.
+ */
+export function createWindow(appUrl: string, initialUrl?: string): BrowserWindow {
   const saved = readWindowState();
   const icon = resourcePath('build', 'icon.ico');
 
   const window = new BrowserWindow({
-    ...(saved ? saved.bounds : { ...DEFAULT_SIZE }),
-    minWidth: 900,
+    // A width saved under the new minimum is widened to it before it is used (task 27).
+    ...(saved ? { ...saved.bounds, width: widenToMinimum(saved.bounds.width) } : { ...DEFAULT_SIZE }),
+    // The idle bar and the three window buttons (title-bar.ts).
+    minWidth: MIN_WIDTH,
     minHeight: 600,
     show: false,
-    backgroundColor: '#12131a',
+    backgroundColor: windowBackground(),
     title: 'bb2dash',
     // The default Electron menu stays installed — Reload and the devtools
     // accelerators keep working — but it is hidden until Alt is pressed, so the
     // shell reads as an app rather than a browser window (PM, 2026-09-17).
     autoHideMenuBar: true,
+    // The window's title bar is the app's bar: Windows keeps its three buttons and draws them in the
+    // dark bar's colours; the theme listener below re-colours them when the page changes theme.
+    titleBarStyle: 'hidden',
+    titleBarOverlay: { ...DARK_OVERLAY },
     ...(icon === null ? {} : { icon }),
     webPreferences: { ...WEB_PREFERENCES, preload: preloadPath() },
   });
 
   recordEvent('window-preferences', { ...WEB_PREFERENCES });
+  // The options the window was built with, under a kind of their own: shell.spec.ts compares the
+  // six keys of 'window-preferences' exactly.
+  const minWidth = MIN_WIDTH;
+  recordEvent('window-chrome', {
+    titleBarStyle: 'hidden',
+    titleBarOverlay: { ...DARK_OVERLAY },
+    autoHideMenuBar: true,
+    minWidth,
+  });
 
   if (saved?.isMaximized) window.maximize();
   window.once('ready-to-show', () => window.show());
   trackWindowState(window);
+  wireChrome(window, appUrl);
 
   // R2-7: owns the initial load, the retry backoff and the crash reload.
-  attachLoader(window, appUrl);
+  attachLoader(window, appUrl, initialUrl ?? appUrl);
 
   return window;
+}
+
+/**
+ * 2026-09-30 — how long the window-less refresh page lives after its load settles. Long
+ * enough for the web app's own client code to run once after the proxy has rewritten the
+ * cookie; short enough that the renderer is gone again well inside a poll interval.
+ */
+export const SESSION_REFRESH_LINGER_MS = 20_000;
+/** The page is destroyed after this whatever its load did. */
+export const SESSION_REFRESH_TIMEOUT_MS = 60_000;
+
+let refreshPage: BrowserWindow | null = null;
+
+/**
+ * Closing the window destroys it now, so R2-4's "reload the hidden window" has nothing to
+ * reload. This does the same thing with a page that exists only for the refresh: a hidden
+ * window in the same partition loads the app once — the web app's proxy rewrites the
+ * cookie on that navigation — and is destroyed again. Main still never calls the auth API
+ * (C-5). One page at a time; returns `null` when one is already running.
+ */
+export function refreshSessionWithoutWindow(
+  appUrl: string,
+  attachGuards: (window: BrowserWindow) => void,
+): BrowserWindow | null {
+  if (refreshPage !== null) return null;
+
+  const page = new BrowserWindow({
+    show: false,
+    width: 800,
+    height: 600,
+    webPreferences: { ...WEB_PREFERENCES, preload: preloadPath() },
+  });
+  refreshPage = page;
+
+  let finished = false;
+  let deadline: NodeJS.Timeout | null = null;
+  const finish = (reason: string): void => {
+    if (finished) return;
+    finished = true;
+    if (deadline !== null) clearTimeout(deadline);
+    refreshPage = null;
+    log(`session refresh page closed (${reason})`);
+    if (!page.isDestroyed()) page.destroy();
+  };
+
+  // Code review (LOW): anything that throws while the page is being wired must still free
+  // the slot and destroy the page, or every later refresh returns null and the hidden
+  // page leaks for the life of the process.
+  try {
+    attachGuards(page);
+    deadline = setTimeout(() => finish('timed out'), SESSION_REFRESH_TIMEOUT_MS);
+    deadline.unref?.();
+
+    const linger = (): void => {
+      const timer = setTimeout(() => finish('done'), SESSION_REFRESH_LINGER_MS);
+      timer.unref?.();
+    };
+    page.webContents.loadURL(appUrl).then(linger, (error: unknown) => {
+      logError('the session refresh page could not load the app', error);
+      linger();
+    });
+  } catch (error) {
+    logError('the session refresh page could not be set up', error);
+    finish('setup failed');
+    return null;
+  }
+  return page;
 }
 
 /**

@@ -1,0 +1,72 @@
+/* The lobby's example prompts (Phase 24b, W-87): a kicker heading with the quiet
+   refresh beside it, then up to three square cards in a row, one column on a
+   phone. A card is a button: the hover tint, never a lift. Tokens only. */
+
+.examples {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.heading {
+  composes: kicker from '@/styles/tokens.module.css';
+  margin: 0;
+  font-weight: var(--font-weight-regular);
+}
+
+.refresh {
+  composes: btnGhost from '@/styles/tokens.module.css';
+  font-size: var(--text-13);
+}
+
+.list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.example {
+  composes: card from '@/styles/tokens.module.css';
+  border: 0;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-14);
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+  transition: var(--motion-control);
+}
+
+.example:hover,
+.example:focus-visible {
+  background: var(--color-hover);
+}
+
+.example:active {
+  background: var(--color-active);
+}
+
+.problem {
+  composes: errorNotice from '@/styles/tokens.module.css';
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 720px) {
+  .list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .example,
+  .refresh {
+    min-height: var(--size-44);
+  }
+}

@@ -1,0 +1,30 @@
+/* The dashed course chip (Phase 24b, W-87): a pill drawn with a dashed edge,
+   because it is a choice to make rather than a thing attached. Tokens only. */
+
+.chip {
+  composes: tag from '@/styles/tokens.module.css';
+  min-height: var(--size-target);
+  border: 1px dashed var(--color-neutral-600);
+  background: transparent;
+  color: var(--color-text);
+  font-family: inherit;
+  cursor: pointer;
+  transition: var(--motion-control);
+}
+
+.chip:hover:not(:disabled),
+.chip[aria-expanded='true'] {
+  border-color: var(--color-neutral-400);
+  background: var(--color-hover);
+}
+
+.chip:disabled {
+  color: var(--color-muted);
+  cursor: not-allowed;
+}
+
+@media (max-width: 720px) {
+  .chip {
+    min-height: var(--size-44);
+  }
+}

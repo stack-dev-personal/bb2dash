@@ -22,10 +22,25 @@
  * pure functions rather than trusted field by field.
  */
 
-import { useEffect } from 'react';
-import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useRef } from 'react';
+import {
+  queryOptions,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from '@tanstack/react-query';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getSupabaseBrowserClient } from './supabase/client';
+import { asRecord } from './json-record';
+import {
+  NO_SYNC_RECORDED,
+  lastSyncedClause,
+  neverSyncedLine,
+  normalizeStreams,
+  runStateWord,
+  type StreamState,
+} from './sync-run-state';
 
 /**
  * The Phase 9 relations are absent from the generated Database type, so the
@@ -33,21 +48,34 @@ import { getSupabaseBrowserClient } from './supabase/client';
  * an un-narrowed client until the types are regenerated; every row that comes
  * back is pinned to an interface below. Same pattern as queries.today.ts.
  */
-function untypedClient(): SupabaseClient {
+export function untypedClient(): SupabaseClient {
   return getSupabaseBrowserClient() as unknown as SupabaseClient;
 }
+
+/**
+ * The PostgREST filter that drops a quarantined crawl (`sync_runs.scope =
+ * 'unregistered'`, Phase 19): Activity and the Sync button's run read share it,
+ * so a row one hides the other never adopts.
+ */
+export const NOT_QUARANTINED_FILTER = 'scope.is.null,scope.neq.unregistered';
 
 /* ---------------------------------------------------------------------------
  * Row types (hand-declared from the frozen contract — see header)
  * ------------------------------------------------------------------------ */
 
-/** `attention_items.kind` — migration 031's check constraint, in Inbox order. */
+/**
+ * `attention_items.kind` — migration 031's check constraint, in Inbox order, and since 205
+ * (Phase 25b) `assistant_proposal`: a planner change the Workspace assistant proposed. That kind is
+ * answered only through `workspace_proposal_decide` (`queries.workspace-proposals.ts`), never by
+ * this module's resolve, and the apply side never sees it.
+ */
 export type AttentionKind =
   | 'conflict'
   | 'stack_must_confirm'
   | 'missing'
   | 'deadline'
-  | 'data_gap';
+  | 'data_gap'
+  | 'assistant_proposal';
 
 /**
  * `attention_items.state`.
@@ -65,8 +93,9 @@ export type SyncRunStatus = 'running' | 'ok' | 'partial' | 'failed';
 /**
  * `agent_requests.kind` — the check constraint, as migration 077 left it:
  * `check (kind in ('sync','transform','inbox_feedback'))`. `inbox_feedback` is
- * the Inbox's "Apply answers" button asking a Claude session to run
- * `/inbox-apply`.
+ * the request the `apply` container's worker runs `/inbox-apply` for: filed by
+ * the Inbox's "Apply answers" button, and by the sync container after a sync
+ * (Phase 23, migration 180).
  */
 export type AgentRequestKind = 'sync' | 'transform' | 'inbox_feedback';
 
@@ -107,6 +136,8 @@ export interface AttentionItem {
   archived_by?: string | null;
   /** 090 — the worker's own record of what it did. jsonb: trust no inner shape. */
   decision?: Record<string, unknown> | null;
+  /** 205 — an `assistant_proposal` item's proposal (checked FK, unique); null on every other kind. */
+  workspace_proposal_id?: number | null;
 }
 
 /** One row of `agent_requests` (migration 032). */
@@ -122,6 +153,10 @@ export interface AgentRequest {
   claimed_by: string | null;
   finished_at: string | null;
   sync_run_id: number | null;
+  /** The crawl's uuid, set when the claim registers its run (Phase 19; 091's `sync_register_run`). */
+  run_id: string | null;
+  /** How many times `sync_claim()` took the row (091). Above 0 on a queued row: the runner requeued it. */
+  claim_attempts: number;
   result: Record<string, unknown> | null;
 }
 
@@ -154,6 +189,10 @@ export interface SyncStatus {
   open_attention: Partial<Record<AttentionKind, number>>;
   /** `v_data_freshness` rows, one per stage. */
   freshness: FreshnessRow[];
+  /** 137: the run's notes, reaped or not, and R-41's per-stream read (null, false, [] before). */
+  notes: string | null;
+  interrupted: boolean;
+  streams: StreamState[];
 }
 
 /** One line of the in-app Activity list, flattened from `summary.changes`. */
@@ -178,6 +217,7 @@ export const ATTENTION_KIND_ORDER: readonly AttentionKind[] = [
   'missing',
   'deadline',
   'data_gap',
+  'assistant_proposal',
 ] as const;
 
 /** Human labels. "needs input" is the Home row's word for stack_must_confirm. */
@@ -187,6 +227,7 @@ export const ATTENTION_KIND_LABEL: Record<AttentionKind, string> = {
   missing: 'missing',
   deadline: 'deadline',
   data_gap: 'data gap',
+  assistant_proposal: 'proposal',
 };
 
 /** Longer headings for the Inbox groups. */
@@ -196,6 +237,7 @@ export const ATTENTION_KIND_HEADING: Record<AttentionKind, string> = {
   missing: 'Missing',
   deadline: 'Deadlines',
   data_gap: 'Data gaps',
+  assistant_proposal: 'Proposed planner changes',
 };
 
 /** The four counts the Home needs-attention row shows (GUI decision 5a). */
@@ -231,6 +273,8 @@ export const syncKeys = {
    * key would each show the other's request as its own.
    */
   openRequest: (kind: AgentRequestKind) => ['agent-request', 'open', kind] as const,
+  /** The run a claimed sync request opened, by its uuid (`queries.sync-run.ts`). */
+  syncRun: (runId: string) => ['sync-run', runId] as const,
   inboxQueueCount: () => ['inbox-queue-count'] as const,
   activity: (limit: number) => ['activity', limit] as const,
 } as const;
@@ -419,12 +463,6 @@ export function buildResolutionPatch(input: ResolveInput, now: Date = new Date()
  * nothing about their inner shape)
  * ------------------------------------------------------------------------ */
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
 function asTextOrNull(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
@@ -515,6 +553,9 @@ export function normalizeSyncStatus(row: unknown): SyncStatus | null {
     summary: normalizeSummary(raw.summary),
     open_attention: normalizeOpenAttention(raw.open_attention),
     freshness: normalizeFreshness(raw.freshness ?? raw.data_freshness),
+    notes: asTextOrNull(raw.notes),
+    interrupted: raw.interrupted === true,
+    streams: normalizeStreams(raw.streams),
   };
 }
 
@@ -581,13 +622,13 @@ export function stalenessLine(freshness: FreshnessRow[], now: Date = new Date())
 
 /** The whole second line: "last synced 3 hrs ago · files stale 2 days". */
 export function freshnessLine(status: SyncStatus | null, now: Date = new Date()): string {
-  if (!status || status.id === null) return 'no sync recorded yet';
-  const parts: string[] = [];
-  if (status.status === 'running') parts.push('sync running');
-  else parts.push(`last synced ${relativeTime(status.finished_at ?? status.started_at, now)}`);
-  if (status.status === 'partial') parts.push('last run partial');
-  if (status.status === 'failed') parts.push('last run failed');
-  const stale = stalenessLine(status.freshness, now);
+  if (!status || status.id === null) return NO_SYNC_RECORDED;
+  const word = runStateWord(status);
+  const synced = lastSyncedClause(status, (iso) => relativeTime(iso, now));
+  const parts: string[] = synced === null ? [] : [synced];
+  if (word) parts.push(word);
+  // Never-synced streams are named only when no stage is stale, failed or never synced.
+  const stale = stalenessLine(status.freshness, now) ?? neverSyncedLine(status.streams);
   if (stale) parts.push(stale);
   return parts.join(' · ');
 }
@@ -598,14 +639,21 @@ export function totalOpen(status: SyncStatus | null): number {
   return ATTENTION_KIND_ORDER.reduce((sum, kind) => sum + (status.open_attention[kind] ?? 0), 0);
 }
 
+/**
+ * The model a sync runs on (Stack, 2026-09-30: syncs default to Sonnet), the same value the
+ * desktop shell's `SYNC_MODEL` passes; the skill checks it again as its first step.
+ */
+export const SYNC_MODEL = 'sonnet';
+
 /** The command Stack pastes into a terminal to run the crawl half of a sync. */
 export function syncCommand(requestId: number): string {
   assertRowId(requestId, 'agent request id');
-  return `claude "/bb-sync ${requestId}"`;
+  return `claude --model ${SYNC_MODEL} "/bb-sync ${requestId}"`;
 }
 
 /**
- * The command Stack pastes to have a Claude session apply his Inbox answers.
+ * The fallback command: what Stack pastes to have a Claude session apply his
+ * Inbox answers when the apply worker has not claimed the request (Phase 23).
  *
  * Same contract as `syncCommand`: the string IS the interface with the
  * `/inbox-apply` skill, so the id is validated before it is interpolated
@@ -1033,6 +1081,25 @@ const ATTENTION_COLUMNS =
   'archived_at, archived_by, decision';
 
 /**
+ * 205 (Phase 25b, R2-8): the checked link from an `assistant_proposal` item to its proposal. Vercel
+ * deploys on merge and 205 goes on at the cut-over, so for that window the column is not there
+ * (Postgres 42703) and the read is made once more without it: no proposal item exists before 205.
+ */
+const PROPOSAL_LINK_COLUMN = 'workspace_proposal_id';
+const UNDEFINED_COLUMN = '42703';
+let proposalLinkMissingLogged = false;
+
+function isUndefinedColumn(error: unknown): boolean {
+  return error !== null && typeof error === 'object' && (error as { code?: unknown }).code === UNDEFINED_COLUMN;
+}
+
+async function readAttentionItems(columns: string, state?: AttentionState) {
+  let query = untypedClient().from('attention_items').select(columns);
+  if (state) query = query.eq('state', state);
+  return query.order('raised_at', { ascending: false }).order('id', { ascending: false });
+}
+
+/**
  * `attention_items`. Pass a state to scope the list (the Home row wants only
  * `open`); the Inbox reads them all so it can show answered and dismissed rows.
  */
@@ -1040,12 +1107,14 @@ export function attentionItemsOptions(state?: AttentionState) {
   return queryOptions({
     queryKey: syncKeys.attention(state),
     queryFn: async (): Promise<AttentionItem[]> => {
-      const supabase = untypedClient();
-      let query = supabase.from('attention_items').select(ATTENTION_COLUMNS);
-      if (state) query = query.eq('state', state);
-      const { data, error } = await query
-        .order('raised_at', { ascending: false })
-        .order('id', { ascending: false });
+      let { data, error } = await readAttentionItems(`${ATTENTION_COLUMNS}, ${PROPOSAL_LINK_COLUMN}`, state);
+      if (error && isUndefinedColumn(error)) {
+        if (!proposalLinkMissingLogged) {
+          proposalLinkMissingLogged = true;
+          console.warn(`attention_items.${PROPOSAL_LINK_COLUMN} is not on the database yet; reading without it`, error);
+        }
+        ({ data, error } = await readAttentionItems(ATTENTION_COLUMNS, state));
+      }
       if (error) throw error;
       return (data ?? []) as unknown as AttentionItem[];
     },
@@ -1055,7 +1124,7 @@ export function attentionItemsOptions(state?: AttentionState) {
 
 const AGENT_REQUEST_COLUMNS =
   'id, created_at, kind, scope, params, note, state, claimed_at, claimed_by, ' +
-  'finished_at, sync_run_id, result';
+  'finished_at, sync_run_id, run_id, claim_attempts, result';
 
 /** One `agent_requests` row, polled while the Sync button is waiting on it. */
 export function agentRequestOptions(id: number | null) {
@@ -1102,13 +1171,37 @@ export function openRequestOptions(kind: AgentRequestKind) {
   return openRequestQuery(kind, syncKeys.openRequest(kind));
 }
 
-/** The Inbox's "Apply answers" button: the newest open `inbox_feedback` row. */
-export function openInboxApplyRequestOptions() {
-  return openRequestOptions('inbox_feedback');
+/**
+ * How often the Inbox looks for an `inbox_feedback` request while none is open
+ * and answers wait (Phase 23): the sync container files one after a sync, without
+ * this page, so the button has to notice it. Slower than the open cadence; the
+ * request only appears at the end of a sync.
+ */
+export const INBOX_APPLY_WATCH_MS = 30 * 1000;
+
+export interface OpenInboxApplyOptions {
+  /** True while answered rows wait: keep looking for a request somebody else filed. */
+  watch?: boolean;
 }
 
-/** One lookup, two keys — the only thing that varies is the kind it filters on. */
-function openRequestQuery(kind: AgentRequestKind, queryKey: readonly unknown[]) {
+/** The Inbox's "Apply answers" button: the newest open `inbox_feedback` row. */
+export function openInboxApplyRequestOptions(options: OpenInboxApplyOptions = {}) {
+  return openRequestQuery(
+    'inbox_feedback',
+    syncKeys.openRequest('inbox_feedback'),
+    options.watch === true ? INBOX_APPLY_WATCH_MS : false,
+  );
+}
+
+/**
+ * One lookup, two keys — the kind it filters on, and how often it looks again
+ * while nothing is open (never, unless the caller watches for a row it did not file).
+ */
+function openRequestQuery(
+  kind: AgentRequestKind,
+  queryKey: readonly unknown[],
+  idleIntervalMs: number | false = false,
+) {
   return queryOptions({
     queryKey,
     queryFn: async (): Promise<AgentRequest | null> => {
@@ -1124,8 +1217,8 @@ function openRequestQuery(kind: AgentRequestKind, queryKey: readonly unknown[]) 
       if (error) throw error;
       return (data ?? null) as unknown as AgentRequest | null;
     },
-    // Same cadence as agentRequestOptions: only a Claude session moves these rows.
-    refetchInterval: (query) => (query.state.data ? 10 * 1000 : false),
+    // Same cadence as agentRequestOptions while a row is open: only a worker moves these rows.
+    refetchInterval: (query) => (query.state.data ? 10 * 1000 : idleIntervalMs),
     staleTime: 0,
   });
 }
@@ -1134,8 +1227,9 @@ function openRequestQuery(kind: AgentRequestKind, queryKey: readonly unknown[]) 
  * How many answered rows `/inbox-apply` still has to work through.
  *
  * `v_inbox_queue` (migration 090) is every resolved or dismissed row the worker
- * has not archived yet. Only the number is wanted — the button says "Apply 3
- * answers" — so this is a head count, not a fetch of the rows themselves.
+ * has not archived yet. Only the number is wanted — it gates the button and tells
+ * it to watch for a request a sync filed — so this is a head count, not a fetch
+ * of the rows themselves.
  */
 export function inboxQueueCountOptions() {
   return queryOptions({
@@ -1148,6 +1242,10 @@ export function inboxQueueCountOptions() {
       if (error) throw error;
       return count ?? 0;
     },
+    // While answers wait, the worker can archive them without this page ever seeing its request
+    // (a sync-filed run of rows that need no reading takes about a second): the count is how the
+    // page notices. With nothing waiting there is nothing to watch.
+    refetchInterval: (query) => ((query.state.data ?? 0) > 0 ? INBOX_APPLY_WATCH_MS : false),
     staleTime: 60 * 1000,
   });
 }
@@ -1175,7 +1273,7 @@ export function activityOptions(limit = 8) {
         .from('sync_runs')
         .select('id, ran_at, started_at, finished_at, status, summary, source, scope')
         .neq('source', 'ical')
-        .or('scope.is.null,scope.neq.unregistered')
+        .or(NOT_QUARANTINED_FILTER)
         .order('id', { ascending: false })
         .limit(limit);
       if (error) throw error;
@@ -1306,8 +1404,8 @@ export function useOpenSyncRequest() {
   return useQuery(openSyncRequestOptions());
 }
 
-export function useOpenInboxApplyRequest() {
-  return useQuery(openInboxApplyRequestOptions());
+export function useOpenInboxApplyRequest(options: OpenInboxApplyOptions = {}) {
+  return useQuery(openInboxApplyRequestOptions(options));
 }
 
 export function useInboxQueueCount() {
@@ -1319,17 +1417,23 @@ export function useActivity(limit = 8) {
 }
 
 /** Resolve an item, then refresh the Inbox and the Home counts together. */
+/**
+ * The three caches every Inbox write moves: the rows themselves, Home's status
+ * row (its open counts), and the Apply button's queue count — answering, taking
+ * an answer back or the worker finishing all change what the queue holds, so the
+ * count moves here and not when a request is filed. One body for every caller.
+ */
+export function invalidateInboxCaches(queryClient: QueryClient): void {
+  void queryClient.invalidateQueries({ queryKey: syncKeys.attentionAll() });
+  void queryClient.invalidateQueries({ queryKey: syncKeys.status() });
+  void queryClient.invalidateQueries({ queryKey: syncKeys.inboxQueueCount() });
+}
+
 export function useResolveAttentionItem() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: resolveAttentionItem,
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: syncKeys.attentionAll() });
-      void queryClient.invalidateQueries({ queryKey: syncKeys.status() });
-      // Answering a row is what changes the worker's queue, so the Apply button's
-      // count moves here — not when a request is filed.
-      void queryClient.invalidateQueries({ queryKey: syncKeys.inboxQueueCount() });
-    },
+    onSettled: () => invalidateInboxCaches(queryClient),
   });
 }
 
@@ -1362,12 +1466,30 @@ export function useCreateAgentRequest() {
  * reload. Filing a request changes nothing yet, so this is the moment that
  * matters. Idempotent: a state that has not moved invalidates nothing.
  */
+/**
+ * When the answered count moves between two reads of it, the worker (or another tab) changed what
+ * the queue holds: the Inbox list and the Home counts refresh. This covers the run the request
+ * polling never sees: one that opens and closes between two looks, and the first request of a
+ * follow-up chain. The first read is not a change, and the count's own cache is left alone, so a
+ * refresh never causes another.
+ */
+export function useRefreshInboxOnQueueChange(count: number | null) {
+  const queryClient = useQueryClient();
+  const last = useRef<number | null>(null);
+  useEffect(() => {
+    if (count === null) return;
+    const before = last.current;
+    last.current = count;
+    if (before === null || before === count) return;
+    void queryClient.invalidateQueries({ queryKey: syncKeys.attentionAll() });
+    void queryClient.invalidateQueries({ queryKey: syncKeys.status() });
+  }, [queryClient, count]);
+}
+
 export function useRefreshInboxOnSettled(state: AgentRequestState | null) {
   const queryClient = useQueryClient();
   useEffect(() => {
     if (state !== 'done' && state !== 'failed') return;
-    void queryClient.invalidateQueries({ queryKey: syncKeys.attentionAll() });
-    void queryClient.invalidateQueries({ queryKey: syncKeys.status() });
-    void queryClient.invalidateQueries({ queryKey: syncKeys.inboxQueueCount() });
+    invalidateInboxCaches(queryClient);
   }, [queryClient, state]);
 }

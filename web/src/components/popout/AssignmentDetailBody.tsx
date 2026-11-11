@@ -22,8 +22,10 @@
  */
 
 import Link from 'next/link';
+import { MARK_CHAR, Mark } from '@/components/shell/icons';
 import tokens from '@/styles/tokens.module.css';
 import { courseCodeFromId } from '@/lib/queries.today';
+import { BLACKBOARD_LINK_TITLE, blackboardLink } from '@/lib/blackboard-link';
 // S-1 (P-grades-7): the one status vocabulary, and the one menu that knows
 // what to do with a retired value still stored on a row.
 import { statusLabel } from '@/lib/progress-status';
@@ -44,6 +46,7 @@ import { AssignmentPlannerBlock } from './AssignmentPlannerBlock';
 import {
   NOT_RECORDED,
   dueDateText,
+  effectiveDue,
   formatClock,
   formatDate,
 } from './assignment-detail-format';
@@ -88,7 +91,9 @@ export function AssignmentDetailBody({ assignmentId }: { assignmentId: string })
   const scheme = schemeQ.data ?? null;
   const series = seriesQ.data ?? [];
   const course = courseQ.data ?? null;
-  const clock = formatClock(assignment.due_at);
+  const bbLink = blackboardLink(assignment, course);
+  const due = effectiveDue(assignment, progressQ.data?.due_override);
+  const clock = formatClock(due.due_at);
 
   return (
     <>
@@ -118,11 +123,10 @@ export function AssignmentDetailBody({ assignmentId }: { assignmentId: string })
           {/* Most rows record only the instant; `dueDateText` reads the day
               off it in New York rather than saying "not recorded" next to a
               perfectly good clock time (PM walk). */}
-          <span className={styles.factValue}>
-            {dueDateText(assignment.due_date, assignment.due_at)}
-          </span>
+          <span className={styles.factValue}>{dueDateText(due.due_date, due.due_at)}</span>
           <span className={styles.factNote}>
-            {clock || assignment.due_rule || 'time not recorded'}
+            {clock || due.due_rule || 'time not recorded'}
+            {due.overridden && ` · your date (Blackboard: ${due.blackboard})`}
           </span>
         </div>
         <div className={styles.fact}>
@@ -193,40 +197,35 @@ export function AssignmentDetailBody({ assignmentId }: { assignmentId: string })
         )}
       </section>
 
-      <section className={styles.block}>
-        <span className={tokens.kicker}>AI policy</span>
-        {isQueryUnresolved(schemeQ) ? (
-          <QueryState query={schemeQ} of="the AI policy" className={styles.missing} />
-        ) : scheme?.ai_policy ? (
-          <p className={styles.prose}>{scheme.ai_policy}</p>
-        ) : (
-          <p className={styles.missing}>No AI policy is recorded for this course.</p>
-        )}
-      </section>
-
       <AssignmentPlannerBlock assignmentId={assignmentId} progressQ={progressQ} />
 
       {/* Its own <section>; the popout's `.block` spacing lives inside it. */}
       <SubmissionBlock
         assignmentId={assignmentId}
         courseId={assignment.course_id}
-        blackboardUrl={course?.bb_url ?? null}
+        blackboardUrl={bbLink?.href ?? null}
       />
 
       <div className={styles.footer}>
         <span className={styles.footerLinks}>
           <Link className={tokens.btnGhost} href={`/course/${assignment.course_id}/grades`}>
-            Grades →
+            Grades <Mark name="caretRight" char={MARK_CHAR.arrowRight} />
           </Link>
-          {course?.bb_url ? (
+          {bbLink ? (
             <a
               className={tokens.btnSecondary}
-              href={course.bb_url}
+              href={bbLink.href}
               target="_blank"
               rel="noreferrer"
-              title="Course-level link — Blackboard has no stable per-item URL here."
+              title={BLACKBOARD_LINK_TITLE[bbLink.scope]}
             >
-              Open in Blackboard ↗ <span className={styles.footerNote}>(course)</span>
+              Open in Blackboard <Mark name="arrowUpRight" />
+              {bbLink.scope === 'course' && (
+                <>
+                  {' '}
+                  <span className={styles.footerNote}>(course)</span>
+                </>
+              )}
             </a>
           ) : (
             <span className={styles.footerNote}>No Blackboard link recorded for this course.</span>

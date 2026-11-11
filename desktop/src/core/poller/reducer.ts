@@ -35,6 +35,19 @@ const LANDED_STATUSES: ReadonlySet<string> = new Set(['ok', 'partial', 'failed']
 /** " · " — the separator the Contract writes in every title. */
 const SEPARATOR = ' · ';
 
+/** C-7 rule 1: a `failed` run's title. */
+const SYNC_FAILED_TITLE = 'Sync failed';
+
+/** Brief 99 (Phase 19): a `failed` run that 136's terminal rule reaped. */
+const SYNC_INTERRUPTED_TITLE = 'Sync interrupted';
+
+/** Brief 99, round 2 (R2-7): what an interrupted run's toast says. */
+const SYNC_INTERRUPTED_BODY =
+  'The crawl did not finish. Nothing from it was folded in; your Inbox has the details.';
+
+/** Where a toast about something waiting in the Inbox opens. */
+const INBOX_ROUTE = '/inbox';
+
 // ---------------------------------------------------------------------------------------
 // Small pure helpers
 // ---------------------------------------------------------------------------------------
@@ -78,13 +91,24 @@ function syncToast(sync: SyncStatusRow | null, lastSeenAt: string): Toast | null
   const changes = summary?.changes ?? [];
   const errors = summary?.errors ?? [];
   const attention = summary?.attention_raised ?? 0;
-  const route = attention > 0 ? '/inbox' : HOME_ROUTE;
+  const route = attention > 0 ? INBOX_ROUTE : HOME_ROUTE;
   const firstError = errors.length > 0 ? errors[0] : undefined;
+
+  // Phase 19: a crawl that never finished was reaped (136), which is not a failed fold.
+  // Its Inbox item is raised by 136, outside the run's summary, so the route is fixed.
+  if (sync.status === 'failed' && sync.interrupted === true) {
+    return {
+      key: `sync:${sync.id}`,
+      title: SYNC_INTERRUPTED_TITLE,
+      body: SYNC_INTERRUPTED_BODY,
+      route: INBOX_ROUTE,
+    };
+  }
 
   if (sync.status === 'failed') {
     return {
       key: `sync:${sync.id}`,
-      title: 'Sync failed',
+      title: SYNC_FAILED_TITLE,
       body: firstError ?? 'No error detail was recorded.',
       route,
     };
@@ -112,13 +136,20 @@ export function gradeKey(row: GradeRow): string {
   return `grade:${row.shell_course_id}:${row.column_id}:${row.run_id}`;
 }
 
-function gradeDetailToast(row: GradeRow, courses: readonly CourseLabel[]): Toast {
+/**
+ * The score as a toast prints it. B-58 amends C-7 rule 2: a column worth zero points
+ * (attendance) shows the score alone, because "1 / 0" reads as a broken fraction.
+ */
+function scoreLine(row: GradeRow): string {
   const score = numeric(row.score);
-  const scoreLine = row.possible === null ? score : `${score} / ${numeric(row.possible)}`;
+  if (row.possible === null || row.possible === 0) return score;
+  return `${score} / ${numeric(row.possible)}`;
+}
+
+function gradeDetailToast(row: GradeRow, courses: readonly CourseLabel[]): Toast {
+  const line = scoreLine(row);
   const body =
-    row.previous_score === null
-      ? scoreLine
-      : `${scoreLine}${SEPARATOR}was ${numeric(row.previous_score)}`;
+    row.previous_score === null ? line : `${line}${SEPARATOR}was ${numeric(row.previous_score)}`;
   return {
     key: gradeKey(row),
     title: `${labelFor(courses, row.shell_course_id)}${SEPARATOR}${row.name}`,
@@ -147,6 +178,12 @@ function gradeToasts(rows: readonly GradeRow[], courses: readonly CourseLabel[])
   for (const [courseId, group] of groupByCourse(rows)) {
     const newest = group[group.length - 1];
     if (!newest) continue; // unreachable: a group is never empty.
+    // B-58 (C-7 rule 2 amended): a course with one row in a coalescing tick gets that row's
+    // detail toast, keyed like any single row, never "1 grades posted".
+    if (group.length === 1) {
+      toasts.push(gradeDetailToast(newest, courses));
+      continue;
+    }
     toasts.push({
       // The Contract freezes the per-row key only. A coalesced toast needs one of its own:
       // it is namespaced under the same prefix and carries the newest member's run, so it is

@@ -1,0 +1,7 @@
+# The egress image's build context is docker/egress/ (compose.yaml); an allow-list of what its
+# Dockerfile copies, so the tests, the e2e kit and the notes beside it never reach the image.
+*
+!squid.conf
+!entrypoint.sh
+!healthcheck.sh
+!sni-present.sh

@@ -1,0 +1,109 @@
+/* The conversation list (Phase 21; Phase 24b). Tokens only. The picked
+   conversation carries the page's red mark of where he is, a bar on its
+   reading edge in --color-accent-500, over the grey fill it had (D-I). */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.heading {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: var(--text-md);
+}
+
+.new {
+  composes: btnGhost from '@/styles/tokens.module.css';
+  flex: none;
+}
+
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.rowLink {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  text-decoration: none;
+}
+.rowLink:hover {
+  background: var(--color-hover);
+}
+.rowLink:focus-visible {
+  outline: var(--size-focus) solid var(--color-accent);
+  outline-offset: calc(var(--size-focus-gap) * -1);
+}
+.rowLink[aria-current='page'] {
+  background: var(--color-active);
+  box-shadow: inset var(--size-underline-mark) 0 0 var(--color-accent-500);
+}
+
+.rowTitle {
+  font-size: var(--text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowWhen {
+  font-size: var(--text-xs);
+  color: var(--color-neutral-500);
+}
+
+.rowAction {
+  composes: btnGhost from '@/styles/tokens.module.css';
+  flex: none;
+  font-size: var(--text-xs);
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.empty {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+}
+
+.problem {
+  composes: errorNotice from '@/styles/tokens.module.css';
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}

@@ -1,0 +1,109 @@
+/**
+ * Round 2 of the first code review, for the foundation files (Phase 22).
+ *
+ *   R2-9    the preconnect to fonts.googleapis.com carries no `crossOrigin` (the stylesheet is not a
+ *           CORS request and could not reuse a CORS connection); the one for fonts.gstatic.com does
+ *           (the font files are); `globals.css` says above its `@import` that the build drops it.
+ *   R2-tip  the drawn label of an icon button has an empty alternative text, so it is drawn and not
+ *           spoken and adds nothing to the button's accessible name.
+ *   R2-notice  the comment in `tokens.module.css` does not quote the compose line, so the brief's
+ *           "Notice files" command counts the 13 files that really compose the class.
+ */
+
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+
+const WEB = process.cwd();
+const read = (...parts: string[]): string => readFileSync(join(WEB, ...parts), 'utf8');
+const layout = read('src', 'app', 'layout.tsx');
+const globals = read('src', 'app', 'globals.css');
+const tokens = read('src', 'styles', 'tokens.module.css');
+
+describe('R2-9: the font preconnects', () => {
+  it('only the gstatic preconnect is a CORS one', () => {
+    // One mapped <link> whose crossOrigin is set for the second origin only.
+    expect(layout).toMatch(/crossOrigin=\{origin === GOOGLE_FONTS_ORIGINS\[1\] \? '' : undefined\}/);
+    expect(layout).not.toMatch(/crossOrigin=""/);
+  });
+
+  it('the second origin is the font files host', async () => {
+    const { GOOGLE_FONTS_ORIGINS } = await import('@/lib/fonts-href');
+    expect(GOOGLE_FONTS_ORIGINS[0]).toBe('https://fonts.googleapis.com');
+    expect(GOOGLE_FONTS_ORIGINS[1]).toBe('https://fonts.gstatic.com');
+  });
+
+  it('globals.css says above its @import that the build drops it and the layout link loads', () => {
+    const at = globals.indexOf("@import url('https://fonts.googleapis.com");
+    expect(at).toBeGreaterThan(0);
+    const above = globals.slice(0, at);
+    const lastComment = above.slice(above.lastIndexOf('/*'));
+    expect(lastComment).toMatch(/build drops this @import/);
+    expect(lastComment).toMatch(/layout/);
+  });
+});
+
+describe('R2-tip: the drawn label is not spoken', () => {
+  it("the generated content is attr(data-tip) with an empty alternative text: `attr(data-tip) / ''`", () => {
+    const rule = /\.tip\[data-tip\]::after\s*\{[^}]*\}/.exec(tokens)?.[0] ?? '';
+    expect(rule).not.toBe('');
+    expect(rule).toContain("content: attr(data-tip) / '';");
+    expect(rule).not.toMatch(/content:\s*attr\(data-tip\)\s*;/);
+  });
+});
+
+describe('R2-notice: the compose line is not quoted in the tokens module', () => {
+  it('"composes: errorNotice from" is in no line of tokens.module.css', () => {
+    expect(tokens).not.toContain('composes: errorNotice from');
+  });
+
+  it('the class itself is still declared', () => {
+    expect(tokens).toMatch(/^\.errorNotice\s*\{/m);
+    expect(tokens).toMatch(/^\.errorNotice::before\s*\{/m);
+  });
+});
+
+describe('V-14 and S-3: no drawn label behind its own open panel, but the sidebar toggle keeps its label', () => {
+  const SELECTOR = ".tip[data-tip][aria-expanded='true']:not([aria-controls='course-sidebar'])::after";
+  const DRAWER_SELECTOR = ".tip[data-tip][aria-expanded='true']::after";
+  const hover = tokens.indexOf('.tip[data-tip]:hover::after');
+  const focus = tokens.indexOf('.tip[data-tip]:focus-visible::after');
+  const open = tokens.indexOf(SELECTOR);
+
+  it('has a rule for a trigger that says it is open, and it shows no label', () => {
+    expect(open).toBeGreaterThan(0);
+    const start = tokens.indexOf('{', open);
+    expect(tokens.slice(start + 1, tokens.indexOf('}', start)).trim()).toBe('display: none;');
+  });
+
+  it('comes after the hover and the focus rules, which it outweighs, so it wins on both', () => {
+    expect(hover).toBeGreaterThan(0);
+    expect(focus).toBeGreaterThan(0);
+    expect(open).toBeGreaterThan(hover);
+    expect(open).toBeGreaterThan(focus);
+  });
+
+  it('leaves out the Courses sidebar toggle: the one trigger with aria-controls="course-sidebar"', async () => {
+    const { SIDEBAR_ID } = await import('@/lib/sidebar-preference');
+    expect(SIDEBAR_ID).toBe('course-sidebar');
+    expect(SELECTOR).toContain(`:not([aria-controls='${SIDEBAR_ID}'])`);
+    const topNav = read('src', 'components', 'shell', 'TopNav.tsx');
+    expect(topNav).toContain('aria-controls={SIDEBAR_ID}');
+    expect(topNav).toMatch(/aria-controls=\{SIDEBAR_ID\}[\s\S]{0,120}data-tip="Courses sidebar"/);
+  });
+
+  it('no other rule hides the label of that toggle', () => {
+    const hiding = [...tokens.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*display:\s*none[^{}]*)\}/g)]
+      .map((match) => match[1]?.trim() ?? '')
+      .filter((selector) => selector.includes('.tip'));
+    expect(hiding).toEqual([SELECTOR, DRAWER_SELECTOR]);
+  });
+
+  it("under the drawer's step the toggle's label is hidden while it is open, like every other trigger's: no :not() there (V-16)", () => {
+    const block = new RegExp('@media [(]max-width: 1023[.]98px[)] [{]([^@]*?)' + String.fromCharCode(10) + '[}]').exec(tokens)?.[1] ?? '';
+    expect(block.replace(/\s+/g, ' ').trim()).toBe(`${DRAWER_SELECTOR} { display: none; }`);
+    expect(block).not.toContain(':not(');
+    // The wide rule above the block still leaves the toggle out.
+    expect(tokens.indexOf(SELECTOR)).toBeLessThan(tokens.indexOf('@media (max-width: 1023.98px)'));
+  });
+});

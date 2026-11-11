@@ -1,0 +1,7 @@
+# bb2dash Phase 25a, W-100, e2e only: CoreDNS as a logging resolver for egress. Every query egress makes
+# (through its Docker resolver, whose upstream compose.e2e.yaml points here) is logged, then forwarded.
+.:53 {
+    log
+    errors
+    forward . /etc/resolv.conf
+}

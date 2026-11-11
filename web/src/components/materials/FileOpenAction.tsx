@@ -26,10 +26,12 @@
  * `storage_path` and must not claim there is no source link.
  */
 
+import { MARK_CHAR, Mark, MarkedLabel } from '@/components/shell/icons';
 import { OpenStoredButton } from './OpenStoredButton';
 import {
   fileHonesty,
-  sourceUrl,
+  linkUrl,
+  outsideUrl,
   storedPath,
   type FileLocation,
   type FileRoutes,
@@ -96,7 +98,9 @@ export function FileOpenAction({
 }) {
   const honesty = fileHonesty(routes);
   const stored = storedPath(routes);
-  const source = sourceUrl(routes);
+  const source = linkUrl(routes);
+  // 164: a link to another site never hands the new tab a window.opener.
+  const sourceRel = outsideUrl(routes) ? 'noopener noreferrer' : 'noreferrer';
 
   return (
     <>
@@ -115,15 +119,15 @@ export function FileOpenAction({
             href={source}
             title={title}
             target="_blank"
-            rel="noreferrer"
+            rel={sourceRel}
           >
-            {action ?? 'Open ↗'}
+            <MarkedLabel label={action ?? `Open ${MARK_CHAR.arrowUpRight}`} />
           </a>
         </span>
       ) : blackboardUrl ? (
         <span className={styles.action}>
           <a className={tokens.btnSecondary} href={blackboardUrl} target="_blank" rel="noreferrer">
-            In Blackboard ↗
+            In Blackboard <Mark name="arrowUpRight" />
           </a>
         </span>
       ) : (

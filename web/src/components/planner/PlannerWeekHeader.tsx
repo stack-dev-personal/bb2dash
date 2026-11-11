@@ -3,13 +3,15 @@
 /**
  * The /planner header row and day heads (R-19, Phase 11; split out in 11b so
  * `PlannerWeek.tsx` stays the board). The range label, the term week, the
- * counts line and the ◂ ▸ Today pager.
+ * counts line, the ◂ ▸ Today pager and, at the top right, "+" — the new-event
+ * wizard (R3-9).
  */
 
 import Link from 'next/link';
 import tokens from '@/styles/tokens.module.css';
 import { useTerm } from '@/lib/queries.today';
 import { termWeekNumber, type PlannerDay, type PlannerWeekModel } from '@/lib/planner-week';
+import { Mark } from '@/components/shell/icons';
 import styles from './PlannerWeek.module.css';
 
 /** '2 classes · 3 due', plus ' · 1 event' when the week has planner events. */
@@ -26,6 +28,8 @@ export function WeekHeader({
   meetingCount,
   itemCount,
   eventCount,
+  onAdd,
+  captionTitle,
 }: {
   view: PlannerWeekModel;
   pathname: string;
@@ -35,6 +39,10 @@ export function WeekHeader({
   itemCount: number;
   /** Planner events touching the week; named only when there are some. */
   eventCount: number;
+  /** R3-9: open the new-event wizard; the button is where focus returns. */
+  onAdd?: (opener: HTMLElement) => void;
+  /** What the count line explains, as its tooltip (the how-to lines left the page). */
+  captionTitle?: string;
 }) {
   const term = useTerm();
   const termWeek = termWeekNumber(term.data ?? null, view.weekStart);
@@ -47,7 +55,7 @@ export function WeekHeader({
           {term.data ? `Week ${termWeek} · ${term.data.name}` : `Week ${termWeek}`}
         </span>
       )}
-      <span className={styles.sub}>
+      <span className={styles.sub} title={captionTitle}>
         {loading
           ? 'loading…'
           : error !== null
@@ -56,6 +64,17 @@ export function WeekHeader({
       </span>
 
       <WeekPager view={view} pathname={pathname} />
+      {onAdd && (
+        <button
+          type="button"
+          className={styles.addEvent}
+          onClick={(event) => onAdd(event.currentTarget)}
+          aria-label="New event"
+          title="New event"
+        >
+          +
+        </button>
+      )}
     </div>
   );
 }
@@ -71,7 +90,7 @@ function WeekPager({ view, pathname }: { view: PlannerWeekModel; pathname: strin
         aria-label="Previous week"
         scroll={false}
       >
-        ◂
+        <Mark name="caretLeft" />
       </Link>
       <Link
         className={styles.pageLink}
@@ -80,7 +99,7 @@ function WeekPager({ view, pathname }: { view: PlannerWeekModel; pathname: strin
         aria-label="Next week"
         scroll={false}
       >
-        ▸
+        <Mark name="caretRight" />
       </Link>
       <Link className={styles.todayLink} href={pathname} scroll={false}>
         Today

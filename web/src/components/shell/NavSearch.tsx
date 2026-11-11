@@ -1,0 +1,219 @@
+'use client';
+
+import { useCallback, useEffect, useId, useRef, useState, type RefObject } from 'react';
+import { SearchIcon } from './icons';
+import tokens from '@/styles/tokens.module.css';
+import { SearchPanel, useMaterialSearch } from './SearchPanel';
+import { useExit } from './useExit';
+import styles from './NavSearch.module.css';
+
+/**
+ * Search in the top bar — an icon that expands in place into a field.
+ *
+ * 2026-09-30, Stack: "reimplement search but only as a search icon (that
+ * expands when clicked to show the text field) as the feature is seldom used."
+ * The wide "Search ⌘K" button and the centered dialog are gone; the results
+ * open in a popover anchored under the field. The icon sits in the bar's
+ * right-hand group (Sync → search → ☰ …) and the field grows to its left.
+ *
+ * Expands on: the icon, ⌘K / Ctrl+K anywhere, or the `bb2dash:command-palette`
+ * window event (kept as the "expand search" trigger for any other caller).
+ * Collapses — and forgets the query — on Escape, a press outside, a second
+ * press of the icon, opening a result, or an empty field losing focus.
+ *
+ * Leaving (task 29): the results popover stays for one exit after search folds, marked
+ * `data-leaving`; the field is gone at once. A fresh expansion is a fresh field (the `generation` key).
+ */
+
+/** The window event any code may dispatch to open search. */
+export const SEARCH_EXPAND_EVENT = 'bb2dash:command-palette';
+
+export function NavSearch() {
+  const [expanded, setExpanded] = useState(false);
+  const [generation, setGeneration] = useState(0);
+  const [exit, exitRef] = useExit(expanded);
+  // Each expansion is a new field, even when it opens inside the last one's exit.
+  const [wasExpanded, setWasExpanded] = useState(false);
+  if (expanded !== wasExpanded) {
+    setWasExpanded(expanded);
+    if (expanded) setGeneration((count) => count + 1);
+  }
+  const rootRef = useRef<HTMLDivElement>(null);
+  const iconRef = useRef<HTMLButtonElement>(null);
+  const fieldRef = useRef<HTMLInputElement>(null);
+  // True from a pointer press on the icon until its click. Safari does not
+  // focus a clicked button, so the field's blur arrives with no relatedTarget;
+  // without this the blur would fold search and the click would reopen it.
+  const iconPressedRef = useRef(false);
+  const baseId = useId();
+  const fieldId = `${baseId}-field`;
+  const listId = `${baseId}-results`;
+
+  const expand = useCallback(() => {
+    setExpanded(true);
+    // Already open: just bring the caret back. A fresh field focuses itself.
+    fieldRef.current?.focus();
+  }, []);
+
+  const collapse = useCallback((returnFocus: boolean) => {
+    setExpanded(false);
+    if (returnFocus) iconRef.current?.focus();
+  }, []);
+
+  // ⌘K / Ctrl+K and the expand event work whether or not search is open.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        expand();
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener(SEARCH_EXPAND_EVENT, expand);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener(SEARCH_EXPAND_EVENT, expand);
+    };
+  }, [expand]);
+
+  // While open: Escape and a press outside the field-and-panel collapse it.
+  useEffect(() => {
+    if (!expanded) return;
+    function onKeyDown(event: KeyboardEvent) {
+      // Only an Escape meant for search: one pressed in another menu (the
+      // account menu closes on its own) must not fold search or steal focus.
+      const root = rootRef.current;
+      if (event.key === 'Escape' && root?.contains(document.activeElement)) collapse(true);
+    }
+    function onPointerDown(event: MouseEvent | TouchEvent) {
+      const root = rootRef.current;
+      if (root && !root.contains(event.target as Node)) collapse(false);
+    }
+    window.addEventListener('keydown', onKeyDown);
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('touchstart', onPointerDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('touchstart', onPointerDown);
+    };
+  }, [expanded, collapse]);
+
+  return (
+    <div
+      ref={rootRef}
+      className={expanded ? styles.rootOpen : styles.root}
+      data-search={expanded ? 'open' : 'closed'}
+    >
+      {/* Mounted per expansion, so the query, mode and highlight start clean. Rendered before
+          the icon so the page order matches what is drawn: the field grows to the icon's left,
+          and Tab moves left to right. */}
+      {exit.present && (
+        <ExpandedSearch
+          key={generation}
+          leaving={exit.leaving}
+          popoverRef={exitRef}
+          fieldRef={fieldRef}
+          rootRef={rootRef}
+          iconPressedRef={iconPressedRef}
+          fieldId={fieldId}
+          listId={listId}
+          onCollapse={collapse}
+        />
+      )}
+
+      <button
+        ref={iconRef}
+        type="button"
+        className={`${styles.icon} ${tokens.tip}`}
+        onMouseDown={() => {
+          iconPressedRef.current = true;
+        }}
+        onMouseLeave={() => {
+          iconPressedRef.current = false;
+        }}
+        onClick={() => {
+          iconPressedRef.current = false;
+          if (expanded) collapse(false);
+          else expand();
+        }}
+        aria-label="Search"
+        aria-expanded={expanded}
+        aria-controls={expanded ? fieldId : undefined}
+        data-tip="Search"
+      >
+        <SearchIcon />
+      </button>
+    </div>
+  );
+}
+
+function ExpandedSearch({
+  leaving,
+  popoverRef,
+  fieldRef,
+  rootRef,
+  iconPressedRef,
+  fieldId,
+  listId,
+  onCollapse,
+}: {
+  /** Search has folded and the popover stays for its exit. */
+  leaving: boolean;
+  popoverRef: (node: HTMLElement | null) => void;
+  fieldRef: RefObject<HTMLInputElement | null>;
+  rootRef: RefObject<HTMLDivElement | null>;
+  iconPressedRef: RefObject<boolean>;
+  fieldId: string;
+  listId: string;
+  onCollapse: (returnFocus: boolean) => void;
+}) {
+  const state = useMaterialSearch(() => onCollapse(false));
+  const { raw, setRaw, ready, search, onInputKeyDown } = state;
+  const typing = raw.trim().length > 0;
+
+  useEffect(() => {
+    fieldRef.current?.focus();
+  }, [fieldRef]);
+
+  function onBlur(event: React.FocusEvent<HTMLInputElement>) {
+    // Focus moving into the panel (a mode button, the course filter) or onto
+    // the icon keeps the search; an empty field left for anywhere else folds.
+    const next = event.relatedTarget as Node | null;
+    if (next && rootRef.current?.contains(next)) return;
+    // A press on the icon: its click decides (it folds search itself).
+    if (iconPressedRef.current) return;
+    if (!typing) onCollapse(false);
+  }
+
+  return (
+    <>
+      <input
+        ref={fieldRef}
+        id={fieldId}
+        className={styles.field}
+        data-leaving={leaving ? '' : undefined}
+        type="text"
+        value={raw}
+        onChange={(e) => setRaw(e.target.value)}
+        onKeyDown={onInputKeyDown}
+        onBlur={onBlur}
+        placeholder="Search materials…"
+        aria-label="Search materials"
+        role="combobox"
+        aria-expanded={typing}
+        aria-controls={typing ? listId : undefined}
+        aria-autocomplete="list"
+        autoComplete="off"
+        spellCheck={false}
+      />
+      {search.isFetching && ready && <span className={styles.spinner} aria-hidden="true" />}
+
+      {typing && (
+        <div ref={popoverRef} className={styles.popover} data-leaving={leaving ? '' : undefined}>
+          <SearchPanel state={state} listId={listId} />
+        </div>
+      )}
+    </>
+  );
+}

@@ -1,0 +1,521 @@
+# bb2dash — containers (Phase 14): the `sync` service, the container's sync runner with its Blackboard
+# login (brief 100 task 15), and the `bb2dash-mcp` image (task 17). The umbrella repo `bb2dash-stack`
+# includes this file and points SECRETS_DIR at the secrets folder outside every repo.
+name: bb2dash
+
+services:
+  # The runner (`sync/dist/main.js`): it takes queued sync requests through the eighteen `sync_runner`
+  # functions, holds Stack's Blackboard login in `bb-profile` (Chromium headful on Xvfb, the login page
+  # at http://127.0.0.1:6080/vnc.html), pulls files into `course-files` and runs the embed step.
+  #
+  # Egress OPEN (Phase 25a, brief 119 question 2): no firewall and no proxy. Chromium must reach
+  # Blackboard, Microsoft's login and Duo, whose names change; `sync` is named as open, not closed.
+  sync:
+    build:
+      context: .
+      dockerfile: docker/sync/Dockerfile
+    image: bb2dash-sync:local
+    init: true
+    # Fixed, so Chromium's profile lock names the same host after the container is recreated.
+    hostname: sync
+    user: pwuser
+    restart: unless-stopped
+    shm_size: 1gb
+    stop_grace_period: 30s
+    security_opt:
+      # Docker reads this path as given, not relative to this file: run through bb2dash-stack's include it
+      # would land in the umbrella's folder. BB2DASH_DIR (the umbrella's .env) names this repo; unset, `.`
+      # is this repo's own folder (the project directory when this file is used alone).
+      - seccomp=${BB2DASH_DIR:-.}/docker/sync/seccomp_profile.json
+    environment:
+      # The keep-alive (Stack, 2026-10-03): a read-only Ultra page every 20 ± 3 minutes while signed in;
+      # 0 turns it off. The jitter and the 60 s check while the login is dead are the runner's constants.
+      KEEPALIVE_MINUTES: "${KEEPALIVE_MINUTES:-20}"
+    ports:
+      # The login page. Loopback only: never reachable from another machine.
+      - "127.0.0.1:6080:6080"
+    # The download lands here and reaches course-files by copy-then-unlink (P-104); X's lock and socket
+    # and the runner's heartbeat live here too, so a restart starts clean.
+    tmpfs:
+      - /tmp:size=1g,mode=1777
+    volumes:
+      # A credential: Stack's Blackboard session. Never in the vault, RAG or an unencrypted backup.
+      - bb-profile:/home/pwuser/bb-profile
+      # Disposable: Storage is the source of truth. Mounted where `local_path` expects it.
+      - course-files:/app/course context
+    secrets:
+      - novnc_password
+      - sync_runner_db_url
+      - supabase_publishable_key
+      - supabase_anon_jwt
+    # The runner's heartbeat (written every 30 s): a dead login stays healthy; the doctor reports it.
+    healthcheck:
+      test: ["CMD", "node", "sync/dist/probe.js", "--heartbeat"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  # The materials MCP server as an image (brief 100 task 17, R-91). Profile `mcp`, so `up` never starts
+  # it: a host Claude Code runs the image once per session with `docker run -i --rm` (the recipe in
+  # mcp-server/README.md). This entry builds the image and offers the same stdio run through compose:
+  #   docker compose --profile mcp build bb2dash-mcp
+  #   docker compose --profile mcp run --rm -T bb2dash-mcp
+  # stdio only: no port, no restart policy and no healthcheck; it exits when its client closes stdin.
+  # Egress OPEN (Phase 25a): no firewall and no proxy; it runs beside a host Claude Code session.
+  bb2dash-mcp:
+    profiles: [mcp]
+    build:
+      context: ./mcp-server
+      dockerfile: Dockerfile
+    image: bb2dash-mcp:local
+    user: node
+    stdin_open: true
+    environment:
+      SUPABASE_URL: https://goultdzqcavefcgnifdy.supabase.co
+      # A path, never the key: the server reads the file itself (mcp-server/src/env-file.ts).
+      SUPABASE_SERVICE_ROLE_FILE: /run/secrets/bb2dash_mcp_service_key
+    secrets:
+      - bb2dash_mcp_service_key
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  # The apply worker (Phase 23): it takes queued `inbox_feedback` requests through the
+  # `inbox_apply_runner` functions (migration 181), archives the answers that need no reading
+  # itself, and runs /inbox-apply with one `claude -p` run on Stack's subscription token for the
+  # rest. The sync container files the request after a sync that closed done (180), and the Inbox's
+  # "Apply answers" button files the same one. It writes: as a database role that can only write
+  # what the skill allows, each write logged against an answered Inbox item.
+  #
+  # Kept away from the Blackboard login (B-43, B-44 as amended 2026-10-07): its own network, never
+  # `default`, so it shares none with `sync`; neither `bb-profile` nor `course-files` is mounted;
+  # no port is published. The firewall the entrypoint raises lets it reach the egress proxy (port 3129,
+  # which tunnels to api.anthropic.com and the bb2dash project's API only) and the session pooler,
+  # and nothing else; DNS is closed once those two are pinned (Phase 25a).
+  #
+  # Profile `apply`, so a plain `up` never builds, starts, waits on or restarts it. From
+  # bb2dash-stack/, with COMPOSE_PROFILES naming it: `docker compose up -d --build apply`. Never a
+  # bare `up` while a sync is open: it can recreate `sync`.
+  apply:
+    profiles: [apply]
+    build:
+      context: .
+      dockerfile: docker/apply/Dockerfile
+      # The pinned CA is the harness checkout's certs/ folder, never a copy in this repo.
+      additional_contexts:
+        harness-certs: ${HARNESS_DIR:-../agentic-harness}/certs
+    image: bb2dash-apply:local
+    # Passes SIGTERM to the worker and reaps the MCP server children a killed CLI leaves behind.
+    init: true
+    restart: unless-stopped
+    # On a stop the worker kills the CLI, closes its request as failed (interrupted), then exits 0.
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    # For the entrypoint's firewall alone (iptables, ipset). The entrypoint then drops to `node`
+    # with an empty bounding set, so the worker and everything it starts hold neither.
+    cap_add: [NET_ADMIN, NET_RAW]
+    environment:
+      # The CLI's config and transcripts live on the apply-claude-home volume.
+      CLAUDE_CONFIG_DIR: /home/node/.claude
+      # No telemetry, error reports or update checks: the firewall allows api.anthropic.com only.
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
+      # The CLI never updates itself: the image pins one version, and its install folder is root's.
+      DISABLE_AUTOUPDATER: "1"
+      # The worker passes `--tools Agent`, so there is no ToolSearch tool to load deferred MCP
+      # tools: the SQL and materials tools must load upfront.
+      ENABLE_TOOL_SEARCH: "false"
+      # The soft cap `--max-budget-usd` receives for one run; the worker refuses a value outside 0.10–10.00.
+      APPLY_RUN_BUDGET_USD: "${APPLY_RUN_BUDGET_USD:-3.00}"
+      # Phase 25a: every HTTPS request goes through the egress proxy, on this service's own port
+      # (3129), which lets api.anthropic.com and the project host through by name and TLS server name; the firewall refuses tcp/443 to
+      # every address. NODE_USE_ENV_PROXY makes Node's fetch read HTTPS_PROXY. NO_PROXY keeps loopback
+      # direct; nothing else is direct (the pooler link is Postgres on tcp/5432, never HTTP).
+      HTTPS_PROXY: http://egress:3129
+      NODE_USE_ENV_PROXY: "1"
+      NO_PROXY: localhost,127.0.0.1
+    networks:
+      - apply-net
+    # The firewall resolves and pins egress at start and checks a request through it, so egress must
+    # be healthy first. `docker compose restart egress` restarts this service too (restart: true), and
+    # its firewall pins egress again; a recreated egress keeps its addresses (docker/egress/e2e). If
+    # egress ever comes back on another address, restart this service by name (Phase 25a).
+    depends_on:
+      egress:
+        condition: service_healthy
+        restart: true
+    volumes:
+      # The CLI's transcripts (kept 30 days): what a run did, for a look afterwards. Not a credential.
+      - apply-claude-home:/home/node/.claude
+    # Files, never values. The worker and its SQL server read inbox_apply_db_url, the worker reads
+    # claude_oauth_token immediately before each run, and the materials server reads
+    # bb2dash_mcp_service_key. No variable names a secret's file and no DATABASE_URL is set.
+    secrets:
+      - inbox_apply_db_url
+      - claude_oauth_token
+      - bb2dash_mcp_service_key
+    # Passes while /run/apply/alive is under 90 s old: the worker touches it after each heartbeat
+    # (every 30 s, through a run too), so healthy means the loop is alive and reached the database.
+    healthcheck:
+      test: ["CMD", "node", "/app/apply/dist/healthcheck.js"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  # The Workspace runner (brief 102 task 12; P-85, P-88): it takes queued questions through the five
+  # `workspace_runner` functions and answers each with one `claude -p` turn on Stack's subscription
+  # token, with the materials MCP server beside it (Phase 24a: the rag server is gone). Read-only: no
+  # tool it offers can write.
+  #
+  # Profile `workspace`, so a plain `up` never builds, starts, waits on or restarts it: the desktop's
+  # sign-in task runs this file with no profile. bb2dash-stack's .env sets COMPOSE_PROFILES=workspace,
+  # and with it, from bb2dash-stack/, `docker compose up -d --build workspace` builds and starts this
+  # one service (`just up` does too, but it rebuilds and can recreate every service, sync included:
+  # never while a sync is open). On the phase branch, before its PR merged, it ran only as its own
+  # test project, `-p bb2dash-wt21 --profile workspace`, with the service named in every command
+  # (brief 102; 102a holds the lines).
+  #
+  # Nothing here is interpolated outside `build:`, the secret paths and WORKSPACE_TURN_BUDGET_USD, so
+  # this file resolves with only SECRETS_DIR and BB2DASH_DIR set.
+  #
+  # Phase 25b: two runners answer at once (Stack's answer 5, cap 2): this service and `workspace-2`
+  # below, which extends this one and changes only its name, its build and its pull policy. Each
+  # claims through workspace_claim_v3 (migration 202) under its own fixed name, WORKSPACE_RUNNER_NAME,
+  # so a recreated container keeps it, and the name starts with the compose project's: live
+  # (project bb2dash) the two are workspace@bb2dash-workspace and workspace@bb2dash-workspace-2.
+  workspace:
+    profiles: [workspace]
+    build:
+      context: .
+      dockerfile: docker/workspace/Dockerfile
+      # The pinned CA comes from the harness checkout's certs/ folder (Phase 24a: the rag server's
+      # build context harness-mcp is gone). HARNESS_DIR is the umbrella's setting; unset, the sibling folder.
+      additional_contexts:
+        harness-certs: ${HARNESS_DIR:-../agentic-harness}/certs
+    image: bb2dash-workspace:local
+    platform: linux/amd64
+    # Passes SIGTERM to the runner and reaps the MCP server children a killed CLI leaves behind.
+    init: true
+    restart: unless-stopped
+    # On a stop the runner kills the CLI and closes its turn as failed / stale_claim, then exits 0.
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    # For the entrypoint's firewall alone (iptables, ipset). The entrypoint then drops to `node`
+    # with an empty bounding set, so the runner and everything it starts hold neither.
+    cap_add: [NET_ADMIN, NET_RAW]
+    environment:
+      # The name the runner claims and beats under, `workspace@<this>`: fixed per service, never the
+      # container's hostname, which a recreate changes (Phase 25b; workspace/src/config.ts checks its shape).
+      # It starts with the compose project's name (review R2-2): 202 closes a request still claimed under
+      # the caller's own name as its dead turn, so a test project (-p bb2dash-wt..., with its second
+      # compose file of test tags) must never claim under the live name. Compose sets
+      # COMPOSE_PROJECT_NAME from -p or from `name:` above, so a test project cannot leave it live; no
+      # other compose file sets this variable (docker/workspace/compose.test.mjs).
+      WORKSPACE_RUNNER_NAME: ${COMPOSE_PROJECT_NAME}-workspace
+      # The CLI's config lives on a tmpfs (freeze amendment F-4): no session persists.
+      CLAUDE_CONFIG_DIR: /home/node/.claude
+      # Off turns off the memory jobs only (the remembered items). The rolling summary of a long
+      # conversation is on from 24a whatever this says.
+      WORKSPACE_MEMORY_JOBS: "on"
+      # No telemetry, error reports or update checks: the firewall allows api.anthropic.com only.
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
+      # The CLI never updates itself: the image pins one version, and its install folder is root's.
+      DISABLE_AUTOUPDATER: "1"
+      # The runner passes `--tools ""`, so there is no ToolSearch tool to load deferred MCP tools:
+      # the four MCP tools must load upfront.
+      ENABLE_TOOL_SEARCH: "false"
+      # The soft per-answer cap `--max-budget-usd` receives; the runner refuses a value outside 0.01–1.00.
+      WORKSPACE_TURN_BUDGET_USD: "${WORKSPACE_TURN_BUDGET_USD:-1.00}"
+      # The pinned CA the runner checks the pooler's certificate against, whatever its DSN says; a
+      # missing or empty file stops the runner. Baked into the image, root's and read-only: a path
+      # to a public certificate, not a secret.
+      WORKSPACE_DB_CA_FILE: /app/certs/prod-ca.crt
+      # Phase 25a: every HTTPS request goes through the egress proxy, on this service's own port
+      # (3128), which lets api.anthropic.com and the project host through by name and TLS server name; the firewall refuses tcp/443 to
+      # every address. NODE_USE_ENV_PROXY makes Node's fetch read HTTPS_PROXY. NO_PROXY keeps loopback
+      # direct; nothing else is direct (the pooler link is Postgres on tcp/5432, never HTTP).
+      HTTPS_PROXY: http://egress:3128
+      NODE_USE_ENV_PROXY: "1"
+      NO_PROXY: localhost,127.0.0.1
+    # Its own network, never `default`: it shares none with `sync`. No port is published.
+    networks:
+      - workspace-net
+    # The firewall resolves and pins egress at start and checks a request through it, so egress must
+    # be healthy first. `docker compose restart egress` restarts this service too (restart: true), and
+    # its firewall pins egress again; a recreated egress keeps its addresses (docker/egress/e2e). If
+    # egress ever comes back on another address, restart this service by name (Phase 25a).
+    depends_on:
+      egress:
+        condition: service_healthy
+        restart: true
+    # The CLI's ~/.claude is a tmpfs owned by node (freeze amendment F-4; probe P-2): with
+    # --no-session-persistence nothing is kept, and nothing survives a restart. The named volume
+    # workspace-claude-home is no longer mounted by anyone; its entry below stays so that this file
+    # removes no volume from a machine. /run/workspace stays the entrypoint's own 0700 node folder:
+    # the runner writes mcp-none.json at start and mcp-<request id>.json for each answer there.
+    tmpfs:
+      - /home/node/.claude:uid=1000,gid=1000,mode=0700,size=64m
+    # Files, never values. The runner reads workspace_runner_db_url and claude_oauth_token at their
+    # fixed paths; the materials server reads bb2dash_mcp_service_key. No variable names a secret's
+    # file (the one *_FILE variable above names the public CA) and no DATABASE_URL is set.
+    secrets:
+      - workspace_runner_db_url
+      - claude_oauth_token
+      - bb2dash_mcp_service_key
+    # Passes while /run/workspace/alive is under 90 s old: the runner touches it after each
+    # heartbeat (every 30 s), so healthy means the loop is alive and reached the database.
+    healthcheck:
+      test: ["CMD", "node", "/app/workspace/dist/healthcheck.js"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  # The second Workspace runner (Phase 25b, brief 119 item D). It EXTENDS `workspace`, so the two
+  # cannot drift: compose copies that service whole (the same image, secrets, network workspace-net,
+  # egress port 3128 and its allow-list: it is the same kind of client, so no port of its own;
+  # healthcheck, tmpfs (its own: a tmpfs is per container), profile, depends_on egress and memory
+  # jobs), then applies the three keys below. Its environment is merged, so only the name changes.
+  #   * build reset: one service builds bb2dash-workspace:local (a second `build:` would build the
+  #     same tag twice). After `docker compose up -d --build workspace`, `docker compose up -d
+  #     workspace-2` takes the new image up alone;
+  #   * pull_policy never: the image is local, so a missing one is an error, never a pull;
+  #   * WORKSPACE_RUNNER_NAME <project>-workspace-2.
+  # Started, restarted and recreated alone, by name, like `workspace`; never through a bare `up`
+  # while a sync is open. docker/workspace/compose.test.mjs pins this block.
+  workspace-2:
+    extends:
+      service: workspace
+    build: !reset null
+    pull_policy: never
+    environment:
+      WORKSPACE_RUNNER_NAME: ${COMPOSE_PROJECT_NAME}-workspace-2
+
+  # The ingest worker (Phase 24a, brief 109, freeze amendment F-3): it claims uploads and remembered items
+  # through the four workspace_ingest_runner functions, downloads a signed link, hands a parsed file to
+  # workspace-extract through the exchange volume, puts the units and embeds them. It holds no model, no
+  # Claude token and no service key; its firewall (docker/workspace-ingest/init-firewall.sh) allows the
+  # egress proxy on port 3130 (which tunnels to the project host only) and its pooler on tcp/5432 and
+  # nothing else, and closes DNS (Phase 25a). The root is NOT read-only: the firewall pins names in
+  # /etc/hosts. Profile workspace: a plain up never starts it.
+  workspace-ingest:
+    profiles: [workspace]
+    build:
+      context: .
+      dockerfile: docker/workspace-ingest/Dockerfile
+      additional_contexts:
+        harness-certs: ${HARNESS_DIR:-../agentic-harness}/certs
+    image: bb2dash-workspace-ingest:local
+    platform: linux/amd64
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    mem_limit: 1g
+    pids_limit: 128
+    security_opt:
+      - no-new-privileges:true
+    # For the entrypoint's firewall alone; it then drops to node with an empty bounding set.
+    cap_add: [NET_ADMIN, NET_RAW]
+    environment:
+      # Phase 25a: every HTTPS request goes through the egress proxy, on this service's own port
+      # (3130), which lets the project host through by name and TLS server name; the firewall refuses tcp/443 to
+      # every address. NODE_USE_ENV_PROXY makes Node's fetch read HTTPS_PROXY. NO_PROXY keeps loopback
+      # direct; nothing else is direct (the pooler link is Postgres on tcp/5432, never HTTP).
+      HTTPS_PROXY: http://egress:3130
+      NODE_USE_ENV_PROXY: "1"
+      NO_PROXY: localhost,127.0.0.1
+    networks:
+      - ingest-net
+    # The firewall resolves and pins egress at start and checks a request through it, so egress must
+    # be healthy first. `docker compose restart egress` restarts this service too (restart: true), and
+    # its firewall pins egress again; a recreated egress keeps its addresses (docker/egress/e2e). If
+    # egress ever comes back on another address, restart this service by name (Phase 25a).
+    depends_on:
+      egress:
+        condition: service_healthy
+        restart: true
+    volumes:
+      - ingest-exchange:/exchange
+    secrets:
+      - workspace_ingest_db_url
+      - supabase_anon_jwt
+    healthcheck:
+      test: ["CMD", "node", "/app/workspace-ingest/dist/healthcheck.js", "worker"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  # The parser's loop (Phase 24a, F-3): the same image as workspace-ingest, another command. It reads one
+  # request at a time from /exchange and runs the locked extractor. No network, no secret, a read-only
+  # root, every capability dropped, the user extract; no root entrypoint, since there is no firewall to
+  # raise. A hostile file can take it over and return wrong text; it can reach nothing else.
+  workspace-extract:
+    profiles: [workspace]
+    image: bb2dash-workspace-ingest:local
+    platform: linux/amd64
+    init: true
+    restart: unless-stopped
+    user: extract
+    entrypoint: ["node", "/app/workspace-ingest/dist/parser-main.js"]
+    command: []
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 1g
+    pids_limit: 128
+    environment:
+      # uv and Python write their scratch here (the root is read-only); the tmpfs below is theirs.
+      HOME: /tmp
+      UV_CACHE_DIR: /tmp/uv-cache
+    tmpfs:
+      - /tmp:mode=1777,size=256m
+    volumes:
+      - ingest-exchange:/exchange
+    healthcheck:
+      test: ["CMD", "node", "/app/workspace-ingest/dist/healthcheck.js", "parser"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  # The egress proxy (Phase 25a, brief 119 item A, W-100): Squid 6.13 in peek-and-splice mode, no
+  # decryption (docker/egress/). The only way out on HTTPS for the three containers with a firewall:
+  # each has its own port and its own list of names (squid.conf), and a tunnel is spliced only when
+  # the CONNECT host is on that list AND the TLS server name is that same name; anything else is
+  # refused before the far server is contacted. It sits on the three client networks, and Squid
+  # resolves names itself and refuses private addresses. Its access log is this container's stdout
+  # (`docker compose logs egress`): one line per tunnel with the port, the name, the SNI and the outcome.
+  #
+  # Not behind it, named as open (brief 119 question 2): `sync` (Blackboard, Microsoft's login and
+  # Duo), `bb2dash-mcp` (a host session's stdio server) and bb2dash-stack's `harness-jobs`; and
+  # `pg_net` inside the database, which needs Supabase. `workspace-extract` has no network at all.
+  #
+  # Profiles workspace and apply, the profiles of its clients, so a plain `up` never starts it. Start
+  # and rebuild it alone, by name (`docker compose up -d --build egress`): it comes back on the same
+  # addresses and its clients carry on. `docker compose restart egress` restarts its three clients too
+  # (their depends_on, restart: true), which raise their firewalls again: never during a turn or a run.
+  egress:
+    profiles: [workspace, apply]
+    build:
+      context: ./docker/egress
+      dockerfile: Dockerfile
+    image: bb2dash-egress:local
+    platform: linux/amd64
+    init: true
+    restart: unless-stopped
+    # Squid runs as proxy (uid 13 in the Debian image) from the start: it never holds root.
+    user: proxy
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    pids_limit: 64
+    # The certificate an ssl-bump port needs, made at each start and trusted by nothing, and Squid's
+    # scratch; the root is read-only.
+    tmpfs:
+      - /run/egress:uid=13,gid=13,mode=0700,size=1m
+      - /tmp:uid=13,gid=13,mode=0700,size=16m
+    networks:
+      - workspace-net
+      - apply-net
+      - ingest-net
+    # Healthy while Squid listens on all three ports; it reads the socket tables and connects nowhere.
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/egress-healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+volumes:
+  bb-profile:
+  course-files:
+  # The Workspace CLI's old ~/.claude volume. No service mounts it since Phase 24a (a tmpfs took its
+  # place); the entry stays so that no file removes the volume from a machine.
+  workspace-claude-home:
+  # The exchange between the ingest worker and the parser (Phase 24a, F-3): tmpfs, 96 MB, mounted by
+  # workspace-ingest and workspace-extract and no other service. Owner root, group 1100 (exchange, which
+  # node and extract both belong to), mode 0770 and no sticky bit, so either user can remove what the
+  # other wrote (a sticky 1777 would not let the worker remove the parser's file).
+  ingest-exchange:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: "size=96m,uid=0,gid=1100,mode=0770"
+  # The apply worker's CLI ~/.claude: transcripts only.
+  apply-claude-home:
+
+networks:
+  # The ingest worker's own bridge: it shares none with the sync or the Workspace (egress sits on it).
+  ingest-net:
+  # The Workspace's own bridge, so it is on no network another service is on (egress apart).
+  workspace-net:
+  # The apply worker's own bridge, for the same reason: never the network `sync` is on (egress apart).
+  apply-net:
+
+secrets:
+  novnc_password:
+    file: ${SECRETS_DIR:-./secrets}/novnc_password
+  sync_runner_db_url:
+    file: ${SECRETS_DIR:-./secrets}/sync_runner_db_url
+  supabase_publishable_key:
+    file: ${SECRETS_DIR:-./secrets}/supabase_publishable_key
+  supabase_anon_jwt:
+    file: ${SECRETS_DIR:-./secrets}/supabase_anon_jwt
+  # The bb2dash service key; this file is its only home (brief 100, Local surfaces).
+  bb2dash_mcp_service_key:
+    file: ${SECRETS_DIR:-./secrets}/bb2dash_mcp_service_key
+  # The Workspace's two (brief 102): the runner's own database login through the session pooler
+  # (role workspace_runner, port 5432) and the `claude setup-token` token.
+  workspace_runner_db_url:
+    file: ${SECRETS_DIR:-./secrets}/workspace_runner_db_url
+  claude_oauth_token:
+    file: ${SECRETS_DIR:-./secrets}/claude_oauth_token
+  # The ingest worker's own database login through the session pooler (role workspace_ingest_runner,
+  # port 5432; Phase 24a, migration 193). It also mounts supabase_anon_jwt above.
+  workspace_ingest_db_url:
+    file: ${SECRETS_DIR:-./secrets}/workspace_ingest_db_url
+  # The apply worker's own database login through the session pooler (role inbox_apply_runner, port
+  # 5432; Phase 23, migration 181). It shares claude_oauth_token and bb2dash_mcp_service_key above.
+  inbox_apply_db_url:
+    file: ${SECRETS_DIR:-./secrets}/inbox_apply_db_url

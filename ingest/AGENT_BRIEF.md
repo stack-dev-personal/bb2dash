@@ -17,10 +17,11 @@ Pilot notes: `/home/claude/bb2dash/ingest/PILOT_IST352.md`. Spec: `/home/claude/
 ## Supabase (project bb2dash, ref goultdzqcavefcgnifdy)
 - Reads/updates: Supabase MCP tool `mcp__Supabase__execute_sql` (load with ToolSearch `select:mcp__Supabase__execute_sql`).
 - REST/Storage from cloud Bash: URL https://goultdzqcavefcgnifdy.supabase.co, publishable key
-  sb_publishable_DCtdYptOILBVKsKv-aHNAg_ruNCH_fe. Anon is INSERT-ONLY on bb_raw, bb_files, bb_file_text and
-  the storage bucket bb-files. Storage upload = `POST /storage/v1/object/bb-files/<relpath>` with headers
-  apikey + Authorization Bearer + Content-Type, NO x-upsert. Text units = `POST /rest/v1/bb_file_text` JSON array
-  of {file_id, unit_kind, unit_no, text} with Prefer: return=minimal.
+  sb_publishable_DCtdYptOILBVKsKv-aHNAg_ruNCH_fe. Anon is INSERT-ONLY on bb_raw, bb_files and the storage
+  bucket bb-files. Storage upload = `POST /storage/v1/object/bb-files/<relpath>` with headers
+  apikey + Authorization Bearer + Content-Type, NO x-upsert. Text units are NOT a REST insert any more
+  (Phase 25a, migrations 200/201): they go through `sync_file_text_put(file_id, units jsonb)` as
+  `sync_runner`, units = JSON array of {unit_kind, unit_no, text}; `ingest/pull_files.mjs` does this.
 - Tables you will touch: bb_files (your course rows only), bb_file_text, course_maps, grading_schemes,
   grade_components, assignments, sessions, readings, meetings, course_staff, sync_runs. Views: v_file_layout
   (relpath, needs_move), v_course_map_latest, v_course_corpus. Function: bb_file_relpath(bb_files.id).

@@ -1,0 +1,345 @@
+{
+  "schema": 1,
+  "phase": "25",
+  "base_url": "https://web-xi-ten-uy9xk6c6p0.vercel.app",
+  "stages": [
+    {
+      "id": "prepare",
+      "kind": "prepare"
+    },
+    {
+      "id": "go-live",
+      "kind": "host",
+      "actions": [
+        {
+          "action": "runner.record"
+        },
+        {
+          "action": "db.proof",
+          "with": {
+            "name": "planner-fingerprint"
+          }
+        },
+        {
+          "action": "db.proof",
+          "with": {
+            "name": "target-before",
+            "save": "target_before"
+          }
+        },
+        {
+          "action": "workspace.doctorRow"
+        },
+        {
+          "action": "db.proof",
+          "with": {
+            "name": "runners-alive"
+          }
+        }
+      ]
+    },
+    {
+      "id": "two",
+      "kind": "sandbox",
+      "tests": [
+        "2 two at once"
+      ]
+    },
+    {
+      "id": "decide",
+      "kind": "sandbox",
+      "tests": [
+        "3 proposal card",
+        "4 approve on the card",
+        "5 reject in the inbox",
+        "6 second decision refused",
+        "7 decided cards draw no value"
+      ]
+    },
+    {
+      "id": "stale",
+      "kind": "sandbox",
+      "tests": [
+        "8 stale after a planner edit"
+      ]
+    },
+    {
+      "id": "restore",
+      "kind": "sandbox",
+      "tests": [
+        "9 planner restored"
+      ]
+    },
+    {
+      "id": "end-proofs",
+      "kind": "host",
+      "actions": [
+        {
+          "action": "db.proof",
+          "with": {
+            "name": "proposals-not-queued",
+            "first": "carry:3.proposal_id",
+            "second": "carry:5.proposal_id",
+            "third": "carry:8.proposal_id",
+            "since": "carry:run.started_at"
+          }
+        },
+        {
+          "action": "db.proof",
+          "with": {
+            "name": "runner-grants"
+          }
+        }
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "id": "0",
+      "kind": "host",
+      "text": "The Workspace's doctor row is green, and both runners, workspace and workspace-2, beat: v_workspace_status counts two alive and names both. Nothing is started or stopped: the cut-over brought both up.",
+      "stage": "go-live",
+      "actions": [
+        "runner.record",
+        "workspace.doctorRow"
+      ],
+      "proofs": [
+        {
+          "name": "runners-alive"
+        }
+      ]
+    },
+    {
+      "id": "1",
+      "kind": "human",
+      "text": "Usage credits are off (claude.ai, Settings, Usage), and the plan's session and weekly percentages from /usage. Stack's to read: the run does not check it."
+    },
+    {
+      "id": "2",
+      "kind": "auto",
+      "text": "Two questions from two conversations are sent at the same moment and both are answered; two runners took them and their claims overlap. The step archives both conversations.",
+      "stage": "two",
+      "test": "2 two at once",
+      "evidence": [
+        "2-first.png",
+        "2-second.png",
+        "2.json"
+      ],
+      "proofs": [
+        {
+          "name": "two-at-once",
+          "with": {
+            "first": "carry:2.first_request_id",
+            "second": "carry:2.second_request_id",
+            "since": "carry:run.started_at",
+            "first_md5": "6b5584c27caac3168a611ff2f59954a7",
+            "second_md5": "73cfc6b1563adcef2a896c67352fc02e"
+          }
+        }
+      ]
+    },
+    {
+      "id": "3",
+      "kind": "auto",
+      "text": "A question asks for one change of the note of the run's assignment; a card under the answer shows the value read and the value proposed. The conversation stays open for steps 4 to 8.",
+      "stage": "decide",
+      "test": "3 proposal card",
+      "evidence": [
+        "3-start.png",
+        "3-end.png",
+        "3-card.png",
+        "3.json"
+      ],
+      "proofs": [
+        {
+          "name": "proposal-made",
+          "with": {
+            "proposal": "carry:3.proposal_id",
+            "request": "carry:3.request_id",
+            "since": "carry:run.started_at",
+            "target": "carry:target_before.target_md5",
+            "which": "one"
+          }
+        }
+      ]
+    },
+    {
+      "id": "4",
+      "kind": "auto",
+      "text": "The proposal is approved on its card: the row changed once, to the proposed note, the proposal reads applied, and the Inbox item reads the same outcome.",
+      "stage": "decide",
+      "test": "4 approve on the card",
+      "evidence": [
+        "4-card.png",
+        "4-inbox.png",
+        "4.json"
+      ],
+      "proofs": [
+        {
+          "name": "proposal-applied",
+          "with": {
+            "proposal": "carry:3.proposal_id",
+            "since": "carry:run.started_at",
+            "target": "carry:target_before.target_md5",
+            "rest": "carry:target_before.rest_md5"
+          }
+        }
+      ]
+    },
+    {
+      "id": "5",
+      "kind": "auto",
+      "text": "A second proposal on the same note, rejected in the Inbox, reads rejected on its card; the rejection wrote nothing.",
+      "stage": "decide",
+      "test": "5 reject in the inbox",
+      "evidence": [
+        "5-open.png",
+        "5-inbox.png",
+        "5-card.png",
+        "5.json"
+      ],
+      "proofs": [
+        {
+          "name": "proposal-made",
+          "with": {
+            "proposal": "carry:5.proposal_id",
+            "request": "carry:5.request_id",
+            "since": "carry:run.started_at",
+            "target": "carry:target_before.target_md5",
+            "which": "two"
+          }
+        },
+        {
+          "name": "proposal-rejected",
+          "with": {
+            "proposal": "carry:5.proposal_id",
+            "first": "carry:3.proposal_id",
+            "since": "carry:run.started_at"
+          }
+        }
+      ]
+    },
+    {
+      "id": "6",
+      "kind": "auto",
+      "text": "A second decision on each decided proposal is refused (55000) and the page shows each as decided; neither proposal nor the row moved.",
+      "stage": "decide",
+      "test": "6 second decision refused",
+      "evidence": [
+        "6-cards.png",
+        "6.json"
+      ],
+      "proofs": [
+        {
+          "name": "decisions-held",
+          "with": {
+            "first": "carry:3.proposal_id",
+            "second": "carry:5.proposal_id",
+            "since": "carry:run.started_at"
+          }
+        }
+      ]
+    },
+    {
+      "id": "7",
+      "kind": "auto",
+      "text": "A decided card draws no old or new value, on the answer and in the Inbox. An open card draws both: steps 3, 5 and 8 show it.",
+      "stage": "decide",
+      "test": "7 decided cards draw no value",
+      "evidence": [
+        "7-workspace.png",
+        "7-inbox.png",
+        "7.json"
+      ]
+    },
+    {
+      "id": "8",
+      "kind": "auto",
+      "text": "A third proposal; the note is then changed in the planner; an approval reads stale and leaves the row unchanged. The step archives the conversation: nothing of the run is left in his list.",
+      "stage": "stale",
+      "test": "8 stale after a planner edit",
+      "evidence": [
+        "8-open.png",
+        "8-planner.png",
+        "8-stale.png",
+        "8.json"
+      ],
+      "proofs": [
+        {
+          "name": "proposal-made",
+          "with": {
+            "proposal": "carry:8.proposal_id",
+            "request": "carry:8.request_id",
+            "since": "carry:run.started_at",
+            "target": "carry:target_before.target_md5",
+            "which": "three"
+          }
+        },
+        {
+          "name": "proposal-stale",
+          "with": {
+            "proposal": "carry:8.proposal_id",
+            "first": "carry:3.proposal_id",
+            "since": "carry:run.started_at"
+          }
+        },
+        {
+          "name": "conversations-unarchived",
+          "with": {
+            "since": "carry:run.started_at",
+            "min_conversations": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "9",
+      "kind": "auto",
+      "text": "The note is cleared through the planner's own field: the row reads as before the run in every column but updated_at, and the rest of the planner is as the run found it.",
+      "stage": "restore",
+      "test": "9 planner restored",
+      "evidence": [
+        "9-planner.png",
+        "9.json"
+      ],
+      "proofs": [
+        {
+          "name": "planner-restored",
+          "with": {
+            "before": "carry:target_before.fingerprint",
+            "target": "carry:target_before.target_md5",
+            "row": "carry:target_before.row_md5"
+          }
+        }
+      ]
+    },
+    {
+      "id": "10",
+      "kind": "host",
+      "text": "No assistant_proposal item is in v_inbox_queue, the queue the apply reads and the sync files from, though the run's three are resolved; v_sync_status counts none.",
+      "stage": "end-proofs",
+      "proofs": [
+        {
+          "name": "proposals-not-queued",
+          "with": {
+            "first": "carry:3.proposal_id",
+            "second": "carry:5.proposal_id",
+            "third": "carry:8.proposal_id",
+            "since": "carry:run.started_at"
+          }
+        }
+      ]
+    },
+    {
+      "id": "11",
+      "kind": "host",
+      "text": "workspace_runner holds no privilege on any public table, view or sequence, and executes exactly fourteen SECURITY DEFINER functions, workspace_propose among them.",
+      "stage": "end-proofs",
+      "proofs": [
+        {
+          "name": "runner-grants"
+        }
+      ]
+    }
+  ]
+}

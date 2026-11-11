@@ -1,0 +1,15 @@
+/* The depth menu's button (Phase 24b, W-87): the quiet pill, so the one primary
+   button of the composer stays Ask. Tokens only. */
+
+.button {
+  composes: btnSecondary from '@/styles/tokens.module.css';
+  min-height: var(--size-target);
+  padding-block: var(--size-4);
+  font-size: var(--text-13);
+}
+
+@media (max-width: 720px) {
+  .button {
+    min-height: var(--size-44);
+  }
+}

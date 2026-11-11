@@ -193,6 +193,20 @@ describe('PlannerItemPopover — what it holds', () => {
     expect(screen.queryByText(/Due not recorded/)).toBeNull();
   });
 
+  it('dates the row by Stack’s own due date when he set one, naming Blackboard’s (221)', () => {
+    hooks.progress = stub({
+      assignment_id: 'IST.323/lab-1',
+      status: 'in_progress',
+      due_override: '2026-09-15T19:30:00Z',
+    });
+    renderPopover(makeAnchor());
+    expect(
+      screen.getByText(
+        'Due Tue, Sep 15 · 3:30 PM · your date (Blackboard: Thu, Sep 17 · 2:00 PM)',
+      ),
+    ).toBeTruthy();
+  });
+
   it('still says "not recorded" when the row records nothing about when', () => {
     hooks.assignment = stub({ ...ASSIGNMENT, due_date: null, due_at: null, due_rule: null });
     renderPopover(makeAnchor());
@@ -446,5 +460,34 @@ describe('PlannerItemPopover — placement', () => {
     } finally {
       window.innerHeight = height;
     }
+  });
+});
+
+/* ---------------------------------------------------------------------------
+ * The Blackboard button — the item's own page when one is recorded (R-69)
+ * ------------------------------------------------------------------------ */
+
+describe('PlannerItemPopover — the Blackboard button', () => {
+  const ITEM_URL =
+    'https://blackboard.syracuse.edu/ultra/courses/_571529_1/outline/assessment/test/_12928193_1?courseId=_571529_1&gradeitemView=details';
+
+  it('opens the assignment’s own page when it has one', () => {
+    hooks.assignment = stub({ ...ASSIGNMENT, bb_url: ITEM_URL });
+    renderPopover(makeAnchor());
+    expect(screen.getByRole('link', { name: /Blackboard/ })).toHaveAttribute('href', ITEM_URL);
+  });
+
+  it('falls back to the course page for an item url on another origin', () => {
+    hooks.assignment = stub({ ...ASSIGNMENT, bb_url: 'https://evil.example.com/ultra/x' });
+    renderPopover(makeAnchor());
+    expect(screen.getByRole('link', { name: /Blackboard/ })).toHaveAttribute(
+      'href',
+      'https://blackboard.syracuse.edu/course/IST323',
+    );
+  });
+
+  it('no longer says Blackboard has no per-item url', () => {
+    renderPopover(makeAnchor());
+    expect(document.body.innerHTML).not.toContain('no stable per-item URL');
   });
 });

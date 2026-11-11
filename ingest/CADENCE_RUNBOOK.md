@@ -18,10 +18,13 @@ request — which meant a sync could catalogue a file, raise an Inbox `data_gap`
 opened, and leave both for a human. The pull is the sync's own unfinished work, so it now finishes
 it. The byte fetch no longer uses Playwright's `download` event either: that crashed the MCP browser
 on 2026-09-23 and cost a sync three files. `ingest/fetch_signed.mjs` walks the `bbcswebdav` redirect
-chain to its signed CDN URL instead, and `ingest/pull_files.mjs --fetch` downloads it.
+chain to its signed CDN URL instead, and `ingest/pull_files.mjs --fetch` downloads it. Since
+2026-10-01 the sync runs only in Stack's logged-in Chrome (Claude in Chrome), which cannot walk a
+redirect: Chrome saves each file to Downloads and `ingest/collect_download.mjs` moves it to where
+`pull_files.mjs` (no `--fetch`) looks. The hop walk stays for a Playwright caller.
 
 ## Inputs
-- Logged-in Blackboard tab (built-in browser, tab `seed`) with `installCrawler` from
+- Logged-in Blackboard tab (Stack's Chrome through Claude in Chrome, the only browser) with `installCrawler` from
   `ingest/bb_crawler.js` loaded as `window.__bb`.
 - Supabase `bb2dash` (ref goultdzqcavefcgnifdy), publishable key for REST/Storage, MCP `execute_sql`
   for reads/updates.
@@ -29,8 +32,9 @@ chain to its signed CDN URL instead, and `ingest/pull_files.mjs --fetch` downloa
   `C:\Users\stack\projects\bb2dash` for git.
 
 ## Steps (post a one-line status after each)
-1. **Crawl.** `await bb.runAll({termName: 'Fall 2026'})` → one `bb_raw` row per course + calendar under
-   a new `run_id`. PASS: 7 course rows + calendar row for the run.
+1. **Crawl.** `await bb.runAll({ termName: 'Fall 2026', runId })`, where `runId` is the `run_id`
+   `bb-sync` step 2 registered when it claimed the request → one `bb_raw` row per course + calendar
+   under that `run_id`, calendar last. PASS: 7 course rows + calendar row for the run.
 2. **Validate stored layers.** DB vs Storage (every `storage_path` exists, sizes match); local mirror
    (sha256 per `local_path`); `v_file_layout.needs_move = 0`; every extracted file has `bb_file_text`.
 3. ~~**Diff live vs catalog.**~~ **AUTOMATED (Phase 9) — do not do this by hand.**
@@ -72,19 +76,27 @@ chain to its signed CDN URL instead, and `ingest/pull_files.mjs --fetch` downloa
    `maxRedirects: 0`) and records the hops; `ingest/pull_files.mjs --fetch` downloads the signed
    URL itself, because a signed URL carries its own authorisation and needs no session. The chain is
    bounded at three hops and must end on `.content.blackboardcdn.com`.
+   **Superseded for the sync on 2026-10-01:** Claude in Chrome has no request API, so step 4b now
+   navigates the tab to `<source_url>?xythos-download=true`, lets Chrome save the file, and
+   collects it with `ingest/collect_download.mjs` (SKILL.md step 4b, Half one).
 
    For the record: the first scripted run was 12 files on 2026-09-22 (Inbox request 38); before the
    script the procedure claimed `<uuid>.tmp` files by size and magic bytes and moved them into
    `course context/<relpath>` by hand.
 
-5. ~~**Record.**~~ **AUTOMATED (Phase 9).** `run_transform` opens the `sync_runs` row before the first
-   read and closes it with `status`, `finished_at` and the `summary` envelope
-   (`{stages, changes, attention_raised}`); each stage writes its own `sync_stage_runs` row, which is
-   what `v_data_freshness` and the app's freshness line read. ~~A run that dies leaves a `running` row
-   that the next tick reaps to `failed` after 30 minutes.~~ Corrected 2026-09-24: the row is opened and
-   closed inside the transform's one transaction, so no `running` row is ever committed (every prod row
-   has `started_at = finished_at`); a run that dies rolls back with its row, and the 30-minute reaper
-   has nothing to reap. Do not `insert into sync_runs` by hand.
+5. ~~**Record.**~~ **AUTOMATED (Phase 9; register-first since Phase 19, migrations 135 and 136).**
+   The `sync_runs` row is opened when the sync request is claimed: `bb-sync` step 2 claims the
+   request and sets its `run_id` in one update, and the trigger `agent_requests_open_sync_run`
+   inserts the row as `running`, so Home reads "sync running" while the crawl is still going.
+   `transform_tick()` folds a registered run only once its `calendar` row has landed (the crawler
+   posts it last), never on an idle timer. `run_transform` adopts that same row and closes it with
+   `status`, `finished_at` and the `summary` envelope (`{stages, changes, attention_raised,
+   errors}`); each stage writes its own `sync_stage_runs` row (nine, with `history`), which is what
+   `v_data_freshness`, `v_sync_status.streams` and the app's freshness line read. A crawl that dies
+   leaves the `running` row and a `claimed` request. After 30 minutes the tick's terminal rule
+   marks the run `failed` with `interrupted_at` set and notes ending `interrupted (reaped)`, closes
+   the request as `failed` and raises one Inbox item. Nothing is retried and an interrupted crawl
+   is never folded: press Sync again. Do not `insert into sync_runs` by hand.
 6. **Report to Stack.** Done by the `bb-sync` skill from `summary->'changes'` and the open
    `attention_items` counts: what changed in plain language (new due dates, items re-created, files
    added) and anything he must confirm, which he answers in the app Inbox at `/inbox`. Grades are

@@ -35,6 +35,15 @@ const RE_EXPORTERS = new Set(['lib/queries.today.ts']);
  */
 const LABEL_EXEMPT = new Set(['lib/queries.grades.ts']);
 
+/**
+ * `queries.workspace-sources.ts` reads `workspace_turns.plan_state` (Phase 24a, migration
+ * 195: `skipped`, `planned`, `fallback`), whether the assistant ran a planning turn before it
+ * answered. That vocabulary shares the word `planned` with the planner status
+ * migration 078 retired, and says nothing about Stack's plan for an assignment.
+ * The same reasoning as LABEL_EXEMPT: one coinciding word is not one vocabulary.
+ */
+const RETIRED_EXEMPT = new Set(['lib/queries.workspace-sources.ts']);
+
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {
     const full = join(dir, entry);
@@ -77,10 +86,9 @@ describe('the status vocabulary lives in one file', () => {
       // T-2 split the popout: `AssignmentPopout.tsx` is now the name the app
       // opens, and this is the body both it and the full-details page render.
       'components/popout/AssignmentDetailBody.tsx',
-      'app/(app)/course/[id]/classwork/CourseScreen.tsx',
-      // F-1: the course Stream was the one screen this list had missed, and it
-      // was spelling its own labels the whole time.
-      'app/(app)/course/[id]/stream/CourseStream.tsx',
+      // R3-4: the course timeline (the Stream tab, which replaced Classwork's
+      // CourseScreen and the Stream's post feed) shows status only through
+      // StatusSelect, listed above, so neither of its files spells a label.
       'lib/queries.today.ts',
     ]) {
       expect(importers, `${screen} must read the shared vocabulary`).toContain(screen);
@@ -99,7 +107,7 @@ describe('the status vocabulary lives in one file', () => {
 
   it('is the only file that names a retired enum value', () => {
     const offenders = files
-      .filter(({ path }) => path !== VOCABULARY && !RE_EXPORTERS.has(path))
+      .filter(({ path }) => path !== VOCABULARY && !RE_EXPORTERS.has(path) && !RETIRED_EXEMPT.has(path))
       .filter(({ text }) =>
         RETIRED.some((value) => new RegExp(`['"]${value}['"]`).test(text)),
       )

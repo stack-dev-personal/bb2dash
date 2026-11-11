@@ -14,7 +14,8 @@
  *
  * WHAT THIS PROVES, AND WHAT IT CANNOT. That the mappers produce the shape migration 050/055
  * reads, keep Stack's prose out of the flat columns, bound the chain, and record what Blackboard
- * really sent. It cannot prove the live responses — Stack's next sync does that.
+ * really sent. It cannot prove the live responses; the v4 and v5 crawls did (the crawler header),
+ * and the raw shapes below follow them since the key lists were cut (Phase 18 task 19).
  */
 
 import { createRequire } from 'node:module';
@@ -77,8 +78,12 @@ const require = createRequire(import.meta.url);
 const crawler = require('../../ingest/bb_crawler.js') as {
   installCrawler: (o: Record<string, unknown>) => {
     runAll: (o?: Record<string, unknown>) => Promise<unknown>;
-    attempts: (c: string, g?: unknown[], o?: { limit?: number }) => Promise<ColumnEntry[]>;
+    attempts: (
+      c: string, g?: unknown[], o?: { limit?: number; misses?: Record<string, number> },
+    ) => Promise<ColumnEntry[]>;
   };
+  keyListMisses: (o: unknown, lists: Record<string, string[]>, prefix: string) => string[];
+  strip: (h: unknown) => string | null;
   assertRunId: (runId: unknown) => string | null;
   mapAttempt: (a: unknown, files?: unknown[], includeKeys?: boolean) => MappedAttempt | null;
   mapAttemptFile: (
@@ -106,7 +111,7 @@ const {
 
 const CTX = { courseId: '_571529_1', attemptId: '_8100001_1' };
 
-/** One `studentSubmissionFiles[]` entry, real shape, invented values. */
+/** One `studentSubmissionFiles[]` entry, live shape (no `size`, 0 of 28 live), invented values. */
 const RAW_FILE = {
   id: '_4400001_1',
   name: 'widget-analysis.docx',
@@ -124,7 +129,11 @@ const RAW_FILE = {
   },
 };
 
-/** One attempt detail (step 3), real shape, invented values. */
+/**
+ * One attempt detail (step 3), live shape, invented values. The feedback is `feedbackToUser`, the
+ * name the live crawls saw. `studentComments` has not been seen live; it stays here because the
+ * crawler keeps its one name, and this is what covers it.
+ */
 const RAW_DETAIL = {
   id: '_8100001_1',
   gradeId: '_7700001_1',
@@ -146,15 +155,15 @@ const RAW_DETAIL = {
     submissionType: 'MANUALLY_SUBMITTED',
   },
   studentSubmission: { rawText: '<p>Draft attached.</p>', displayText: 'Draft attached.' },
-  instructorFeedback: { rawText: '<p>Solid first pass.</p>', displayText: 'Solid first pass.' },
+  feedbackToUser: { rawText: '<p>Solid first pass.</p>', displayText: 'Solid first pass.' },
   studentComments: 'Resubmitting after the lab.',
   studentSubmissionFiles: [RAW_FILE],
   submissionHasFilePartsWithErrors: false,
 };
 
 describe('the envelope version', () => {
-  it('is 4 — the attempts chain a student session can actually read', () => {
-    expect(crawler.CRAWLER_VERSION).toBe(4);
+  it('is 5 — the v4 chain plus the Phase 18 probe', () => {
+    expect(crawler.CRAWLER_VERSION).toBe(5);
   });
 
   it('bounds a column at the newest three attempts', () => {
@@ -224,6 +233,21 @@ describe('pickKey / atPath — a candidate may be a path', () => {
   });
 });
 
+describe('strip — only a string is ever flattened into text', () => {
+  it('reads displayText or rawText only when it is a string', () => {
+    expect(crawler.strip({ rawText: { displayText: 'x' } })).toBeNull();
+    expect(crawler.strip({ displayText: { nested: true }, rawText: '<p>Raw half.</p>' })).toBe('Raw half.');
+    expect(crawler.strip({ displayText: 'Shown half.', rawText: '<p>Raw half.</p>' })).toBe('Shown half.');
+    expect(crawler.strip('<p>A bare string.</p>')).toBe('A bare string.');
+  });
+
+  it('never lets an object at studentSubmission.rawText become the submission text', () => {
+    const out = mapAttempt({ ...RAW_DETAIL, studentSubmission: { rawText: { displayText: 'x' } } })!;
+    expect(out.text.studentSubmission).toBeNull();
+    expect(JSON.stringify(out.text)).not.toContain('[object Object]');
+  });
+});
+
 describe('mapAttemptFile — v4 reads the URL instead of building one', () => {
   it('takes Blackboard\'s own durable permanentUrl', () => {
     const f = mapAttemptFile(RAW_FILE, CTX)!;
@@ -239,9 +263,20 @@ describe('mapAttemptFile — v4 reads the URL instead of building one', () => {
       .toEqual(['downloadUrl', 'id', 'mime', 'name', 'size', 'uuid']);
   });
 
-  it('falls back to file.fileName when the entry has no display name', () => {
-    const { name: _drop, linkName: _drop2, ...noName } = RAW_FILE;
-    expect(mapAttemptFile(noName, CTX)!.name).toBe('widget-analysis.docx');
+  it('a live entry has no size: size is null and the name comes from `name`', () => {
+    expect(RAW_FILE).not.toHaveProperty('size');
+    const f = mapAttemptFile({ ...RAW_FILE, name: 'from-name.docx' }, CTX)!;
+    expect(f.size).toBeNull();
+    expect(f.name).toBe('from-name.docx');
+    // Bytes come from the pull (bb_files.bytes), so even a stray size key is not read.
+    expect(mapAttemptFile({ ...RAW_FILE, size: 1234 }, CTX)!.size).toBeNull();
+    expect(crawler.ATTEMPT_FILE_KEYS).not.toHaveProperty('size');
+  });
+
+  it('falls back to file.fileName when `name` is empty, so 085 never files it as untitled', () => {
+    expect(crawler.ATTEMPT_FILE_KEYS.name).toEqual(['name', 'file.fileName']);
+    const blank = { ...RAW_FILE, name: '', file: { ...RAW_FILE.file, fileName: 'essay.docx' } };
+    expect(mapAttemptFile(blank, CTX)!.name).toBe('essay.docx');
   });
 
   it('falls back to the v3 built URL only when there is no permanentUrl', () => {
@@ -256,8 +291,12 @@ describe('mapAttemptFile — v4 reads the URL instead of building one', () => {
     expect(f.downloadUrl!.startsWith('https://bb.example.edu/learn/api/v1/')).toBe(true);
   });
 
-  it('uses bbFileUuid as the id when there is no id', () => {
-    expect(mapAttemptFile({ bbFileUuid: 'abc', file: { permanentUrl: 'https://x/y' } }, CTX)!.id).toBe('abc');
+  it('uses bbFileUuid as the id when there is no id, and keeps the durable URL', () => {
+    expect(crawler.ATTEMPT_FILE_KEYS.id).toEqual(['id', 'bbFileUuid']);
+    const { id: _drop, ...noId } = RAW_FILE;
+    const f = mapAttemptFile(noId, CTX)!;
+    expect(f.id).toBe('11111111-2222-3333-4444-555555555555');
+    expect(f.downloadUrl).toBe('https://blackboard.syracuse.edu/bbcswebdav/xid-9000001_1');
   });
 
   it('leaves an unknown field null rather than guessing', () => {
@@ -323,7 +362,7 @@ describe('mapAttempt — the shape migration 050/055 reads', () => {
   it('flattens prose to plain text and caps each field', () => {
     const long = mapAttempt({
       ...RAW_DETAIL,
-      instructorFeedback: { rawText: 'f'.repeat(4000) },
+      feedbackToUser: { rawText: 'f'.repeat(4000) },
       studentComments: 'c'.repeat(4000),
       studentSubmission: { rawText: 's'.repeat(9000) },
     })!;
@@ -364,6 +403,73 @@ describe('mapAttempt — the shape migration 050/055 reads', () => {
   it('returns null for something that is not an attempt at all', () => {
     expect(mapAttempt(null)).toBeNull();
     expect(mapAttempt('nope')).toBeNull();
+  });
+});
+
+describe('v5 (Phase 18, R-66) — feedback is read from `feedbackToUser` alone', () => {
+  it('lists the two object forms, then the bare key, and no instructorFeedback', () => {
+    expect(ATTEMPT_FIELD_KEYS.feedback)
+      .toEqual(['feedbackToUser.rawText', 'feedbackToUser.displayText', 'feedbackToUser']);
+  });
+
+  it('reads feedbackToUser: {rawText} into text.instructorFeedback', () => {
+    const out = mapAttempt({ id: '_8100003_1', feedbackToUser: { rawText: '<p>See the rubric.</p>' } })!;
+    expect(out.text.instructorFeedback).toBe('See the rubric.');
+  });
+
+  it('reads displayText when rawText is empty', () => {
+    const out = mapAttempt({ id: '_1_1', feedbackToUser: { rawText: '', displayText: 'Shown text.' } })!;
+    expect(out.text.instructorFeedback).toBe('Shown text.');
+  });
+
+  it('reads feedbackToUser sent as a plain string', () => {
+    const out = mapAttempt({ id: '_1_1', feedbackToUser: '<p>Plain string feedback.</p>' })!;
+    expect(out.text.instructorFeedback).toBe('Plain string feedback.');
+  });
+
+  it('reads nothing from instructorFeedback alone: the v4 fallback is gone', () => {
+    const { feedbackToUser: _drop, ...v4Shape } = RAW_DETAIL;
+    const out = mapAttempt({
+      ...v4Shape, instructorFeedback: { rawText: '<p>Old name.</p>', displayText: 'Old name.' },
+    })!;
+    expect(out.text.instructorFeedback).toBeNull();
+  });
+
+  it('never turns an object into text, and the probe counts it as a miss', () => {
+    const empty = { id: '_1_1', feedbackToUser: { rawText: null, displayText: '' } };
+    expect(mapAttempt(empty)!.text.instructorFeedback).toBeNull();
+    expect(crawler.keyListMisses(empty, ATTEMPT_FIELD_KEYS, 'ATTEMPT_FIELD_KEYS'))
+      .toContain('ATTEMPT_FIELD_KEYS.feedback');
+    // A non-string where the text should be is skipped, not flattened by strip().
+    const nested = { id: '_1_1', feedbackToUser: { rawText: { displayText: 'not feedback' } } };
+    expect(mapAttempt(nested)!.text.instructorFeedback).toBeNull();
+  });
+
+  it('keeps the prose under text, never as a flat key', () => {
+    const out = mapAttempt({ id: '_1_1', feedbackToUser: { rawText: 'x' } })!;
+    expect(out).not.toHaveProperty('feedbackToUser');
+    expect(out).not.toHaveProperty('feedback');
+  });
+});
+
+describe('keyListMisses — v5 counts a key list that found nothing', () => {
+  it('names every list with no present candidate', () => {
+    const misses = crawler.keyListMisses({ id: '_1_1', status: 'X' }, ATTEMPT_FIELD_KEYS, 'ATTEMPT_FIELD_KEYS');
+    expect(misses).toContain('ATTEMPT_FIELD_KEYS.feedback');
+    expect(misses).toContain('ATTEMPT_FIELD_KEYS.score');
+    expect(misses).not.toContain('ATTEMPT_FIELD_KEYS.status');
+  });
+
+  it('names nothing when every list hits', () => {
+    expect(crawler.keyListMisses(RAW_DETAIL, ATTEMPT_FIELD_KEYS, 'ATTEMPT_FIELD_KEYS')).toEqual([]);
+  });
+
+  it('counts no file miss on a live entry, which has no size', () => {
+    expect(crawler.keyListMisses(RAW_FILE, crawler.ATTEMPT_FILE_KEYS, 'ATTEMPT_FILE_KEYS')).toEqual([]);
+  });
+
+  it('treats anything that is not an object as a miss on every list', () => {
+    expect(crawler.keyListMisses(null, { a: ['a'], b: ['b'] }, 'X')).toEqual(['X.a', 'X.b']);
   });
 });
 
@@ -615,6 +721,27 @@ describe('attempts() — the three-request chain', () => {
     expect(entry.results[0].files).toEqual([]);
   });
 
+  it('v5: counts an unknown feedback shape in the caller\'s misses, once per attempt', async () => {
+    const { feedbackToUser: _drop, ...noFeedback } = RAW_DETAIL;
+    stubFetch({ detail: { body: {
+      ...noFeedback,
+      instructorFeedback: { rawText: 'v4 name, never sent live' },
+      commentsForStudent: { rawText: 'unknown key' },
+    } } });
+    const misses: Record<string, number> = {};
+    const [entry] = await install().attempts(COURSE, [COLUMN], { misses });
+    expect(misses['ATTEMPT_FIELD_KEYS.feedback']).toBe(1);
+    expect(misses['ATTEMPT_FIELD_KEYS.status']).toBeUndefined();
+    expect(entry.results[0].text.instructorFeedback).toBeNull();
+  });
+
+  it('v5: a fully known detail and file add no miss at all, and no size miss', async () => {
+    stubFetch();
+    const misses: Record<string, number> = {};
+    await install().attempts(COURSE, [COLUMN], { misses });
+    expect(misses).toEqual({});
+  });
+
   it('never throws: a network failure is a status 0 on the entry', async () => {
     globalThis.fetch = vi.fn(async () => { throw new Error('offline'); }) as unknown as typeof fetch;
     const [entry] = await install().attempts(COURSE, [COLUMN]);
@@ -691,6 +818,22 @@ describe('assessmentFields — the probe for where Ultra keeps the assessment fi
     });
     expect(out.paths.gradebookColumnId).toBe('gradebookColumnId');
     expect(out.paths.dueDate).toBe('contentDetail.resource/x-bb-asmt-test-link.test.assessment.dueDate');
+  });
+
+  it('records the live path: points and due date under test.gradingColumn, the other two nowhere (R-75)', () => {
+    const LINK = 'resource/x-bb-asmt-test-link';
+    const full = {
+      id: '_12928186_1',
+      contentDetail: {
+        [LINK]: { test: { gradingColumn: { possible: 20, dueDate: '2026-10-01T03:59:00.000Z' } } },
+      },
+    };
+    const out = assessmentFields(full)!;
+    expect(out.values).toEqual({ points: 20, dueDate: '2026-10-01T03:59:00.000Z' });
+    expect(out.paths).toEqual({
+      points: `contentDetail.${LINK}.test.gradingColumn.possible`,
+      dueDate: `contentDetail.${LINK}.test.gradingColumn.dueDate`,
+    });
   });
 
   it('prefers the shallower occurrence when a field appears twice', () => {

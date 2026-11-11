@@ -9,7 +9,9 @@ and nothing in here renders any of the UI — it loads `appUrl` and gets out of 
 way.
 
 Windows 11 only. Unpacked build, no installer, no code signing, no auto-update
-(Phase 12 contract, C-10).
+(Phase 12 contract, C-10). New builds come from the logon builder in
+[`launch/`](launch/README.md), and the app swaps to one only when Stack presses
+**Update now** (see *Updates* below).
 
 ## Prerequisites
 
@@ -60,6 +62,8 @@ the terminal somewhere unintended.
 | `pollIntervalMinutes` | `15` | how often the notification poller ticks while the app runs |
 | `dueReminderTime` | `18:00` | New York wall-clock time the once-a-day "due tomorrow" check runs |
 | `syncDryRun` | `false` | when true the Sync terminal prints the command instead of running it |
+| `syncLauncher` | `terminal` | `terminal`: the Sync button opens Windows Terminal on `/bb-sync`. `queue-only`: the button only queues and the container's runner takes the request; no terminal opens, and when the runner raises "Blackboard login needed" the app opens `http://127.0.0.1:6080/vnc.html` once in the default browser, already unlocked (brief 100, task 18) |
+| `novncPasswordFile` | `<profile>\.bb2dash-secrets\novnc_password` | the file the login page's noVNC password is read from under `queue-only`; a BOM, CR and LF are stripped, and the password goes only into the URL handed to the browser, never into the log. A missing or unreadable file opens the page without it |
 
 **Secrets.** The anon key is the only credential in this package, and it is not a
 secret: it is public in the web bundle already, and row-level security is the
@@ -70,7 +74,8 @@ key belongs in `config.json` on the machine, never in the repository.
 **Environment overrides.** Every key can be overridden by an environment
 variable (`BB2DASH_APP_URL`, `BB2DASH_SUPABASE_ANON_KEY`, `BB2DASH_REPO_DIR`,
 `BB2DASH_POLL_INTERVAL_MINUTES`, `BB2DASH_DUE_REMINDER_TIME`,
-`BB2DASH_SYNC_DRY_RUN`, `BB2DASH_SUPABASE_URL`). The e2e suite uses them to point
+`BB2DASH_SYNC_DRY_RUN`, `BB2DASH_SUPABASE_URL`, `BB2DASH_SYNC_LAUNCHER`,
+`BB2DASH_NOVNC_PASSWORD_FILE`). The e2e suite uses them to point
 the shell at a local fixture page so no test ever reaches `*.supabase.co`.
 
 ## Build, test, pack
@@ -145,12 +150,28 @@ machine and brought back.
 
 ## Living with it
 
-* **Closing the window hides it.** The app keeps running in the tray and keeps
-  polling. The tray menu is **Open bb2dash / Check now / Quit**; left-clicking
-  the tray icon shows the window. **Quit** is the only thing that ends the
-  process.
+* **Closing the window closes it for real** (2026-09-30). The web app's renderer
+  process goes away; the main process, the tray and the poller keep running, so
+  toasts still arrive. The tray menu is **Open bb2dash / Check now / Quit**;
+  left-clicking the tray icon or choosing *Open* builds a fresh window, and
+  clicking a toast builds one straight at the toast's screen. **Quit** is the
+  only thing that ends the process.
+  Measured on the packed build (signed-out page, so the renderer is on the small
+  side), two open/close cycles each:
+  * with GPU acceleration on (first cut): open 4 processes, 434-660 MB working
+    set; closed 3 processes, 295-313 MB (main ~110, GPU ~130, utility ~57).
+  * with GPU acceleration **off** (Stack, 2026-09-30; `app.disableHardwareAcceleration()`
+    in `src/main/index.ts`): open 4 processes, 355-364 MB working set / ~118 MB
+    private; closed 3 processes, 258-259 MB / ~81 MB private (main ~103, GPU
+    ~100, utility ~56). Chromium still runs a GPU process for software
+    compositing, but its private memory drops sharply.
+* **The session stays fresh with the window closed.** When the web session has
+  expired and no window is open, the shell loads the app once in a hidden page
+  for 20 seconds (at most every 10 minutes) so the web app's own proxy rewrites
+  the cookie, then destroys the page. Main still never calls the auth API.
 * **One instance.** Launching a second time shows and focuses the window that is
-  already open; there is never a second taskbar button.
+  already open, or builds one if it was closed; there is never a second taskbar
+  button.
 * **Signing in** happens on the web app's own `/login` page inside the window.
   The session cookie lives in the window's persistent partition, so it survives
   a restart. The shell reads that cookie to make its own database reads and
@@ -160,10 +181,86 @@ machine and brought back.
   key or cookie value is ever written. That is the first place to look when
   something does not happen.
 * **Other state** in `%APPDATA%\bb2dash`: `window-state.json` (size and
-  position), `notify-watermark.json` (what has already been notified about).
-  Deleting them is safe; the app rebuilds both.
+  position), `notify-watermark.json` (what has already been notified about),
+  `update-reminder.json` (the *Update later* time). Deleting them is safe; the
+  app rebuilds all three.
 * **Links to anywhere else** — a signed file URL from Materials, an outside link
   in an announcement — open in the default browser, not in the window.
+
+## Updates
+
+Only for the app as the logon builder installs it
+(`%LOCALAPPDATA%\bb2dash-launch\current\bb2dash.exe`); a dev run or a
+hand-packed build does none of this.
+
+* **Builds without a logon.** At launch and every 6 hours
+  (`BUILDER_INTERVAL_HOURS`) the app starts the `Bb2dash-LogonBuild` task, unless
+  it is already running. The builder fetches, rebuilds only when `desktop/`
+  changed, and never switches builds while the app is open.
+* **The prompt.** The running build is the tree hash in the resolved path of the
+  executable (`builds\<tree>\win-unpacked`). When the builder's `state.json`
+  records a newer `lastBuiltSha` whose build is on disk, the next time a window
+  opens a small bb2dash window appears over it: *A new version of bb2dash is
+  ready* with **Update now** and **Update later**. *Update later* asks when to
+  remind: **In 1 hour**, **In 4 hours** or **Tomorrow** (09:00 local). The
+  choice is saved in `%APPDATA%\bb2dash\update-reminder.json`, and no prompt
+  appears before then. Closing the prompt saves nothing; the next open asks
+  again. It is never a native dialog, and under `BB2DASH_TEST=1` it is only
+  recorded (`update-prompt` event).
+* **Update now** runs `launch\update-now.ps1 -Detach` as a hidden child and
+  waits up to 30 s for it to exit. That stage hands the helper off to a
+  separate hidden PowerShell (`Start-Process`, so the helper outlives the app)
+  and exits. The app quits only after the helper's `swap-pending` marker names
+  the new build (20 s bound). If the hand-off fails or no marker appears, the
+  app stays on its build and `main.log` says *Update now could not start the
+  helper; staying on this build:* with the reason, for example
+  *update-now.ps1 -Detach exited 6: no helper was started* or *the update
+  helper did not start within 20000 ms: … ; a helper may still be running:
+  see logs\update-now.log*. The helper waits for every bb2dash process to
+  exit, points `current` at the new build and starts `Bb2dash-App`. If the
+  build is missing or the junction cannot be moved, the old build stays
+  current and the app starts on it; if the app never exited within 60 s,
+  nothing is started. A helper refuses outright, touching nothing, while a
+  fresh `swap-pending` names another build. Its log is
+  `%LOCALAPPDATA%\bb2dash-launch\logs\update-now.log` (both stages); the app's
+  side is in `main.log` under `[update]`.
+* **Forcing an update.** Open the account menu (the person icon, top right) and
+  click **Update desktop app**. It first checks Docker (`docker version`, 10 s
+  bound); with Docker not running it answers at once *Update failed: Docker isn't
+  running — start Docker Desktop and try again* and starts nothing. Otherwise it
+  shows *Checking for updates…*, writes `force-request.json` so this builder run
+  waits only 30 s for Docker (`APP_DOCKER_WAIT_SECONDS`; the logon run keeps its
+  600 s), starts `Bb2dash-LogonBuild` (or joins the run already going) and waits
+  for it: fetch 45 s + Docker wait 30 s + longest build 20 min + 2 min margin
+  (`FORCE_UPDATE_TIMEOUT_MS`, about 23 minutes). A container build takes a few
+  minutes, a no-change run a few seconds. If the wait runs out anyway, it says
+  *Update failed: still building — it will offer the update when it finishes*:
+  the build keeps going, and the usual prompt offers it at the next window open.
+  Then:
+  * a newer build is on disk: the app runs the same **Update now** path as the
+    prompt (hand-off, helper swap, relaunch) and says *Updating — bb2dash will
+    restart* only once the helper's marker has appeared. A failed hand-off or no
+    marker answers *Update failed: the update could not start* and the app stays
+    on its build;
+  * nothing newer, and this run fetched `origin/main` and its `desktop/` tree is
+    the running build: *Up to date*. It never says that when it could not look;
+  * anything else: *Update failed: &lt;reason&gt;*. Docker not running while a
+    build was needed (*Docker isn't running — start Docker Desktop and try
+    again*), no fetch (*could not reach GitHub …*), the build failed, or the builder left no check of its own (an older installed builder;
+    that goes away once a successful build refreshes the installed scripts).
+    Details are in `logon-build.log` and `main.log`.
+
+  What the builder could check is in `%LOCALAPPDATA%\bb2dash-launch\last-check.json`
+  (`checkedAt`, `remoteTree`, `skip`: empty, `fetch-failed`, `ref-unresolved` or
+  `docker-not-ready`), written at the end of every build step.
+
+  The item appears only inside the desktop app; a normal browser never shows it.
+  It reaches main through the preload's `requestUpdate()`, the one IPC call
+  (`bb2dash:request-update`), which main answers only for the main window's top
+  frame on the app origin. One request runs at a time; clicking again while one
+  runs waits for the same answer. A dev run answers *Update failed: this copy is
+  not an installed build*; under `BB2DASH_TEST=1` the request is only recorded
+  (`update-request` event).
 
 ## Acceptance script
 
@@ -173,7 +270,8 @@ The six steps that say this phase is done, run from the unpacked build:
    taskbar button, and you are still signed in.
 2. Double-click it again: the same window is focused. No second window, no
    second process.
-3. Close the window and reopen it from the tray: still signed in.
+3. Close the window (the renderer process goes away) and reopen it from the
+   tray: a new window, still signed in.
 4. Trigger a sync: one "Sync landed with N changes" toast, with the right N.
 5. Receive a "grade posted" and a "due tomorrow" toast naming the course and the
    item; clicking each raises the window on the right screen.
@@ -195,7 +293,7 @@ desktop/
                       move into a container later (R-28).
     main/             the Electron adapter: window, tray, cookies, notifications,
                       child_process, logging.
-    preload/          exposes one frozen object and no IPC.
+    preload/          exposes one frozen object: version, requestUpdate (one IPC call).
   test/
     unit/             vitest
     e2e/              Playwright for Electron

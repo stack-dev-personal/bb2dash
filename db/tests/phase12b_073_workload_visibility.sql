@@ -179,7 +179,9 @@ begin
        where attrelid = 'public.v_work_items'::regclass and attnum > 0 and not attisdropped)
      <> 'item_kind,item_id,course_id,title,type,category,glyph,in_workload,due_at,due_on,due_rule,'
         'points_possible,submission,series_key,sequence_no,status,priority,effort,effort_source,'
-        'is_override,multiplier_applied,suggested_start,undated,confidence' then
+        'is_override,multiplier_applied,suggested_start,undated,confidence'
+        -- appended by 221 (Stack's own due date)
+        ',bb_due_at,due_overridden' then
     raise exception 'FAIL v_work_items columns changed';
   end if;
   if not exists (select 1 from pg_class c, unnest(c.reloptions) o

@@ -1,0 +1,431 @@
+// The scheduled runner on fakes (Phase 23 follow-ups, item 3): a temporary checkout with a
+// `.git/HEAD`, a temporary state folder, and a recorded command runner. Nothing starts a real
+// command, and nothing is written outside the temporary folders (never the real home folder).
+
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { test } from 'node:test';
+
+import {
+  EXPORTER_KEY,
+  LOG_FILE,
+  NETWORK_RETRY_WAITS_MS,
+  RUN_BUDGET_MS,
+  STATE_FILE,
+  STATE_SCHEMA,
+  checkoutIsOnMain,
+  main,
+  parseArgs,
+  parseResultLine,
+  scrub,
+} from './exports-run.mjs';
+
+const KEY = 'sb_secret_TESTONLY_not_a_real_key';
+const JWT = 'eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.c2lnbmF0dXJl';
+const STATE_KEYS = ['schema', 'started_at', 'ended_at', 'exit_code', 'reason', 'exporters'];
+const EXPORTER_STATE_KEYS = ['exit_code', 'filed', 'skipped', 'not_filed'];
+const HEAD_MAIN = 'ref: refs/heads/main\n';
+
+function world(t, { head = HEAD_MAIN, dotGit = 'dir' } = {}) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'exports-run-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const repoRoot = path.join(root, 'checkout');
+  const stateDir = path.join(root, 'state', '.bb2dash-exports');
+  const secrets = path.join(root, 'secrets');
+  const harness = path.join(root, 'harness');
+  fs.mkdirSync(repoRoot);
+  if (dotGit === 'dir') {
+    fs.mkdirSync(path.join(repoRoot, '.git'));
+    if (head !== null) fs.writeFileSync(path.join(repoRoot, '.git', 'HEAD'), head);
+  } else if (dotGit === 'file') {
+    fs.writeFileSync(path.join(repoRoot, '.git'), `gitdir: ${path.join(root, 'main-checkout', '.git', 'worktrees', 'x')}\n`);
+  }
+  const runs = [];
+  let tick = 0;
+  const lines = [];
+  return {
+    root, repoRoot, stateDir, secrets, harness, runs, lines,
+    argv: ['--secrets-dir', secrets, '--harness-dir', harness],
+    deps(exporter) {
+      return {
+        repoRoot,
+        stateDir,
+        log: (l) => lines.push(l),
+        now: () => new Date(Date.UTC(2026, 9, 9, 12, 0, tick++)),
+        run: (command, args, options) => {
+          runs.push({ command, args, options });
+          return typeof exporter === 'function' ? exporter({ command, args, options }) : exporter;
+        },
+      };
+    },
+    state: () => JSON.parse(fs.readFileSync(path.join(stateDir, STATE_FILE), 'utf8')),
+    logText: () => fs.readFileSync(path.join(stateDir, LOG_FILE), 'utf8'),
+  };
+}
+
+const result = (json) => `inbox-decisions-export: x\ninbox-decisions-result ${JSON.stringify(json)}\n`;
+const exporterOk = (status, json) => ({ status, stdout: result(json), stderr: '' });
+
+function assertShape(state) {
+  assert.deepEqual(Object.keys(state), STATE_KEYS);
+  assert.equal(state.schema, 1);
+  assert.equal(state.schema, STATE_SCHEMA);
+  assert.deepEqual(Object.keys(state.exporters), ['inbox-decisions']);
+  assert.deepEqual(Object.keys(state.exporters[EXPORTER_KEY]), EXPORTER_STATE_KEYS);
+  assert.match(state.started_at, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/);
+  assert.match(state.ended_at, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/);
+  assert.ok([0, 1, 2].includes(state.exit_code));
+  assert.ok([null, 'not_main', 'config', 'error', 'no_network'].includes(state.reason));
+  for (const k of EXPORTER_STATE_KEYS) assert.equal(typeof state.exporters[EXPORTER_KEY][k], 'number');
+}
+
+test('arguments: both folders are required, and anything else is refused', () => {
+  assert.deepEqual(parseArgs(['--secrets-dir', 's', '--harness-dir', 'h']), { secretsDir: 's', harnessDir: 'h' });
+  for (const bad of [[], ['--secrets-dir', 's'], ['--harness-dir', 'h'], ['--secrets-dir', '--harness-dir', 'h'], ['--secrets-dir', 's', '--harness-dir', 'h', '--now'], ['x']]) {
+    assert.throws(() => parseArgs(bad), /usage/, JSON.stringify(bad));
+  }
+});
+
+test('the guard reads .git/HEAD as a file and wants ref: refs/heads/main; a .git file, a branch, a hash and no .git all fail', (t) => {
+  const check = (opts) => checkoutIsOnMain(world(t, opts).repoRoot);
+  assert.equal(check({}), true);
+  assert.equal(check({ head: 'ref: refs/heads/main' }), true);
+  assert.equal(check({ head: 'ref: refs/heads/fix/phase23-followups\n' }), false);
+  assert.equal(check({ head: 'ref: refs/heads/main-old\n' }), false);
+  assert.equal(check({ head: '0123456789abcdef0123456789abcdef01234567\n' }), false);
+  assert.equal(check({ head: null }), false);
+  assert.equal(check({ dotGit: 'file' }), false);
+  assert.equal(check({ dotGit: 'none' }), false);
+});
+
+test('a clean run: exit 0, and the state file holds exactly the fixed keys', async (t) => {
+  const w = world(t);
+  const code = await main(w.argv, w.deps(exporterOk(0, { exit_code: 0, filed: 16, skipped: 1, not_filed: 0 })));
+  assert.equal(code, 0);
+  const state = w.state();
+  assertShape(state);
+  assert.deepEqual(state, {
+    schema: 1,
+    started_at: '2026-10-09T12:00:00.000Z',
+    ended_at: '2026-10-09T12:00:01.000Z',
+    exit_code: 0,
+    reason: null,
+    exporters: { 'inbox-decisions': { exit_code: 0, filed: 16, skipped: 1, not_filed: 0 } },
+  });
+});
+
+test('a failed run: the exporter exits 1 with rows not filed; the state says exit 1, reason error, and the counts', async (t) => {
+  const w = world(t);
+  const code = await main(w.argv, w.deps(exporterOk(1, { exit_code: 1, filed: 3, skipped: 0, not_filed: 2 })));
+  assert.equal(code, 1);
+  const state = w.state();
+  assertShape(state);
+  assert.equal(state.exit_code, 1);
+  assert.equal(state.reason, 'error');
+  assert.deepEqual(state.exporters[EXPORTER_KEY], { exit_code: 1, filed: 3, skipped: 0, not_filed: 2 });
+});
+
+test('a thrown error: exit 1, reason error, the state is still written, and no message is stored in it', async (t) => {
+  const w = world(t);
+  const code = await main(w.argv, w.deps(() => {
+    throw new Error(`spawn exploded for ${w.secrets} with ${KEY}`);
+  }));
+  assert.equal(code, 1);
+  const state = w.state();
+  assertShape(state);
+  assert.equal(state.exit_code, 1);
+  assert.equal(state.reason, 'error');
+  const raw = fs.readFileSync(path.join(w.stateDir, STATE_FILE), 'utf8');
+  assert.ok(!raw.includes('exploded') && !raw.includes(KEY) && !raw.includes(w.secrets));
+  // The log may name the error, but never the key.
+  assert.match(w.logText(), /exploded/);
+  assert.ok(!w.logText().includes(KEY));
+});
+
+test('a checkout that is not on main exits 2 with reason not_main, starts no command, and still writes the state', async (t) => {
+  for (const opts of [{ head: 'ref: refs/heads/fix/x\n' }, { dotGit: 'file' }, { dotGit: 'none' }]) {
+    const w = world(t, opts);
+    const code = await main(w.argv, w.deps(exporterOk(0, { exit_code: 0, filed: 1, skipped: 0, not_filed: 0 })));
+    assert.equal(code, 2, JSON.stringify(opts));
+    assert.deepEqual(w.runs, [], 'nothing is filed');
+    const state = w.state();
+    assertShape(state);
+    assert.equal(state.exit_code, 2);
+    assert.equal(state.reason, 'not_main');
+    assert.deepEqual(state.exporters[EXPORTER_KEY], { exit_code: 2, filed: 0, skipped: 0, not_filed: 0 });
+  }
+});
+
+test('missing or odd arguments exit 2 with reason config, start no command, and still write the state', async (t) => {
+  const w = world(t);
+  assert.equal(await main([], w.deps(exporterOk(0, {}))), 2);
+  assert.deepEqual(w.runs, []);
+  const state = w.state();
+  assertShape(state);
+  assert.equal(state.exit_code, 2);
+  assert.equal(state.reason, 'config');
+});
+
+test('an exporter that exits 2 (its configuration) is exit 2, reason config, with its own counts', async (t) => {
+  const w = world(t);
+  const code = await main(w.argv, w.deps(exporterOk(2, { exit_code: 2, filed: 0, skipped: 0, not_filed: 0 })));
+  assert.equal(code, 2);
+  const state = w.state();
+  assertShape(state);
+  assert.equal(state.reason, 'config');
+  assert.equal(state.exporters[EXPORTER_KEY].exit_code, 2);
+});
+
+// The odd exit code here is 7: 3 is the exporter's "did not reach Supabase", which is tried again (below).
+test('an exporter that is killed, or says nothing, or exits 0 without its result line, is exit 1 with reason error', async (t) => {
+  for (const answer of [{ status: null, stdout: '', stderr: '' }, { status: 7, stdout: 'whatever', stderr: '' }, { status: 0, stdout: 'no result line here\n', stderr: '' }]) {
+    const w = world(t);
+    assert.equal(await main(w.argv, w.deps(answer)), 1, JSON.stringify(answer));
+    const state = w.state();
+    assertShape(state);
+    assert.equal(state.exit_code, 1);
+    assert.equal(state.reason, 'error');
+  }
+});
+
+test('the only command the runner starts is the exporter, with --notes-only and the two folders in its environment', async (t) => {
+  const w = world(t);
+  await main(w.argv, w.deps(exporterOk(0, { exit_code: 0, filed: 0, skipped: 0, not_filed: 0 })));
+  assert.equal(w.runs.length, 1);
+  const exporter = path.join(path.resolve(import.meta.dirname), 'inbox-decisions-export.mjs');
+  // The runner is told its checkout by `repoRoot`; the exporter is always the sibling script of the runner itself.
+  assert.deepEqual([w.runs[0].command, ...w.runs[0].args], [process.execPath, exporter, '--notes-only']);
+  assert.equal(w.runs[0].options.cwd, w.repoRoot);
+  assert.equal(w.runs[0].options.env.SECRETS_DIR, w.secrets);
+  assert.equal(w.runs[0].options.env.HARNESS_DIR, w.harness);
+
+  // And the source starts one command only: no git, no gh, no docker.
+  const source = fs.readFileSync(path.join(import.meta.dirname, 'exports-run.mjs'), 'utf8');
+  // The one copy of the process start is the exporter's runCommand; the runner has none of its own.
+  assert.equal((source.match(/spawnSync/g) ?? []).length, 0);
+  assert.equal((source.match(/node:child_process/g) ?? []).length, 0);
+  assert.equal((source.match(/\brunCommand\(/g) ?? []).length, 1);
+  assert.doesNotMatch(source, /['"`](git|gh|docker|docker-compose|uv)['"`]/);
+});
+
+test('the key never reaches the state file or the log, and no path is stored in the state', async (t) => {
+  const w = world(t);
+  const noisy = {
+    status: 1,
+    stdout: `fetch failed with ${KEY}\nheader eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.c2lnbmF0dXJl\n${result({ exit_code: 1, filed: 0, skipped: 0, not_filed: 1 })}`,
+    stderr: `stderr also has ${KEY}`,
+  };
+  await main(w.argv, w.deps(noisy));
+  const raw = fs.readFileSync(path.join(w.stateDir, STATE_FILE), 'utf8');
+  for (const text of [raw, w.logText(), w.lines.join('\n')]) {
+    assert.ok(!text.includes(KEY));
+    assert.ok(!text.includes(JWT));
+  }
+  for (const p of [w.root, w.secrets, w.harness, w.repoRoot]) assert.ok(!raw.includes(p));
+  assert.match(w.logText(), /not filed|fetch failed/);
+});
+
+test('scrub removes the key forms; parseResultLine takes the last result line and refuses a malformed one', () => {
+  assert.equal(scrub(`a ${KEY} b ${JWT} c`), 'a <redacted> b <redacted> c');
+  const good = { exit_code: 0, filed: 1, skipped: 2, not_filed: 3 };
+  assert.deepEqual(parseResultLine(`x\ninbox-decisions-result {"exit_code":9,"filed":0,"skipped":0,"not_filed":0}\n${result(good)}`), { filed: 1, skipped: 2, notFiled: 3 });
+  assert.equal(parseResultLine('nothing'), null);
+  assert.equal(parseResultLine('inbox-decisions-result {nope'), null);
+  assert.equal(parseResultLine('inbox-decisions-result {"filed":-1,"skipped":0,"not_filed":0}'), null);
+  assert.equal(parseResultLine('inbox-decisions-result {"filed":"2","skipped":0,"not_filed":0}'), null);
+});
+
+test('the state folder is created, the state is replaced whole each run, and the log rolls', async (t) => {
+  const w = world(t);
+  const ok = exporterOk(0, { exit_code: 0, filed: 1, skipped: 0, not_filed: 0 });
+  await main(w.argv, { ...w.deps(ok), maxLogBytes: 400 });
+  const first = w.state();
+  await main(w.argv, { ...w.deps(exporterOk(0, { exit_code: 0, filed: 0, skipped: 0, not_filed: 0 })), maxLogBytes: 400 });
+  assert.equal(first.exporters[EXPORTER_KEY].filed, 1);
+  assert.equal(w.state().exporters[EXPORTER_KEY].filed, 0);
+  // Only the state and the log (and its one rolled copy) are there: no temporary file is left.
+  for (let i = 0; i < 6; i += 1) await main(w.argv, { ...w.deps(ok), maxLogBytes: 400 });
+  assert.deepEqual(fs.readdirSync(w.stateDir).sort(), [LOG_FILE, `${LOG_FILE}.1`, STATE_FILE].sort());
+  assert.ok(fs.statSync(path.join(w.stateDir, LOG_FILE)).size < 4000);
+});
+
+test('a state folder that cannot be written is exit 1 with one line, never a throw', async (t) => {
+  const w = world(t);
+  fs.mkdirSync(path.dirname(w.stateDir), { recursive: true });
+  fs.writeFileSync(w.stateDir, 'a file where the folder should be');
+  const code = await main(w.argv, w.deps(exporterOk(0, { exit_code: 0, filed: 0, skipped: 0, not_filed: 0 })));
+  assert.equal(code, 1);
+  assert.ok(w.lines.some((l) => l.includes('could not write')));
+});
+
+// Round 3: a timed-out exporter says so in the log, and only in the log.
+test('a timed-out exporter logs its spawn error, and no message reaches the state file', async (t) => {
+  const w = world(t);
+  const deps = w.deps(null);
+  delete deps.run;
+  const spawn = (command, args, options) => {
+    w.runs.push({ command, args, options });
+    return { status: null, stdout: '', stderr: '', error: { message: 'spawnSync node ETIMEDOUT' } };
+  };
+  const code = await main(w.argv, { ...deps, spawn });
+  assert.equal(code, 1);
+  assert.equal(w.runs.length, 1);
+  assert.equal(w.runs[0].options.timeout, 14 * 60 * 1000);
+  assert.match(w.logText(), /ETIMEDOUT/);
+  const state = w.state();
+  assertShape(state);
+  assert.equal(state.exit_code, 1);
+  assert.equal(state.reason, 'error');
+  assert.ok(!fs.readFileSync(path.join(w.stateDir, STATE_FILE), 'utf8').includes('ETIMEDOUT'));
+});
+
+// ---------------------------------------------------------------------------------------------
+// No network yet (2026-10-09: two runs failed, each five minutes after a logon or a wake, with
+// "the request did not reach Supabase: fetch failed"). The exporter says so with exit 3, and the
+// runner waits and starts it again.
+// ---------------------------------------------------------------------------------------------
+
+const unreachable = () => exporterOk(3, { exit_code: 3, filed: 0, skipped: 0, not_filed: 0 });
+
+/** Deps whose exporter answers from a list, one answer a start, and whose waits are recorded, not slept. */
+function retryDeps(w, answers) {
+  const waits = [];
+  let started = 0;
+  const deps = w.deps(() => answers[Math.min(started++, answers.length - 1)]);
+  return { waits, deps: { ...deps, sleep: async (ms) => { waits.push(ms); } } };
+}
+
+test('the waits between tries grow, and their sum is under eight minutes', () => {
+  assert.deepEqual(NETWORK_RETRY_WAITS_MS, [15_000, 30_000, 60_000, 120_000, 240_000]);
+  assert.ok(NETWORK_RETRY_WAITS_MS.reduce((sum, ms) => sum + ms, 0) <= 8 * 60 * 1000);
+});
+
+test('no network at first: the runner waits and starts the exporter again, and the run that gets through is the one recorded', async (t) => {
+  const w = world(t);
+  const { waits, deps } = retryDeps(w, [unreachable(), unreachable(), exporterOk(0, { exit_code: 0, filed: 2, skipped: 1, not_filed: 0 })]);
+  const code = await main(w.argv, deps);
+  assert.equal(code, 0);
+  assert.equal(w.runs.length, 3);
+  assert.deepEqual(waits, [15_000, 30_000]);
+  assert.ok(w.runs.every((r) => r.command === process.execPath && r.args.at(-1) === '--notes-only'), 'every start is the exporter');
+  const state = w.state();
+  assertShape(state);
+  assert.equal(state.exit_code, 0);
+  assert.equal(state.reason, null);
+  assert.deepEqual(state.exporters[EXPORTER_KEY], { exit_code: 0, filed: 2, skipped: 1, not_filed: 0 });
+  assert.match(w.logText(), /did not reach Supabase \(try 1 of 6\): trying again in 15 s/);
+  assert.match(w.logText(), /did not reach Supabase \(try 2 of 6\): trying again in 30 s/);
+});
+
+test('no network at all: six tries, then exit 1 with the reason no_network and zero counts', async (t) => {
+  const w = world(t);
+  const { waits, deps } = retryDeps(w, [unreachable()]);
+  const code = await main(w.argv, deps);
+  assert.equal(code, 1);
+  assert.equal(w.runs.length, NETWORK_RETRY_WAITS_MS.length + 1);
+  assert.deepEqual(waits, [...NETWORK_RETRY_WAITS_MS]);
+  const state = w.state();
+  assertShape(state);
+  assert.equal(state.exit_code, 1);
+  assert.equal(state.reason, 'no_network');
+  assert.deepEqual(state.exporters[EXPORTER_KEY], { exit_code: 3, filed: 0, skipped: 0, not_filed: 0 });
+  assert.match(w.logText(), /did not reach Supabase \(try 6 of 6\): giving up/);
+});
+
+test('only an unreachable database is tried again: a failed run, a stopped one and a killed one start the exporter once', async (t) => {
+  for (const answer of [
+    exporterOk(1, { exit_code: 1, filed: 0, skipped: 0, not_filed: 1 }),
+    exporterOk(2, { exit_code: 2, filed: 0, skipped: 0, not_filed: 0 }),
+    { status: null, stdout: '', stderr: '' },
+  ]) {
+    const w = world(t);
+    const { waits, deps } = retryDeps(w, [answer]);
+    await main(w.argv, deps);
+    assert.equal(w.runs.length, 1);
+    assert.deepEqual(waits, []);
+  }
+});
+
+test('a run that got through after a wait and then failed is a failed run, not a network one', async (t) => {
+  const w = world(t);
+  const { waits, deps } = retryDeps(w, [unreachable(), exporterOk(1, { exit_code: 1, filed: 1, skipped: 0, not_filed: 1 })]);
+  assert.equal(await main(w.argv, deps), 1);
+  assert.deepEqual(waits, [15_000]);
+  assert.equal(w.state().reason, 'error');
+});
+
+// ---------------------------------------------------------------------------------------------
+// One deadline for the whole run (review of 2026-10-09, MEDIUM): the task is killed at 15 minutes,
+// and a run that is killed writes no state. So every start gets what is left of one deadline, and
+// no try is started with too little left.
+// ---------------------------------------------------------------------------------------------
+
+/** Deps on a clock of their own: a wait moves it by its length, a start by `startTakesMs`. */
+function timedDeps(w, { answers, startTakesMs = 0 }) {
+  const waits = [];
+  let clockMs = 1_000_000;
+  let started = 0;
+  const deps = w.deps(() => {
+    clockMs += startTakesMs;
+    return answers[Math.min(started++, answers.length - 1)];
+  });
+  return { waits, deps: { ...deps, clock: () => clockMs, sleep: async (ms) => { waits.push(ms); clockMs += ms; } } };
+}
+
+test('the run has one deadline, under the 15 minutes of the task, and a first start still has the exporter its full limit', () => {
+  assert.equal(RUN_BUDGET_MS, 14.5 * 60 * 1000);
+  assert.ok(RUN_BUDGET_MS < 15 * 60 * 1000);
+});
+
+test('each start is given what is left of the deadline: a start after the waits cannot run past it', async (t) => {
+  const w = world(t);
+  const ok = exporterOk(0, { exit_code: 0, filed: 1, skipped: 0, not_filed: 0 });
+  const { waits, deps } = timedDeps(w, { answers: [unreachable(), unreachable(), unreachable(), unreachable(), ok] });
+  assert.equal(await main(w.argv, deps), 0);
+  assert.deepEqual(waits, [15_000, 30_000, 60_000, 120_000]);
+  const limits = w.runs.map((r) => r.options.timeout);
+  // The first four fit the exporter's own 14 minutes; the fifth starts 3 min 45 s in and gets the rest.
+  assert.deepEqual(limits, [840_000, 840_000, 825_000, 765_000, RUN_BUDGET_MS - 225_000]);
+  assert.equal(limits.at(-1), 645_000);
+});
+
+test('no try is started with too little of the deadline left: slow unreachable tries end the run as no_network, with its state written', async (t) => {
+  const w = world(t);
+  // A network that accepts the connection and never answers: each try ends "unreachable" after five minutes.
+  const { waits, deps } = timedDeps(w, { answers: [unreachable()], startTakesMs: 5 * 60 * 1000 });
+  assert.equal(await main(w.argv, deps), 1);
+  // 5:00, wait 0:15, 10:15, wait 0:30 (10:45, 3:45 left), third try to 15:45: nothing is left for a fourth.
+  assert.equal(w.runs.length, 3);
+  assert.deepEqual(waits, [15_000, 30_000]);
+  assert.deepEqual(w.runs.map((r) => r.options.timeout), [840_000, 555_000, 225_000]);
+  const state = w.state();
+  assertShape(state);
+  assert.equal(state.reason, 'no_network');
+  assert.match(w.logText(), /did not reach Supabase \(try 3 of 6\): giving up, too little of the run's time is left/);
+});
+
+test('exit 3 is tried again only when the result line says 3 too: a bare status 3 is a failed run, started once', async (t) => {
+  const w = world(t);
+  const { waits, deps } = timedDeps(w, { answers: [{ status: 3, stdout: 'crashed with no result line\n', stderr: '' }] });
+  assert.equal(await main(w.argv, deps), 1);
+  assert.equal(w.runs.length, 1);
+  assert.deepEqual(waits, []);
+  assert.equal(w.state().reason, 'error');
+});
+
+test('a wait the machine slept through: the deadline has passed on waking, so no start is made and the run ends no_network with its state written', async (t) => {
+  const w = world(t);
+  const { waits, deps } = timedDeps(w, { answers: [unreachable()] });
+  let clockMs = 5_000_000;
+  // The laptop sleeps during the first wait and wakes an hour later.
+  const slept = { ...deps, clock: () => clockMs, sleep: async (ms) => { waits.push(ms); clockMs += 60 * 60 * 1000; } };
+  assert.equal(await main(w.argv, slept), 1);
+  assert.equal(w.runs.length, 1);
+  assert.deepEqual(waits, [15_000]);
+  const state = w.state();
+  assertShape(state);
+  assert.equal(state.reason, 'no_network');
+  assert.match(w.logText(), /the run's time was up after the wait: no further try/);
+});

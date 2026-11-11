@@ -119,6 +119,39 @@ describe('CourseSidebar — the course list', () => {
     expect(screen.getByRole('link', { name: /GEO 103/ })).toHaveAttribute('href', '/course/GEO.103');
   });
 
+  it('draws each course as a subject tile, its title, and its code with its section', async () => {
+    renderShell();
+    await waitFor(() => expect(sidebarState()).toBe('open'));
+
+    const ist = screen.getByRole('link', { name: /IST 323/ });
+    expect(ist).toHaveTextContent(/^IST/);
+    expect(ist).toHaveTextContent('Intro to Cybersecurity');
+    expect(ist).toHaveTextContent('M002');
+    expect(screen.getByRole('link', { name: /GEO 103/ })).toHaveTextContent('M001');
+  });
+
+  it('names the kind on a row that is not a lecture, and says nothing on a lecture', async () => {
+    stub.courses = {
+      isPending: false,
+      isError: false,
+      data: [COURSES[0], { ...COURSES[1], id: 'GEO.103.recitation', kind: 'recitation', section: 'M003' }],
+    };
+    renderShell();
+    await waitFor(() => expect(sidebarState()).toBe('open'));
+
+    expect(screen.getByRole('link', { name: /GEO 103/ })).toHaveTextContent('Recitation');
+    expect(screen.getByRole('link', { name: /IST 323/ })).not.toHaveTextContent(/Lecture/);
+  });
+
+  it('keeps the chevron and the tile out of a row’s name: a reader hears the course, not a glyph', async () => {
+    renderShell();
+    await waitFor(() => expect(sidebarState()).toBe('open'));
+
+    const ist = screen.getByRole('link', { name: /IST 323/ });
+    expect(ist).not.toHaveAccessibleName(/▸/);
+    expect(ist).toHaveAccessibleName(/^Intro to Cybersecurity/);
+  });
+
   it('marks the open course as the current page and no other', async () => {
     stub.pathname = '/course/IST.323';
     renderShell();
@@ -340,5 +373,42 @@ describe('CourseSidebar — the overlay drawer', () => {
 
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(sidebarState()).toBe('open');
+  });
+});
+
+describe('TopNav — the account menu (usePopover, reshaped in Phase 17)', () => {
+  const account = () => screen.getByRole('button', { name: 'Account' });
+
+  it('opens on click and says who is signed in', () => {
+    renderShell();
+    expect(account()).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(account());
+    expect(account()).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('stack@syr.edu')).toBeInTheDocument();
+  });
+
+  it('stays open for a press inside it and closes for a press outside it', async () => {
+    renderShell();
+    fireEvent.click(account());
+    fireEvent.mouseDown(screen.getByRole('menuitem', { name: 'Sign out' }));
+    expect(account()).toHaveAttribute('aria-expanded', 'true');
+
+    fireEvent.mouseDown(document.body);
+    await waitFor(() => expect(account()).toHaveAttribute('aria-expanded', 'false'));
+    expect(screen.queryByRole('menuitem', { name: 'Sign out' })).not.toBeInTheDocument();
+  });
+
+  it('closes on Escape', async () => {
+    renderShell();
+    fireEvent.click(account());
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(account()).toHaveAttribute('aria-expanded', 'false'));
+  });
+
+  it('closes when ☰ is pressed, so only one panel is open', async () => {
+    renderShell();
+    fireEvent.click(account());
+    fireEvent.click(toggle());
+    await waitFor(() => expect(account()).toHaveAttribute('aria-expanded', 'false'));
   });
 });

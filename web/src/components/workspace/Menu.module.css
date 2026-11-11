@@ -1,0 +1,114 @@
+/* The composer's pop-downs (Phase 24b, W-87): the plus menu, the course menu and
+   the depth menu. A floating panel is a large card on the surface with the
+   floating shadow; its entries are quiet rows that take the hover tint. Tokens
+   only. A panel opens by the room there is (menu-placement.ts): up at the foot
+   of a thread, down (.down) in the lobby. */
+
+.anchor {
+  position: relative;
+  display: inline-flex;
+}
+
+.panel {
+  position: absolute;
+  bottom: calc(100% + var(--space-1));
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: var(--size-220);
+  max-width: var(--size-320);
+  padding: var(--space-1);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+}
+
+/* The depth menu sits beside Ask, at the right edge. */
+.panelEnd {
+  composes: panel;
+  left: auto;
+  right: 0;
+}
+
+/* Opened down, when the room below the button is the larger: in the lobby (W-2). */
+.down {
+  top: calc(100% + var(--space-1));
+  bottom: auto;
+}
+
+/* What scrolls inside a panel is positioned, so what it holds scrolls with it. */
+.list {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  max-height: var(--size-320);
+  overflow-y: auto;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+}
+
+.group + .group {
+  margin-top: var(--space-1);
+  padding-top: var(--space-1);
+  border-top: 1px solid var(--color-divider);
+}
+
+.heading {
+  composes: kicker from '@/styles/tokens.module.css';
+  padding: var(--space-1) var(--space-3);
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--size-3);
+  width: 100%;
+  min-height: var(--size-target);
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-14);
+  text-align: left;
+  cursor: pointer;
+  transition: var(--motion-control);
+}
+
+.item:hover,
+.item:focus-visible {
+  background: var(--color-hover);
+}
+
+.item:active {
+  background: var(--color-active);
+}
+
+.item[aria-checked='true'] {
+  font-weight: var(--font-weight-semibold);
+}
+
+.note {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+.problem {
+  composes: errorNotice from '@/styles/tokens.module.css';
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 720px) {
+  .item {
+    min-height: var(--size-44);
+  }
+}

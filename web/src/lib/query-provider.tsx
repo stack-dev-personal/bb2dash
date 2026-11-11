@@ -4,6 +4,7 @@ import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persist
 import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { useState, type ReactNode } from 'react';
+import { shouldPersistQuery } from './persistable';
 
 /**
  * TanStack Query v5 + persistQueryClient (localStorage).
@@ -20,7 +21,9 @@ import { useState, type ReactNode } from 'react';
  */
 
 export const PERSIST_KEY = 'bb2dash.query-cache';
-export const PERSIST_BUSTER = 'v1';
+// v2 (2026-11-11): the Inbox's session labels are cached as pairs, not a Map. A v1 blob
+// holds them as `{}`, which crashed the Inbox, so it is dropped.
+export const PERSIST_BUSTER = 'v2';
 
 function makeQueryClient() {
   return new QueryClient({
@@ -64,6 +67,8 @@ export function QueryProvider({ children }: { children: ReactNode }) {
         persister,
         maxAge: 24 * 60 * 60 * 1000,
         buster: PERSIST_BUSTER,
+        // Only data JSON keeps unchanged is saved (lib/persistable.ts); the rest is refetched.
+        dehydrateOptions: { shouldDehydrateQuery: shouldPersistQuery },
       }}
     >
       {children}

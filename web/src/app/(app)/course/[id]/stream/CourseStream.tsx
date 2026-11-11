@@ -1,138 +1,270 @@
 'use client';
 
 /**
- * Course Stream (Phase 8, R-01/R-02) — the course's front page.
+ * Course Stream — the course's front page.
  *
- * Two blocks:
+ * Three blocks:
  *   1. the per-course Upcoming-work tracker (the same component Home uses, fed
  *      only this course's shells' `v_work_items` rows);
- *   2. the feed: every `v_course_stream` post, grouped by the New York day it
- *      was posted on, newest day first.
+ *   2. new and changed materials (Phase 19, R-38): one post per file or
+ *      content item a registered crawl found new or changed, labelled "New" or
+ *      "Changed" and dated by that crawl. The rows are `v_course_stream`'s
+ *      material arm, which migration 133 feeds from `bb_material_history`.
+ *      A course with no such post gets no block at all; a failed read gets a
+ *      one-line error in it (R3-7). A file opens through the shared ladder; a
+ *      link item at its own url; a video (lti) or document in Blackboard (R4);
+ *   3. the course timeline (R3-4): the week-divided two-lane view that was
+ *      Classwork's `?view=timeline`. Classes on the left, with their files and
+ *      the announcements posted that week; assignments on the right, with
+ *      their files and the status select. See `components/course/CourseTimeline`.
  *
- * The feed is honest about what each post is. An announcement shows its body,
- * a material shows its bucket and file name, an assignment shows what the row
- * actually carries (due date, points, status) and nothing it does not. Body
- * text runs through `scrubSnippet`, so a professor's PPTX speaker notes can
- * never surface here as if they were course content.
+ * The day-grouped post feed this page used to show (Phase 8) is gone: every
+ * other kind of post it carried now sits on the timeline next to the class or
+ * the due date it belongs to.
  */
 
+import { MARK_CHAR, MarkedLabel } from '@/components/shell/icons';
 import { useMemo } from 'react';
 import {
   courseToday,
-  filterStreamRows,
-  groupStreamByDay,
+  streamDayKey,
   useCourseDisplay,
   useCourseStream,
   useCourseWorkItems,
   type CourseStreamRow,
-  type StreamPostKind,
 } from '@/lib/queries.course';
-import { bucketLabel } from '@/lib/queries.materials';
-import { scrubSnippet } from '@/lib/queries.search';
-import { useSetItemStatus, type WorkItem as TrackerWorkItem } from '@/lib/queries.today';
-// S-1 (P-grades-7) / F-1: one status vocabulary, this screen included.
-import { statusLabel } from '@/lib/progress-status';
+import { blackboardLink } from '@/lib/blackboard-link';
+import { UNKNOWN_ROUTE, type FileRoutes, type RouteValue } from '@/lib/queries.materials';
+import {
+  trackerWindowStart,
+  useSetItemStatus,
+  useTerm,
+  type WorkItem as TrackerWorkItem,
+} from '@/lib/queries.today';
 import type { ProgressStatus } from '@/lib/queries';
 import { isQueryLoading } from '@/components/shared/QueryState';
+import { CourseTimeline } from '@/components/course/CourseTimeline';
+import { formatDay } from '@/components/course/TimelineRows';
+import { FileOpenAction } from '@/components/materials/FileOpenAction';
 import { UpcomingTracker } from '@/components/tracker/UpcomingTracker';
 import { DEFAULT_HORIZON_DAYS, DEFAULT_VISIBLE_DAYS } from '@/components/tracker/anchor';
 import tokens from '@/styles/tokens.module.css';
 import styles from './CourseStream.module.css';
 
-/* -- pure presentation helpers --------------------------------------------- */
+/* -- material history: pure helpers ---------------------------------------- */
 
-const KIND_LABEL: Record<StreamPostKind, string> = {
-  announcement: 'Announcement',
-  material: 'Material',
-  assignment_posted: 'Assignment posted',
-  assignment_due: 'Due',
-};
+/** What a material post is called. */
+export type MaterialChangeLabel = 'New' | 'Changed';
 
-const KIND_GLYPH: Record<StreamPostKind, string> = {
-  announcement: '!',
-  material: 'M',
-  assignment_posted: 'A',
-  assignment_due: 'D',
-};
+/**
+ * How many material posts sit above the timeline before the rest fold under
+ * "N earlier". History is kept for the whole term, so an unbounded list would
+ * push the timeline, which is the Stream (R3-4), off the screen.
+ */
+export const MATERIAL_POSTS_SHOWN = 8;
 
-const KIND_CLASS: Record<StreamPostKind, string> = {
-  announcement: tokens.glyphQuiz,
-  material: tokens.glyphReading,
-  assignment_posted: tokens.glyphAssignment,
-  assignment_due: tokens.glyphExam,
-};
-
-const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-/** 'YYYY-MM-DD' → "Mon · Sep 7" (parsed as UTC so the day never shifts). */
-export function formatDayHeading(dayISO: string, todayISO: string): string {
-  if (dayISO === todayISO) return 'Today';
-  const [y, m, d] = dayISO.split('-').map(Number);
-  const dt = new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1));
-  const mon = dt.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
-  return `${DOW[dt.getUTCDay()]} · ${mon} ${dt.getUTCDate()}`;
+/**
+ * `meta.change` → the label. `appeared` is New, `changed` is Changed. Anything
+ * else, a vanished item or a row that does not say, has no label and is not
+ * posted.
+ */
+export function materialChangeLabel(change: unknown): MaterialChangeLabel | null {
+  if (change === 'appeared') return 'New';
+  if (change === 'changed') return 'Changed';
+  return null;
 }
 
-/** Points, only when the row carries them. Never invented, never zero-filled. */
-export function formatPoints(points: number | string | null | undefined): string | null {
-  if (points === null || points === undefined || points === '') return null;
-  const n = typeof points === 'number' ? points : Number(points);
-  if (!Number.isFinite(n)) return null;
-  const text = Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10);
-  return `${text} pt${n === 1 ? '' : 's'}`;
+function runIdOf(row: CourseStreamRow): string | null {
+  const runId = row.meta?.run_id;
+  return typeof runId === 'string' && runId.length > 0 ? runId : null;
 }
 
-/* -- one feed row ---------------------------------------------------------- */
+/**
+ * One key per item, per crawl, per kind of change. The run id is in it because
+ * one file posts once for every crawl it changed in, so `ref_id` alone repeats.
+ */
+export function materialPostKey(row: CourseStreamRow): string {
+  return `material:${row.ref_kind}:${row.ref_id}:${runIdOf(row) ?? ''}:${row.meta?.change ?? ''}`;
+}
 
-export function StreamRow({ row }: { row: CourseStreamRow }) {
-  const meta = row.meta ?? {};
-  const scrubbed = scrubSnippet(row.body);
-  const points = formatPoints(meta.points_possible);
+/**
+ * The stream rows that are material-history posts, in the order the view gave
+ * them (newest crawl first).
+ *
+ * A material row is posted only when it says what changed, names its crawl and
+ * can be dated. The view before migration 133 says none of that, so it posts
+ * nothing here and the page stays what it was. Two rows with the same key are
+ * one file carried by two content items in one crawl: it is posted once.
+ */
+export function materialHistoryPosts(rows: readonly CourseStreamRow[]): CourseStreamRow[] {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    if (row.post_kind !== 'material') return false;
+    if (materialChangeLabel(row.meta?.change) === null) return false;
+    if (runIdOf(row) === null) return false;
+    if (Number.isNaN(Date.parse(row.posted_at))) return false;
+    const key = materialPostKey(row);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 
-  const detail: string[] = [];
-  if (row.post_kind === 'material') {
-    if (meta.bucket) detail.push(bucketLabel(meta.bucket));
-    if (meta.file_name) detail.push(meta.file_name);
+/**
+ * A meta key the view did not carry is unknown, not absent: the ladder must
+ * say "Not stored" rather than claim the file has no route.
+ */
+function routeValue(value: string | null | undefined): RouteValue {
+  return value === undefined ? UNKNOWN_ROUTE : value;
+}
+
+/** The Open ladder's routes for a file post; the stream never carries a disk path. */
+function streamFileRoutes(row: CourseStreamRow): FileRoutes {
+  return {
+    storage_path: routeValue(row.meta?.storage_path),
+    source_url: routeValue(row.meta?.source_url),
+    local_path: UNKNOWN_ROUTE,
+  };
+}
+
+/* -- content posts: where they open (round 4) ------------------------------ */
+
+/** Where a content post opens, and what the control says. */
+export interface ContentPostLink {
+  href: string;
+  label: string;
+}
+
+/** The schemes a link item's own url may carry. */
+const EXTERNAL_PROTOCOLS: ReadonlySet<string> = new Set(['https:', 'http:']);
+
+const OPEN_LINK_LABEL = `Open ${MARK_CHAR.arrowUpRight}`;
+const OPEN_IN_BLACKBOARD_LABEL = `Open in Blackboard ${MARK_CHAR.arrowUpRight}`;
+
+/** The item kinds that open in Blackboard rather than at a url of their own. */
+const OPENS_IN_BLACKBOARD: ReadonlySet<string> = new Set(['lti', 'document']);
+
+/** A parsed http(s) URL, or null for anything absent, blank, malformed or of another scheme. */
+function externalUrl(raw: string | null | undefined): URL | null {
+  const value = raw?.trim();
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return EXTERNAL_PROTOCOLS.has(url.protocol) ? url : null;
+  } catch {
+    return null;
   }
-  if (row.post_kind === 'assignment_posted' || row.post_kind === 'assignment_due') {
-    if (meta.type) detail.push(meta.type.replace(/_/g, ' '));
-    if (meta.due_on) detail.push(`due ${meta.due_on}`);
-    if (points) detail.push(points);
-    // S-1 / F-1: the shared vocabulary, not this file's own spelling. The view
-    // types `status` loosely (string | null), so a value the enum does not
-    // carry is spelled out rather than swallowed.
-    if (meta.status) {
-      detail.push(statusLabel(meta.status as ProgressStatus) ?? meta.status.replace(/_/g, ' '));
-    }
-  }
+}
 
+/**
+ * Where a `bb_content` post opens (Stack, 2026-10-03: "Videos don't need to be
+ * downloaded and stored... Only keep the link to it."):
+ *
+ *   link             its own url, when that parses as http or https
+ *   lti, document    the course's Blackboard page, the same `v_course_display.bb_url`
+ *                    the course header's "Blackboard ↗" opens, checked by
+ *                    `blackboardLink` (https only). Never an LTI launch url: a
+ *                    Kaltura launch does not play outside Blackboard.
+ *   anything else    no link. A file post keeps its own Open ladder.
+ *
+ * Every href is a parsed URL's `href`; no item is ever downloaded from here.
+ */
+export function contentPostLink(
+  row: CourseStreamRow,
+  course: { bb_url?: string | null } | null | undefined,
+): ContentPostLink | null {
+  if (row.ref_kind !== 'bb_content') return null;
+  const kind = row.meta?.item_kind;
+  if (kind === 'link') {
+    const url = externalUrl(row.meta?.url);
+    return url === null ? null : { href: url.href, label: OPEN_LINK_LABEL };
+  }
+  if (typeof kind === 'string' && OPENS_IN_BLACKBOARD.has(kind)) {
+    const link = blackboardLink(null, course);
+    return link === null ? null : { href: link.href, label: OPEN_IN_BLACKBOARD_LABEL };
+  }
+  return null;
+}
+
+/* -- material history: the block ------------------------------------------- */
+
+/** The course's Blackboard page, as `v_course_display` carries it. */
+type CourseBlackboard = { bb_url?: string | null } | null;
+
+function MaterialPost({ row, course }: { row: CourseStreamRow; course: CourseBlackboard }) {
+  const label = materialChangeLabel(row.meta?.change);
+  if (label === null) return null;
+  const link = contentPostLink(row, course);
   return (
-    <article className={styles.row} data-post-kind={row.post_kind}>
-      <span className={KIND_CLASS[row.post_kind]} aria-hidden="true">
-        {KIND_GLYPH[row.post_kind]}
-      </span>
+    <li className={styles.materialRow} data-change={row.meta?.change ?? undefined}>
+      <span className={label === 'New' ? styles.changeNew : styles.changeChanged}>{label}</span>
+      {/* The title is Blackboard's text. It is rendered as text, never as HTML. */}
+      <span className={styles.materialTitle}>{row.title}</span>
+      <time className={styles.materialDate} dateTime={row.posted_at}>
+        synced {formatDay(streamDayKey(row.posted_at))}
+      </time>
+      {row.ref_kind === 'bb_file' && (
+        <FileOpenAction routes={streamFileRoutes(row)} className={tokens.btnGhost} />
+      )}
+      {link && (
+        <a className={tokens.btnGhost} href={link.href} target="_blank" rel="noopener noreferrer">
+          <MarkedLabel label={link.label} />
+        </a>
+      )}
+    </li>
+  );
+}
 
-      <div className={styles.rowBody}>
-        <div className={styles.rowHead}>
-          <span className={styles.kind}>{KIND_LABEL[row.post_kind]}</span>
-          {row.post_kind === 'announcement' && meta.is_read === false && (
-            <span className={styles.unread}>unread</span>
-          )}
-          <span className={styles.rowTitle}>{row.title}</span>
-        </div>
+function MaterialList({ posts, course }: { posts: readonly CourseStreamRow[]; course: CourseBlackboard }) {
+  return (
+    <ul className={styles.materialList}>
+      {posts.map((row) => (
+        <MaterialPost key={materialPostKey(row)} row={row} course={course} />
+      ))}
+    </ul>
+  );
+}
 
-        {detail.length > 0 && <div className={styles.rowMeta}>{detail.join(' · ')}</div>}
+const MATERIALS_HEADING_ID = 'course-stream-materials';
 
-        {scrubbed.notesOnly ? (
-          <p className={styles.rowNote}>speaker notes only — nothing shown</p>
-        ) : (
-          scrubbed.text !== '' && <p className={styles.rowText}>{scrubbed.text}</p>
-        )}
-        {scrubbed.notesHidden && !scrubbed.notesOnly && (
-          <span className={styles.rowNote}>speaker notes hidden</span>
-        )}
-      </div>
-    </article>
+/** R3-7: what the block says when the stream read failed, rather than vanishing. */
+export const MATERIALS_LOAD_ERROR = "Couldn't load new and changed materials.";
+
+/**
+ * The block. Nothing while the read is in flight or when there is no post; one
+ * error line when the read failed (with any posts a previous read left in the
+ * cache still listed under it).
+ */
+function MaterialHistory({
+  posts,
+  failed,
+  course,
+}: {
+  posts: readonly CourseStreamRow[];
+  failed: boolean;
+  course: CourseBlackboard;
+}) {
+  if (posts.length === 0 && !failed) return null;
+  const shown = posts.slice(0, MATERIAL_POSTS_SHOWN);
+  const earlier = posts.slice(MATERIAL_POSTS_SHOWN);
+  return (
+    <section className={styles.materials} aria-labelledby={MATERIALS_HEADING_ID}>
+      <h2 id={MATERIALS_HEADING_ID} className={tokens.kicker}>
+        New and changed materials
+      </h2>
+      {failed && (
+        <p className={styles.state} role="alert">
+          {MATERIALS_LOAD_ERROR}
+        </p>
+      )}
+      {shown.length > 0 && <MaterialList posts={shown} course={course} />}
+      {earlier.length > 0 && (
+        <details className={styles.earlier}>
+          <summary>{earlier.length} earlier</summary>
+          <MaterialList posts={earlier} course={course} />
+        </details>
+      )}
+    </section>
   );
 }
 
@@ -141,12 +273,18 @@ export function StreamRow({ row }: { row: CourseStreamRow }) {
 export function CourseStream({ courseId }: { courseId: string }) {
   const display = useCourseDisplay(courseId);
   const shellIds = useMemo(() => display.data?.shell_ids ?? [], [display.data]);
-
-  const streamQ = useCourseStream(shellIds);
   const workItemsQ = useCourseWorkItems(shellIds);
+  // The same cache entry the timeline reads; the materials block names its own failure too.
+  const streamQ = useCourseStream(shellIds);
   const setStatus = useSetItemStatus();
 
-  const todayISO = courseToday();
+  // R3-1: the strip can scroll back to the term's first day, from the same
+  // term row Home reads (`useTerm` + `trackerWindowStart`); it still opens on
+  // today. Before the term starts there is nothing earlier to reach.
+  const termQ = useTerm();
+  const todayIso = courseToday();
+  const windowStart = trackerWindowStart(termQ.data, todayIso);
+  const startIso = windowStart === todayIso ? null : windowStart;
 
   /**
    * `v_work_items` comes back typed from the generated view, where Postgres
@@ -163,14 +301,12 @@ export function CourseStream({ courseId }: { courseId: string }) {
     [workItemsQ.data],
   );
 
-  const days = useMemo(
-    () => groupStreamByDay(filterStreamRows(streamQ.data ?? [], todayISO)),
-    [streamQ.data, todayISO],
-  );
+  const materialPosts = useMemo(() => materialHistoryPosts(streamQ.data ?? []), [streamQ.data]);
 
   const handleStatus = (item: TrackerWorkItem, status: ProgressStatus) => {
     setStatus.mutate({ item: { item_kind: item.item_kind, item_id: item.item_id }, status });
   };
+  const pendingItemId = setStatus.isPending ? setStatus.variables?.item.item_id ?? null : null;
 
   if (display.isPending) return <p className={styles.state}>Loading course…</p>;
   if (display.isError) return <p className={styles.state}>Could not load this course.</p>;
@@ -184,38 +320,19 @@ export function CourseStream({ courseId }: { courseId: string }) {
         items={trackerItems}
         horizonDays={DEFAULT_HORIZON_DAYS}
         visibleDays={DEFAULT_VISIBLE_DAYS}
+        startIso={startIso}
         title={`Upcoming work · ${display.data.code}`}
         onStatusChange={handleStatus}
-        pendingItemId={setStatus.isPending ? setStatus.variables?.item.item_id ?? null : null}
-        isPending={isQueryLoading(workItemsQ)}
+        pendingItemId={pendingItemId}
+        // The start date waits on the term row, so the strip is loading until it answers.
+        isPending={isQueryLoading(workItemsQ) || isQueryLoading(termQ)}
         error={workItemsQ.error}
       />
 
-      <section className={styles.feed} aria-label="Course stream">
-        {streamQ.isPending && <p className={styles.state}>Loading the stream…</p>}
-        {streamQ.isError && (
-          <p className={styles.state} role="alert">
-            Could not load the stream: {streamQ.error.message}
-          </p>
-        )}
-        {!streamQ.isPending && !streamQ.isError && days.length === 0 && (
-          <p className={styles.state}>Nothing has been posted to this course yet.</p>
-        )}
+      {/* The course header's "Blackboard ↗" reads the same row (`useCourseDisplay`). */}
+      <MaterialHistory posts={materialPosts} failed={streamQ.isError} course={display.data} />
 
-        {days.map((day) => (
-          <div key={day.day} className={styles.day}>
-            <div className={styles.dayHead}>
-              <span className={tokens.kicker}>{formatDayHeading(day.day, todayISO)}</span>
-              <span className={styles.dayCount}>
-                {day.rows.length} post{day.rows.length === 1 ? '' : 's'}
-              </span>
-            </div>
-            {day.rows.map((row) => (
-              <StreamRow key={`${row.post_kind}:${row.ref_kind}:${row.ref_id}`} row={row} />
-            ))}
-          </div>
-        ))}
-      </section>
+      <CourseTimeline courseId={courseId} />
     </div>
   );
 }

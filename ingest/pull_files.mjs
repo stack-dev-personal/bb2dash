@@ -3,7 +3,8 @@
 //
 //   node ingest/pull_files.mjs --manifest <manifest.json> --downloads <dir> [--mirror <dir>]
 //                              [--bucket my_submissions] [--only 119,152] [--out <sql path>]
-//                              [--dry-run]
+//                              [--dry-run] [--no-embed] [--fetch] [--restale]
+//   node ingest/pull_files.mjs --restale-post --downloads <dir> [--only ids] [--no-embed]
 //
 // CADENCE_RUNBOOK step 4, the one step no automation replaced: store the bytes of the bb_files
 // rows the transform catalogued with `storage_path is null`. First run 2026-09-22 (12 files).
@@ -17,20 +18,27 @@
 // every manifest written before 2026-09-22 — is a course file.
 //
 // THE SHAPE. Two halves, because bbcswebdav URLs 302 to a cross-origin CDN with no CORS:
-//   1. Something holding the Blackboard session records the redirect chain for each file — the
-//      browser half. It follows nothing and downloads nothing; it walks hops one at a time with
-//      `page.context().request.get(u, { maxRedirects: 0 })` through `ingest/fetch_signed.mjs`'s
-//      `resolveSignedUrl`, and writes the resulting `hops` array onto the manifest row. The old
-//      route through Playwright's `download` event is gone: it crashed the MCP browser on
+//   1. The browser half gets each file's bytes onto disk as `<id>_<name>` (`downloadNameFor`).
+//      THE SYNC'S WAY (bb-sync step 4b, since 2026-10-01): the sync runs only in Stack's logged-in
+//      Chrome through Claude in Chrome, which cannot read a redirect. The tab is navigated to
+//      `<source_url>?xythos-download=true`, Chrome saves the file to its Downloads folder (an
+//      inline PDF is saved by a same-origin snippet on the CDN page), and
+//      `ingest/collect_download.mjs` moves it into --downloads. No signed URL ever passes through
+//      the agent. Then this script runs WITHOUT `--fetch`.
+//      THE FALLBACK (`--fetch`), only for a caller holding a Playwright-style request API and a
+//      logged-in context: walk hops one at a time with `request.get(u, { maxRedirects: 0 })`
+//      through `ingest/fetch_signed.mjs`'s `resolveSignedUrl` and write the `hops` array onto each
+//      manifest row. Playwright's `download` event is never used: it crashed the MCP browser on
 //      2026-09-23 and left a sync unable to store three catalogued files.
-//   2. This script does the rest, per manifest row. With `--fetch` it validates the row's `hops`
-//      and downloads the signed URL itself (a signed CDN URL carries its own authorisation, so no
-//      session is needed here); without it, it finds an already-downloaded `<id>_*` in --downloads.
+//   2. This script does the rest, per manifest row. Without `--fetch` it finds the `<id>_*` file
+//      already in --downloads; with `--fetch` it validates the row's `hops` and downloads the
+//      signed URL itself (a signed CDN URL carries its own authorisation, so no session is needed).
 //      Then: check size and magic bytes, copy to the local mirror (`course context/<relpath>`),
 //      POST to Storage `bb-files/<key>` with the publishable key (anon is insert-only, never
 //      `x-upsert`; a Duplicate answer means the object is already there), run extract_text.py
-//      under uv with its three libraries, POST the units to /rest/v1/bb_file_text (anon
-//      insert-only; `char_count` is generated, never sent), and write the `update bb_files …`
+//      under uv with its three libraries, store the units through `sync_file_text_put` (migration
+//      200) as `sync_runner`, with the login the sync container uses (`ingest/text_put.mjs`;
+//      Phase 25a, replacing the REST insert with the publishable key), and write the `update bb_files …`
 //      statements to --out for the owner to run through execute_sql. Unless `--no-embed`, a run
 //      that posted any unit finishes by calling `ingest/embed_corpus.mjs`'s loop, so the text it
 //      just stored is actually searchable when the run ends.
@@ -38,25 +46,33 @@
 //      reported, and a human marks it `superseded_by` its replacement. A `session_expired` outcome
 //      (401/403 on the first hop) stops the whole run: every remaining row would fail the same way.
 //
-// TWO MODES, ALWAYS EXCLUSIVE. Course files (no flag) and Stack's submissions (`--bucket
+// THE MODES, ALWAYS EXCLUSIVE. Course files (no flag) and Stack's submissions (`--bucket
 // my_submissions`) each take their own rows and can never write the other's. Re-pulling a file
-// whose stored bytes went stale is deliberately NOT here: it replaces text already in the corpus,
-// so it belongs in a step someone runs on purpose, not in every sync.
+// whose stored bytes went stale is `--restale` then `--restale-post` (see the --restale block
+// below): it replaces text already in the corpus, so it runs on its own rows and in its own runs,
+// and it never puts document text into the owner SQL.
 //
 // THE MANIFEST. One JSON array from this query (execute_sql), saved to a file:
 //   select jsonb_agg(jsonb_build_object('id', f.id, 'file_name', f.file_name,
 //            'relpath', bb_file_relpath(f.id), 'mime', f.mime_type, 'source_url', f.source_url,
 //            'bucket', f.bucket, 'attempt_id', f.attempt_id))
-//     from bb_files f where f.storage_path is null and f.superseded_by is null;
-//   With `--fetch`, the browser half adds `hops` to every row before this script reads it.
+//     from bb_files f where f.storage_path is null and f.superseded_by is null
+//      and f.source_url is not null and not bb_file_is_outside_link(f.source_url)
+//      and f.outside_url is null;
+//   An outside link (migration 161: an http(s) source_url off the Blackboard host; migration 164: a
+//   Blackboard file whose link redirects to another site, bb_files.outside_url) is never pulled.
+//   With `--fetch`, the Playwright fallback adds `hops` to every row before this script reads it.
 //   `mime` may be null: it is then inferred from the extension. An optional `key` overrides the
 //   Storage key (a re-upload of an already-stored file needs its own; see file 145). `attempt_id`
 //   is carried for the operator's report only; nothing here reads it.
 //
-// STORAGE KEYS. Supabase Storage rejects `#` in a key; the key drops it, the mirror keeps the real
-// name, and `storage_path` records the key. Nothing else is renamed — in particular the
-// `attempt-<digits>/` segment migration 052 gives a submission relpath survives into the key, which
-// is what keeps a pulled-back submission off the key of a file Stack staged under the same name.
+// STORAGE KEYS. Supabase Storage refuses any key character outside `STORAGE_KEY_VALID` (`#`, `%`,
+// `~`, `[`, `]`, `"`, curly quotes, every non-ASCII letter): each one becomes `_` in every segment,
+// never the `/` separators, while the mirror and `file_name` keep the real name and `storage_path`
+// records the key. An occupied sanitised key is refused, not resumed (`occupiedKeyRefusal`).
+// Nothing else is renamed — in particular the `attempt-<digits>/` segment migration 052 gives a
+// submission relpath survives into the key, which is what keeps a pulled-back submission off the
+// key of a file Stack staged under the same name.
 //
 // Importing this module runs nothing: every helper is pure and exported for pull_files.test.mjs.
 
@@ -80,7 +96,6 @@ export const MIME_BY_EXT = {
   '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 };
-const EXTRACT_DEPS = ['python-docx', 'python-pptx', 'openpyxl'];
 
 /** Minimal argv parser: `--name value` pairs and `--flag` booleans. */
 export function parseArgs(argv) {
@@ -103,10 +118,45 @@ export function mimeFor(row) {
   return MIME_BY_EXT[ext] ?? 'application/octet-stream';
 }
 
-/** The Storage object key: an explicit override wins; otherwise the relpath without `#`. */
+/**
+ * The characters Supabase Storage accepts in an object key: storage-api's `VALID_OBJECT_KEY`,
+ * verbatim (supabase/storage `src/storage/limits.ts`, read at 69bb550, 2026-09-21). A key with
+ * anything else is answered `400 InvalidKey` (file 2489, 2026-10-05: a curly apostrophe).
+ */
+export const STORAGE_KEY_VALID = /^[A-Za-z0-9_/!.*'() &$=@;:+,?-]*$/;
+/** What a refused character becomes in the key, one per character. */
+export const STORAGE_KEY_REPLACEMENT = '_';
+// The same set without `/`, negated: one segment's refused characters, a whole code point at a time
+// (`u`), so an emoji is one `_`, not two. The sanitiser/check agreement test keeps the two in step.
+const REFUSED_IN_SEGMENT = /[^A-Za-z0-9_!.*'() &$=@;:+,?-]/gu;
+
+/** One key segment with every character Storage refuses replaced by `_`. */
+export function safeStorageSegment(segment) {
+  return String(segment).replace(REFUSED_IN_SEGMENT, STORAGE_KEY_REPLACEMENT);
+}
+
+/** A key Storage accepts: each `/`-separated segment made safe; the separators never change. */
+export function sanitizeStorageKey(key) {
+  return String(key).split('/').map(safeStorageSegment).join('/');
+}
+
+/** The key before sanitising: an explicit override wins; otherwise the relpath. */
+function unsanitisedKeyFor(row) {
+  return row.key ? String(row.key) : String(row.relpath);
+}
+
+/**
+ * The Storage object key: the explicit override or the relpath, sanitised. The sanitiser changes
+ * nothing Storage accepts, so a deliberate override is honoured byte for byte; one Storage would
+ * refuse can never be stored as given, and `storage_path` records the key actually used.
+ */
 export function storageKeyFor(row) {
-  if (row.key) return row.key;
-  return String(row.relpath).replace(/#/g, '_');
+  return sanitizeStorageKey(unsanitisedKeyFor(row));
+}
+
+/** Did sanitising change this row's key? Then another file's name may map to the same key. */
+export function keyWasSanitised(row) {
+  return storageKeyFor(row) !== unsanitisedKeyFor(row);
 }
 
 /**
@@ -131,6 +181,15 @@ export function bytesLookValid(bytes, mime) {
   return bytes[0] === 0x50 && bytes[1] === 0x4b;
 }
 
+/**
+ * The name a manifest row's bytes go by in --downloads: `<id>_<safe name>`. `findDownload` looks
+ * for this prefix, `--fetch` writes it, and `ingest/collect_download.mjs` moves a Chrome download
+ * to it: one spelling for all three.
+ */
+export function downloadNameFor(row) {
+  return `${row.id}_${safeBasename(row.file_name || row.relpath)}`;
+}
+
 /** The downloaded file for a manifest id: `<id>_<name>` in the downloads dir. */
 export function findDownload(fileNames, id) {
   return fileNames.find((f) => f.startsWith(`${id}_`)) ?? null;
@@ -143,6 +202,8 @@ export function isSubmissionRow(row) {
 
 /** Which of the two exclusive runs this is. */
 export function modeOf(args) {
+  if (args?.['restale-post']) return 'restale-post';
+  if (args?.restale) return 'restale';
   return args?.bucket === SUBMISSION_BUCKET ? 'submissions' : 'course';
 }
 
@@ -189,17 +250,226 @@ export function isDuplicateAnswer(status, body) {
 }
 
 /**
- * Is that duplicate answer good enough to go on? For a course file yes: the key is derived from the
- * catalogue, so the object under it is this file. For a submission NO — migration 052's
+ * Is that duplicate answer good enough to go on? For a course file whose key is the catalogue's own
+ * spelling, yes: the object under it is this file. For a submission NO — migration 052's
  * `attempt-<digits>` segment means nothing should ever share the key, so an occupied one holds
  * bytes this step did not write and must not point a Blackboard row at. bb-sync step 4b reports the
- * row, leaves `storage_path` null, and a human decides.
+ * row, leaves `storage_path` null, and a human decides. A SANITISED course key (W-73) is refused the
+ * same way: two names that differ only in a refused character (`a’b.pdf`, `a“b.pdf`) share a key,
+ * so the object there may be the other file's. The cost: a sanitised file whose earlier pass
+ * uploaded and then failed later is a loud item instead of a resume, until Storage's size and md5
+ * eTag are checked against the fetched bytes (Phase 14's deferred list).
  */
-export function duplicateIsAcceptable(submission) {
-  return !submission;
+export function duplicateIsAcceptable(submission, { restale = false, sanitised = false } = {}) {
+  if (submission) return false;
+  // A restale key carries the new bytes' sha. If it is already occupied (a run that stopped midway,
+  // or a re-run before the owner SQL), the object is NOT overwritten and NOT trusted: the owner SQL
+  // refuses to re-point the row unless storage.objects holds exactly these bytes (md5 eTag + size).
+  // That check is what makes an occupied restale key resumable instead of a dead end, sanitised or not.
+  if (restale) return true;
+  return !sanitised;
+}
+
+/**
+ * Why an occupied Storage key must not be recorded as this row's file, or null when it may (the
+ * course resume). Both runners put it after `storage <status>: `, so the report's `not_pulled` and
+ * the Inbox item say why without a lookup. The verdict comes first and the sanitised file name
+ * last, so the report's 200-character clip can only shorten the name (the line already names the
+ * file by id). A name already holding `_` where another has a refused character is not sanitised,
+ * so if it arrives second it still resumes: the size + md5 check on Phase 14's deferred list closes that.
+ */
+export function occupiedKeyRefusal(row) {
+  const raw = unsanitisedKeyFor(row);
+  const key = sanitizeStorageKey(raw);
+  const sanitised = key !== raw;
+  if (duplicateIsAcceptable(isSubmissionRow(row), { sanitised })) return null;
+  if (sanitised) {
+    return `key already occupied; this key was sanitised, so the object there may be another file; a human decides (${path.posix.basename(key)})`;
+  }
+  return 'key already occupied; a human decides whether those bytes are this file';
+}
+
+export const sha256Hex = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
+/** Storage's eTag for a single (non-multipart) upload is the quoted md5 of the body. */
+export const md5Hex = (bytes) => crypto.createHash('md5').update(bytes).digest('hex');
+
+/**
+ * Where this run writes its owner SQL. An earlier run's non-empty file is never truncated: its rows
+ * may not have been executed yet and are not re-processed here, so a new per-run file is written
+ * next to it (`<name>.<stamp>.sql`) and the run says which.
+ */
+export function resolveOutPath(out, stamp) {
+  let existing = '';
+  try { existing = fs.readFileSync(out, 'utf8'); } catch { return out; }
+  if (existing.trim() === '') return out;
+  const ext = path.extname(out) || '.sql';
+  return path.join(path.dirname(out), `${path.basename(out, path.extname(out))}.${stamp}${ext}`);
 }
 
 const q = (s) => `'${String(s).replace(/'/g, "''")}'`;
+
+// ---------------------------------------------------------------------------------------------
+// --restale: re-pull a row whose stored bytes went stale.
+//
+// `stage_files` (074 and its predecessors) appends `; stored bytes may be stale` to a row's notes
+// when the instructor re-uploads a file under the same item (same content id and name, new rid).
+// The stored bytes and their text may then be out of date. This mode re-fetches them.
+//
+// THE RULE IT KEEPS (PR #32's security review): professor-authored document text never lands in
+// SQL an agent reads and hands to a privileged execute_sql. Text goes through sync_file_text_put
+// (200) exactly as the normal pull stores it, as a parameter, never in SQL text. The owner SQL carries only ids, Storage keys, hashes, a mime shape, a date
+// and this script's own constant wording, and each of those is shape-checked before it is written.
+//
+// WHY TWO RUNS. `bb_file_text` is unique on (file_id, unit_kind, unit_no) and `sync_runner` can
+// only insert through sync_file_text_put, never update or delete, so the new units cannot be stored
+// while the old ones are there, and only the owner can remove the old ones. So:
+//   1. `--restale` fetches the bytes and hashes them. Unchanged bytes → owner SQL that only clears
+//      the note. Changed bytes → a NEW Storage key (a `restale-<sha12>/` segment; the old object is
+//      never overwritten and stays where it is), a mirror copy at that new path, the units staged
+//      on local disk (`<downloads>/restale_units/<id>.json`), and one owner transaction per row:
+//      delete the old units (their embeddings cascade), point the row at the new key and sha, and
+//      replace the marker with a dated "re-pulled" note. Both statements are guarded on the old
+//      sha, so a row that changed since the manifest was read is left alone. The transaction
+//      opens with a guard that aborts unless storage.objects holds exactly these bytes at the new
+//      key (md5 eTag + size): that is why an occupied restale key is resumed, never refused or
+//      overwritten. A row that uploads but gets no units reports its orphaned key.
+//   2. The owner runs that SQL through execute_sql.
+//   3. `--restale-post` stores each staged file's units through sync_file_text_put, all or nothing
+//      (one transaction, rolled back when any unit is already there), and runs the embed step. A unit
+//      already there means step 2 has not run for that row yet; nothing is stored and the file stays
+//      staged.
+//
+// THE MANIFEST for --restale adds three keys to the normal one (ids, hashes and a boolean only):
+//   select jsonb_agg(jsonb_build_object('id', f.id, 'file_name', f.file_name,
+//            'relpath', bb_file_relpath(f.id), 'mime', f.mime_type, 'source_url', f.source_url,
+//            'bucket', f.bucket, 'storage_path', f.storage_path, 'sha256', f.sha256,
+//            'stale', true) order by f.id)
+//     from bb_files f
+//    where f.superseded_by is null and f.storage_path is not null
+//      and f.notes like '%stored bytes may be stale%' and not bb_file_is_outside_link(f.source_url);
+// ---------------------------------------------------------------------------------------------
+
+/** The exact wording stage_files appends (034, 037, 043, 053, 074); prod rows 72 and 144 carry it. */
+export const STALE_MARKER = '; stored bytes may be stale';
+const RESTALE_BY = 'ingest/pull_files.mjs --restale';
+const SHA_RE = /^[0-9a-f]{64}$/;
+const MD5_RE = /^[0-9a-f]{32}$/;
+// The storage guard is a DO block quoted with this tag, so no key may contain it.
+const GUARD_TAG = '$restale$';
+const MIME_RE = /^[a-z0-9.+-]+\/[a-z0-9.+-]+$/i;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const ID_RE = /^\d+$/;
+// A key or relpath is a catalogue path: one line, no control characters.
+const NO_CONTROL_RE = /^[^\u0000-\u001f\u007f]+$/;
+
+function mustMatch(value, re, what) {
+  if (!re.test(String(value))) throw new Error(`restale: refusing a malformed ${what}`);
+  return String(value);
+}
+
+/** Rows --restale may take: flagged stale, bytes already stored, a well-formed sha, not a submission. */
+export function filterRestale(rows, only) {
+  const ids = String(only ?? '').split(',').map((s) => s.trim()).filter(Boolean).map(Number);
+  return rows.filter((r) => (ids.length === 0 || ids.includes(Number(r.id)))
+    && r.stale === true && Boolean(r.storage_path) && SHA_RE.test(String(r.sha256))
+    && ID_RE.test(String(r.id)) && !isSubmissionRow(r));
+}
+
+/** The relpath for re-pulled bytes: the same folder plus a `restale-<sha12>/` segment. */
+export function restaleRelpath(relpath, sha256) {
+  const p = String(relpath);
+  const cut = p.lastIndexOf('/');
+  const dir = cut >= 0 ? p.slice(0, cut + 1) : '';
+  return `${dir}restale-${mustMatch(sha256, SHA_RE, 'sha256').slice(0, 12)}/${p.slice(cut + 1)}`;
+}
+
+/** The owner transaction for a row whose bytes changed. Ids, keys and hashes only. */
+export function restaleSql({ id, oldSha, newSha, key, relpath, size, mime, pulledOn, md5 }) {
+  const fid = mustMatch(id, ID_RE, 'id');
+  const was = q(mustMatch(oldSha, SHA_RE, 'old sha256'));
+  const now = q(mustMatch(newSha, SHA_RE, 'new sha256'));
+  const bytes = mustMatch(size, ID_RE, 'size');
+  const type = q(mustMatch(mime, MIME_RE, 'mime'));
+  const day = mustMatch(pulledOn, DATE_RE, 'date');
+  mustMatch(key, NO_CONTROL_RE, 'key');
+  mustMatch(relpath, NO_CONTROL_RE, 'relpath');
+  const etag = q(`"${mustMatch(md5, MD5_RE, 'md5')}"`);
+  if (String(key).includes(GUARD_TAG)) throw new Error('restale: refusing a key that holds the guard quote tag');
+  // The row is re-pointed only if the object at the new key is these bytes. The script cannot read
+  // Storage back (anon is insert-only), so the owner checks storage.objects, and a mismatch aborts
+  // the whole transaction loudly instead of pointing the row at bytes nobody verified.
+  const guard = `do ${GUARD_TAG} begin if not exists (select 1 from storage.objects o where o.bucket_id = ${q(BUCKET)} ` +
+    `and o.name = ${q(key)} and o.metadata->>'eTag' = ${etag} and (o.metadata->>'size')::bigint = ${bytes}) ` +
+    `then raise exception 'restale file ${fid}: the object at the new key is not the bytes this run fetched'; end if; end ${GUARD_TAG};`;
+  return [
+    'begin;',
+    guard,
+    `delete from bb_file_text where file_id = ${fid} and exists (select 1 from bb_files where id = ${fid} and sha256 = ${was});`,
+    `update bb_files set storage_path = ${q(`${BUCKET}/${key}`)}, local_path = ${q(`course context/${relpath}`)}, ` +
+      `sha256 = ${now}, bytes = ${bytes}, mime_type = ${type}, downloaded_at = now(), text_status = 'extracted', ` +
+      `notes = replace(notes, ${q(STALE_MARKER)}, ${q(`; bytes re-pulled ${day} by ${RESTALE_BY}`)}) ` +
+      `where id = ${fid} and sha256 = ${was};`,
+    'commit;',
+  ].join('\n');
+}
+
+/** The owner transaction for a row whose bytes turned out unchanged: the note only. */
+export function restaleUnchangedSql({ id, sha, pulledOn }) {
+  const fid = mustMatch(id, ID_RE, 'id');
+  const was = q(mustMatch(sha, SHA_RE, 'sha256'));
+  const day = mustMatch(pulledOn, DATE_RE, 'date');
+  return [
+    'begin;',
+    `update bb_files set notes = replace(notes, ${q(STALE_MARKER)}, ${q(`; bytes re-checked ${day} by ${RESTALE_BY}: unchanged`)}) ` +
+      `where id = ${fid} and sha256 = ${was};`,
+    'commit;',
+  ].join('\n');
+}
+
+/** What --restale stages on disk for --restale-post: the unit rows, never SQL. */
+export function stagedUnits({ id, sha256, units }) {
+  return { id, sha256, rows: textRows(id, units) };
+}
+
+export function stagedUnitsPath(downloads, id) {
+  return path.join(downloads, 'restale_units', `${id}.json`);
+}
+
+function firstLine(error) {
+  return String(error instanceof Error ? error.message : error).split('\n')[0];
+}
+
+/**
+ * The text store for this run: `ingest/text_put.mjs`, loaded here and not at the top, because the
+ * sync image copies this file for its pure helpers but not that one. It reads the sync_runner login
+ * from SECRETS_DIR and the pinned CA from the harness checkout (verify-full, as the Workspace), and
+ * connects on the first put.
+ */
+async function openTextStore(env, ingestDir) {
+  const tp = await import('./text_put.mjs');
+  const dsn = tp.readSyncRunnerDsn(env);
+  const ca = tp.readPinnedCa(env);
+  const pg = await tp.loadPg(path.join(ingestDir, '..'));
+  const store = tp.openTextPut({ dsn, ca, pg });
+  return {
+    putFile: (fileId, units) => tp.putFileText(store, fileId, units),
+    postStaged: (staged, id) => tp.restalePostOne(staged, id, store),
+    end: () => store.end(),
+  };
+}
+
+const USAGE = 'usage: node ingest/pull_files.mjs --manifest <json> --downloads <dir> [--mirror <dir>] [--bucket my_submissions] [--fetch] [--restale] [--only ids] [--out <sql>] [--dry-run] [--no-embed]\n' +
+  '       node ingest/pull_files.mjs --restale-post --downloads <dir> [--only ids] [--no-embed]';
+
+/** The argument error for this run, or null. */
+export function argError(args) {
+  if (args.restale && args['restale-post']) return '--restale and --restale-post are exclusive: run --restale, then the owner SQL, then --restale-post';
+  if (args['restale-post']) return args.downloads && args.bucket === undefined ? null : USAGE;
+  if (!args.manifest || !args.downloads) return USAGE;
+  if (args.bucket !== undefined && args.bucket !== SUBMISSION_BUCKET) return `--bucket takes only '${SUBMISSION_BUCKET}' (bb-sync step 4b); omit it for course files`;
+  if (args.restale && args.bucket !== undefined) return '--restale takes course rows only; it does not combine with --bucket';
+  return null;
+}
 
 /**
  * The one statement the owner runs per file; the script never writes bb_files itself.
@@ -208,13 +478,14 @@ const q = (s) => `'${String(s).replace(/'/g, "''")}'`;
  * `application/octet-stream` — keep what Blackboard said, fall back to the observed type only for a
  * pre-v4 row that has none. And its notes line names the step that pulled it.
  */
-export function bbFilesUpdateSql({ id, key, relpath, sha256, size, mime, textStatus, pulledOn, submission = false }) {
+export function bbFilesUpdateSql({ id, key, relpath, sha256, size, mime, textStatus, pulledOn, submission = false, textKept = false }) {
   const mimeAssign = submission ? `mime_type = coalesce(mime_type, ${q(mime)})` : `mime_type = ${q(mime)}`;
   const pulledBy = submission ? 'bb-sync step 4b' : 'ingest/pull_files.mjs';
+  const kept = textKept ? '; existing text units kept' : '';
   return (
     `update bb_files set storage_path = ${q(`${BUCKET}/${key}`)}, local_path = ${q(`course context/${relpath}`)}, ` +
     `sha256 = ${q(sha256)}, bytes = ${size}, ${mimeAssign}, downloaded_at = now(), ` +
-    `text_status = ${q(textStatus)}, notes = coalesce(notes, '') || ${q(` | bytes pulled ${pulledOn} by ${pulledBy}`)} ` +
+    `text_status = ${q(textStatus)}, notes = coalesce(notes, '') || ${q(` | bytes pulled ${pulledOn} by ${pulledBy}${kept}`)} ` +
     `where id = ${id} and storage_path is null;`
   );
 }
@@ -224,9 +495,14 @@ export function anonHeaders(key, contentType) {
   return { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': contentType };
 }
 
-function extractUnits(ingestDir, filePath) {
-  const args = ['run', '--python', '3.12', ...EXTRACT_DEPS.flatMap((d) => ['--with', d]), 'python', path.join(ingestDir, 'extract_text.py'), filePath];
-  const out = execFileSync('uv', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, cwd: ingestDir });
+/**
+ * extract_text.py on the locked set (ingest/pyproject.toml + ingest/uv.lock, brief 100 task 14), so
+ * the host and the sync image run the same pinned libraries; `--locked` stops on a stale lock rather
+ * than re-resolving. `run` is execFileSync, injectable for extract_text.test.mjs.
+ */
+export function extractUnits(ingestDir, filePath, run = execFileSync) {
+  const args = ['run', '--locked', '--project', ingestDir, 'python', path.join(ingestDir, 'extract_text.py'), filePath];
+  const out = run('uv', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, cwd: ingestDir });
   return parseExtractOutput(out);
 }
 
@@ -249,7 +525,7 @@ async function bytesOnDisk(row, ctx) {
   if (chain.outcome !== 'ok') {
     return { error: `hops ${chain.outcome}: ${chain.reason ?? 'no signed URL'}`, outcome: chain.outcome };
   }
-  const dest = path.join(downloads, `${row.id}_${safeBasename(row.file_name || row.relpath)}`);
+  const dest = path.join(downloads, downloadNameFor(row));
   const got = await downloadTo(fetchImpl, chain.signedUrl, dest);
   if (got.outcome !== 'ok') {
     return { error: `download ${got.outcome}: ${got.reason}`, outcome: got.outcome, fatal: got.outcome === 'session_expired' };
@@ -268,6 +544,7 @@ async function pullOne(row, ctx) {
   const mime = mimeFor(row);
   if (!bytesLookValid(bytes, mime)) return { id: row.id, error: `bad bytes: ${bytes.length} bytes, magic ${bytes.subarray(0, 4).toString('hex')}` };
   const sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
+  if (ctx.restale) return restaleOne(row, ctx, { localPath, bytes, mime, sha256 });
   const submission = isSubmissionRow(row);
   const storageKey = storageKeyFor(row);
   const tag = submission ? { submission: true } : {};
@@ -283,47 +560,149 @@ async function pullOne(row, ctx) {
   const upBody = await up.text();
   if (!up.ok) {
     if (!isDuplicateAnswer(up.status, upBody)) return { id: row.id, error: `storage ${up.status}: ${upBody.slice(0, 200)}` };
-    // A course key is derived from the catalogue, so an occupied one holds this same file. Only a
-    // submission key must never be assumed (migration 052: nothing should ever share it).
-    if (!duplicateIsAcceptable(submission)) {
-      return { id: row.id, key: storageKey, ...tag, error: `Storage key already occupied (${up.status}); a human decides whether those bytes are this file` };
-    }
+    // A course key in the catalogue's own spelling holds this same file. A submission key (migration
+    // 052: nothing should ever share it) or a sanitised key (W-73: another name may map to it) is never assumed.
+    const refusal = occupiedKeyRefusal(row);
+    if (refusal) return { id: row.id, key: storageKey, ...tag, error: `storage ${up.status}: ${refusal}` };
   }
 
   let units = [];
   let extractError = null;
   try { units = extractUnits(ingestDir, localPath); } catch (e) { extractError = String(e).slice(0, 200); }
 
-  let unitsPosted = 0;
-  if (units.length) {
-    const tr = await fetch(`${supabaseUrl}/rest/v1/bb_file_text`, {
-      method: 'POST', headers: { ...anonHeaders(key, 'application/json'), Prefer: 'return=minimal' },
-      body: JSON.stringify(textRows(row.id, units)),
-    });
-    if (!tr.ok) return { id: row.id, error: `bb_file_text ${tr.status}: ${(await tr.text()).slice(0, 200)}` };
-    unitsPosted = units.length;
+  const text = await ctx.putFile(row.id, units);
+  if (text.error) return { id: row.id, error: text.error };
+  const { unitsPosted, textKept } = text;
+  // Too large for 200: recorded as a failed extraction is (text_status failed), so it is not pulled again.
+  if (text.textRefused) extractError = text.textRefused;
+
+  const textStatus = text.unitCount ? 'extracted' : 'failed';
+  const sql = bbFilesUpdateSql({ id: row.id, key: storageKey, relpath: row.relpath, sha256, size: bytes.length, mime, textStatus, pulledOn, submission, textKept });
+  return { id: row.id, key: storageKey, size: bytes.length, sha256: sha256.slice(0, 12), ...tag, storage: up.status, units: units.length, unitsPosted, textKept, textStatus, extractError, sql };
+}
+
+/**
+ * --restale, per row, once the fresh bytes are on disk and hashed. Unchanged bytes → the note-only
+ * SQL. Changed bytes → new key, mirror at the new path, Storage POST (an occupied key is refused),
+ * extract, stage the units on disk, and the one owner transaction. A row whose extraction yields
+ * nothing gets no SQL: its old text is better than none.
+ */
+export async function restaleOne(row, ctx, { localPath, bytes, mime, sha256 }) {
+  const { mirror, dryRun, pulledOn, downloads } = ctx;
+  if (sha256 === row.sha256) {
+    return { id: row.id, restale: 'unchanged', sha256: sha256.slice(0, 12), ...(dryRun ? { dryRun: true } : { sql: restaleUnchangedSql({ id: row.id, sha: sha256, pulledOn }) }) };
+  }
+  const relpath = restaleRelpath(row.relpath, sha256);
+  const storageKey = storageKeyFor({ relpath });
+  if (dryRun) return { id: row.id, restale: 'changed', key: storageKey, size: bytes.length, sha256: sha256.slice(0, 12), dryRun: true };
+
+  const dest = path.join(mirror, relpath);
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.copyFileSync(localPath, dest);
+
+  const up = await ctx.storagePost(storageKey, bytes, mime);
+  let resumed = false;
+  if (!up.ok) {
+    // Occupied: never overwritten. Resumed only because the owner SQL verifies the object's bytes.
+    if (!isDuplicateAnswer(up.status, up.body) || !duplicateIsAcceptable(false, { restale: true })) {
+      return { id: row.id, key: storageKey, error: `storage ${up.status}: ${String(up.body).slice(0, 200)}` };
+    }
+    resumed = true;
   }
 
-  const textStatus = units.length ? 'extracted' : 'failed';
-  const sql = bbFilesUpdateSql({ id: row.id, key: storageKey, relpath: row.relpath, sha256, size: bytes.length, mime, textStatus, pulledOn, submission });
-  return { id: row.id, key: storageKey, size: bytes.length, sha256: sha256.slice(0, 12), ...tag, storage: up.status, units: units.length, unitsPosted, textStatus, extractError, sql };
+  // Past this point the object exists at storageKey. A row that gets no SQL leaves it orphaned, so
+  // every such outcome names it; a retry reaches it as an occupied key and resumes.
+  const orphan = (why) => ({ id: row.id, key: storageKey, orphanKey: storageKey,
+    error: `not restaled: ${why}; the old text is kept, no SQL is written, and ${BUCKET}/${storageKey} is orphaned until a retry resumes it or a human removes it` });
+  let units = [];
+  try { units = ctx.extract(localPath); } catch (e) { return orphan(`extract failed (${String(e).slice(0, 160)})`); }
+  if (!units.length) return orphan('extract gave no units');
+
+  const staged = stagedUnitsPath(downloads, row.id);
+  fs.mkdirSync(path.dirname(staged), { recursive: true });
+  fs.writeFileSync(staged, JSON.stringify(stagedUnits({ id: Number(row.id), sha256, units })));
+  const sql = restaleSql({ id: row.id, oldSha: row.sha256, newSha: sha256, key: storageKey, relpath, size: bytes.length, mime, pulledOn, md5: md5Hex(bytes) });
+  return { id: row.id, restale: 'changed', key: storageKey, size: bytes.length, sha256: sha256.slice(0, 12), units: units.length, staged, sql, ...(resumed ? { resumed: true } : {}) };
+}
+
+/** The embed step, shared by the pull and --restale-post. Returns the note and an exit code. */
+async function embedStep(env, supabaseUrl) {
+  const jwt = env.SB_ANON_JWT;
+  if (!jwt) return { note: '; embed step skipped (SB_ANON_JWT is not set) — run ingest/embed_corpus.mjs', code: 0 };
+  const embed = await runEmbedLoop({ post: makePost(supabaseUrl, jwt), maxParts: DEFAULT_MAX_PARTS, log: (line) => console.log(line) });
+  if (embed.exitCode !== 0) { console.error(embed.error); return { note: `; EMBED FAILED — ${embed.error}`, code: 1 }; }
+  return { note: '; embeddings finished', code: 0 };
+}
+
+/**
+ * --restale-post: store each staged file's units through sync_file_text_put, all or nothing, as the
+ * normal pull stores text. A posted file is renamed `<id>.json.posted` so a re-run never posts it
+ * twice. A unit already there means the owner SQL has not deleted that row's old units yet: nothing
+ * is stored and the file stays staged for the next run.
+ */
+async function restalePost(args, env, ingestDir) {
+  const supabaseUrl = env.SUPABASE_URL || DEFAULT_SUPABASE_URL;
+  const dir = path.dirname(stagedUnitsPath(args.downloads, 0));
+  const only = String(args.only ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  const names = fs.existsSync(dir) ? fs.readdirSync(dir).filter((n) => /^\d+\.json$/.test(n)) : [];
+  const picked = names.filter((n) => only.length === 0 || only.includes(n.replace('.json', '')));
+  const results = [];
+  if (picked.length > 0) {
+    let store;
+    try {
+      store = await openTextStore(env, ingestDir);
+    } catch (error) {
+      console.error(`restale-post: ${firstLine(error)}`);
+      return 2;
+    }
+    try {
+      for (const name of picked) {
+        const file = path.join(dir, name);
+        const staged = JSON.parse(fs.readFileSync(file, 'utf8'));
+        const id = Number(name.replace('.json', ''));
+        const r = await store.postStaged(staged, id);
+        if (r.outcome === 'posted') fs.renameSync(file, `${file}.posted`);
+        results.push(r);
+      }
+    } finally {
+      await store.end();
+    }
+  }
+  for (const r of results) console.log(JSON.stringify(r));
+  const unitsPosted = results.reduce((n, r) => n + (r.unitsPosted || 0), 0);
+  let embed = { note: '', code: 0 };
+  if (shouldEmbed({ dryRun: false, noEmbed: args['no-embed'] === true, unitsPosted })) embed = await embedStep(env, supabaseUrl);
+  const pending = results.filter((r) => r.outcome === 'owner_sql_pending').map((r) => r.id);
+  console.log(`${results.filter((r) => r.outcome === 'posted').length} of ${picked.length} staged file(s) posted (restale-post)` +
+    (pending.length ? `; owner SQL not run yet for ${pending.join(', ')}` : '') + embed.note);
+  return results.some((r) => r.outcome !== 'posted') || embed.code ? 1 : 0;
 }
 
 export async function main(argv = process.argv.slice(2), env = process.env) {
   const args = parseArgs(argv);
-  if (!args.manifest || !args.downloads) {
-    console.error('usage: node ingest/pull_files.mjs --manifest <json> --downloads <dir> [--mirror <dir>] [--bucket my_submissions] [--fetch] [--only ids] [--out <sql>] [--dry-run] [--no-embed]');
-    console.error('note: --dry-run writes nothing to Storage, the mirror or the database, but with --fetch it still downloads the bytes, because the key and sha it reports are computed from them.');
+  const bad = argError(args);
+  if (bad) {
+    console.error(bad);
+    if (bad === USAGE) console.error('note: --dry-run writes nothing to Storage, the mirror or the database, but with --fetch it still downloads the bytes, because the key and sha it reports are computed from them.');
     return 2;
   }
-  if (args.bucket !== undefined && args.bucket !== SUBMISSION_BUCKET) {
-    console.error(`--bucket takes only '${SUBMISSION_BUCKET}' (bb-sync step 4b); omit it for course files`);
-    return 2;
-  }
+  const ingestDir = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
+  if (args['restale-post']) return restalePost(args, env, ingestDir);
   const key = env.SB_ANON_KEY || env.SUPABASE_PUBLISHABLE_KEY;
   if (!key && !args['dry-run']) { console.error('SB_ANON_KEY (the publishable key) is not set'); return 2; }
-  const ingestDir = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
   const mode = modeOf(args);
+  // A first pull stores text through sync_file_text_put as sync_runner: the login is read (and the
+  // pg client found) before any byte moves, so a missing secret stops the run instead of failing
+  // every row after its upload. It connects on the first put. --restale stages text, and stores none.
+  let store = null;
+  if (args['dry-run'] !== true && args.restale !== true) {
+    try {
+      store = await openTextStore(env, ingestDir);
+    } catch (error) {
+      console.error(`pull_files: ${firstLine(error)}`);
+      return 2;
+    }
+  }
   const ctx = {
     downloads: args.downloads,
     // Only --fetch may name a directory that does not exist yet; it creates it below. Without
@@ -336,49 +715,61 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     supabaseUrl: env.SUPABASE_URL || DEFAULT_SUPABASE_URL,
     key, ingestDir, dryRun: args['dry-run'] === true,
     fetchMode: args.fetch === true,
+    restale: args.restale === true,
+    storagePost: async (storageKey, bytes, mime) => {
+      const up = await fetch(`${env.SUPABASE_URL || DEFAULT_SUPABASE_URL}/storage/v1/object/${BUCKET}/${encodeKey(storageKey)}`, {
+        method: 'POST', headers: anonHeaders(key, mime), body: bytes,
+      });
+      return { ok: up.ok, status: up.status, body: await up.text() };
+    },
+    extract: (localPath) => extractUnits(ingestDir, localPath),
+    putFile: (fileId, units) => {
+      if (!store) throw new Error('no text store in this mode');
+      return store.putFile(fileId, units);
+    },
     fetchImpl: (url) => fetch(url),
     pulledOn: new Date().toISOString().slice(0, 10),
   };
   if (ctx.fetchMode) fs.mkdirSync(args.downloads, { recursive: true });
 
-  const rows = filterManifest(JSON.parse(fs.readFileSync(args.manifest, 'utf8')), args.only, args.bucket);
+  const manifest = JSON.parse(fs.readFileSync(args.manifest, 'utf8'));
+  const rows = ctx.restale ? filterRestale(manifest, args.only) : filterManifest(manifest, args.only, args.bucket);
   const results = [];
   let stopped = null;
-  for (const row of rows) {
-    const r = await pullOne(row, ctx);
-    results.push(r);
-    if (r.fatal) {
-      // The Blackboard session died mid-run. Stop: every remaining row fails the same way, and the
-      // rows already pulled keep their SQL so the run is not wasted.
-      stopped = r;
-      break;
+  try {
+    for (const row of rows) {
+      const r = await pullOne(row, ctx);
+      results.push(r);
+      if (r.fatal) {
+        // The Blackboard session died mid-run. Stop: every remaining row fails the same way, and the
+        // rows already pulled keep their SQL so the run is not wasted.
+        stopped = r;
+        break;
+      }
     }
+  } finally {
+    await store?.end();
   }
 
   const sql = results.filter((r) => r.sql).map((r) => `-- file ${r.id}\n${r.sql}`).join('\n');
-  const out = args.out || path.join(args.downloads, 'pull_files.sql');
+  const wanted = args.out || path.join(args.downloads, 'pull_files.sql');
+  const out = ctx.dryRun ? wanted : resolveOutPath(wanted, new Date().toISOString().replace(/[-:]/g, '').slice(0, 15));
+  if (out !== wanted) console.log(`${wanted} holds an earlier run's SQL and is kept; this run's SQL is in ${out}`);
   if (!ctx.dryRun) fs.writeFileSync(out, sql + '\n');
   for (const r of results) console.log(JSON.stringify({ ...r, sql: undefined }));
 
   const unitsPosted = results.reduce((n, r) => n + (r.unitsPosted || 0), 0);
   let embedNote = '';
   if (shouldEmbed({ dryRun: ctx.dryRun, noEmbed: args['no-embed'] === true, unitsPosted })) {
-    const jwt = env.SB_ANON_JWT;
-    if (!jwt) {
-      embedNote = '; embed step skipped (SB_ANON_JWT is not set) — run ingest/embed_corpus.mjs';
-    } else {
-      const embed = await runEmbedLoop({
-        post: makePost(ctx.supabaseUrl, jwt),
-        maxParts: DEFAULT_MAX_PARTS,
-        log: (line) => console.log(line),
-      });
-      embedNote = embed.exitCode === 0 ? '; embeddings finished' : `; EMBED FAILED — ${embed.error}`;
-      if (embed.exitCode !== 0) {
-        console.error(embed.error);
-        console.log(`${results.filter((r) => r.sql).length} of ${rows.length} pulled (${mode}); bb_files updates in ${out}${embedNote}`);
-        return 1;
-      }
+    const embed = await embedStep(env, ctx.supabaseUrl);
+    embedNote = embed.note;
+    if (embed.code !== 0) {
+      console.log(`${results.filter((r) => r.sql).length} of ${rows.length} pulled (${mode}); bb_files updates in ${out}${embedNote}`);
+      return 1;
     }
+  }
+  if (ctx.restale && !ctx.dryRun) {
+    console.log('restale: run the SQL file through execute_sql, then `node ingest/pull_files.mjs --restale-post --downloads <same dir>` to post the staged units');
   }
 
   if (ctx.dryRun) {
@@ -391,4 +782,11 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
 }
 
 const invokedDirectly = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
-if (invokedDirectly) main().then((code) => process.exit(code));
+// Set the exit code and let the event loop drain: a hard exit while undici is still closing a
+// fetch handle aborts node on Windows (libuv `!(handle->flags & UV_HANDLE_CLOSING)`, async.c:94).
+if (invokedDirectly) {
+  main().then(
+    (code) => { process.exitCode = code; },
+    (e) => { console.error(String((e && e.stack) || e)); process.exitCode = 1; },
+  );
+}

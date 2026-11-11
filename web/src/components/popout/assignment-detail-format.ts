@@ -93,3 +93,41 @@ export function formatDue(
   const clock = formatClock(dueAt) || (dueRule ?? '');
   return clock === '' ? date : `${date} · ${clock}`;
 }
+
+/** The three due facts an assignment row carries. */
+export interface DueFields {
+  due_date: string | null;
+  due_at: string | null;
+  due_rule: string | null;
+}
+
+/** The due date a surface should show, and where it came from. */
+export interface EffectiveDue extends DueFields {
+  /** True when Stack's own date (assignment_progress.due_override) won. */
+  overridden: boolean;
+  /** Blackboard's due line, for the "Blackboard: …" hint beside his date. */
+  blackboard: string;
+}
+
+/**
+ * Stack's due date when he set one (migration 221), else Blackboard's.
+ *
+ * His date is one instant, so it replaces all three facts: a `due_date` or a
+ * rule left over from Blackboard would otherwise name a different day.
+ */
+export function effectiveDue(
+  assignment: DueFields,
+  dueOverride: string | null | undefined,
+): EffectiveDue {
+  const blackboard = formatDue(assignment.due_date, assignment.due_at, assignment.due_rule);
+  if (typeof dueOverride !== 'string' || dueOverride.trim() === '') {
+    return {
+      due_date: assignment.due_date,
+      due_at: assignment.due_at,
+      due_rule: assignment.due_rule,
+      overridden: false,
+      blackboard,
+    };
+  }
+  return { due_date: null, due_at: dueOverride, due_rule: null, overridden: true, blackboard };
+}

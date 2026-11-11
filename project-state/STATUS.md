@@ -1,6 +1,6 @@
 # bb2dash — Project State
 
-> Updated upon each PR. Last update: **2026-09-29** (**desktop logon build**, [PR #31](https://github.com/emstacho-su/bb2dash/pull/31) **merged 2026-09-29** as 6295b83 from `feat/desktop-logon-build`, after PR #30 (6ef3933) and before PR #32 (795bcf6), all three on Stack's word that day: `desktop/launch/` stands the shell up after sign-in on the new laptop (`stack-laptop`, checkout `C:/Users/stack/projects/bb2dash`) and rebuilds it in an ephemeral `docker compose run --rm` container only when `desktop/` changed on the build ref; two Task Scheduler entries, `Bb2dash-LogonBuild` (logon + 2 min, below normal) and `Bb2dash-App` (the exe, normal priority, no time limit); builds keyed by the `desktop/` tree hash under `%LOCALAPPDATA%\bb2dash-launch\builds\`, a `current` junction repointed only while the app is closed; `wt.ts` joins with `node:path/win32` so the unit suite passes on Linux; no Phase 14 container is in it — a repo-root `compose.yaml`, when Phase 14 adds one, is brought up by the same task; see "Known issues / operational notes"). The same PR carries the `estac` → `stack` path pass: every live doc (state docs, the sprint-2 plan, run sheet, briefs, research and verification, the skill and ingest docs, the desktop docs and unit fixtures) now names `C:/Users/stack/...`, sprint 0–1 records keep the old paths as history, the desktop `repoDir` default is derived from the home folder, and the Task 0 record `docs/planning/sprint-2/verification/82b_NOVNC_SPIKE.md` exists with its eight pending rows (DECISIONS 2026-09-29; see "Known issues" for what is not stood up on this laptop yet). Before that, **2026-09-28** (**Phase 15 — database hygiene and the SQL test runner, [PR #30](https://github.com/emstacho-su/bb2dash/pull/30) merged 2026-09-29 as 6ef3933** from `feat/db-hygiene-15`, built through the evening of 2026-09-27 and opened after midnight: migrations 100, 101 and 102 live and md5-identical to their committed blobs; `node scripts/db-test.mjs` → `passed 21, failed 0, units 21`, exit 0, the first time the suite has ever run as a set; the security advisor's mutable-`search_path` list is empty (was 7); no planner series outlives its last occurrence on any delete path; eight stale assertions across seven `db/tests` files repaired, four of them units no worker owned, absorbed on Stack's decision; seven DECISIONS rows; nothing visual, so no preview walk — row 17 under "What has been done". Earlier the same day: **sprint 2 briefs verified, batch answered by delegation**: [PR #28](https://github.com/emstacho-su/bb2dash/pull/28) merged as 67269b5 from `docs/sprint2-planning`; briefs `95_`–`103_` verified in three Opus rounds, record `105_BRIEF_VERIFICATION_2026-09-27.md`; ORCHESTRATOR §6 one prompt per phase; Stack delegated the 59 batch answers and the plan approval, written as DECISIONS rows dated 2026-09-27; the calendar push has run `ok` since 2026-09-24 17:03Z but the consent screen's publishing status is still Stack's to read before 2026-10-01; execution run sheet 106 on `docs/sprint2-execution`, [PR #29](https://github.com/emstacho-su/bb2dash/pull/29), merged as 931260b). Before that, **2026-09-27** (**sprint 2 briefs verified, batch answered by delegation**: [PR #28](https://github.com/emstacho-su/bb2dash/pull/28) merged as 67269b5 from `docs/sprint2-planning`; briefs `95_`–`103_` verified in three Opus rounds, record `105_BRIEF_VERIFICATION_2026-09-27.md`; ORCHESTRATOR §6 one prompt per phase; Stack delegated the 59 batch answers and the plan approval, written as DECISIONS rows dated 2026-09-27; the calendar push has run `ok` since 2026-09-24 17:03Z but the consent screen's publishing status is still Stack's to read before 2026-10-01; execution run sheet 106 on `docs/sprint2-execution`, the execution PR (open)). Before that, **2026-09-24** (**sprint 2 planned** on `docs/sprint2-planning`, PR open: requirements `91_`, research `92_*`/`93_`, phases `94_`, briefs `95_`–`103_`; state docs corrected to the truth the same day — see "What's next — Sprint 2"; the calendar push was down 2026-09-23 19:57Z → 2026-09-24 17:03Z, see Known issues). Before that, **2026-09-23** (operations only, no code: sync request 39 → `sync_runs` 62 `ok`, 7 courses, 3 new tentative gradebook columns, 3 new course files; `/inbox-apply` request 40 archived 537–540 and raised #544 (ECN.304 Quiz 3 date), log in `docs/inbox-decisions/2026-09-23.md`; files 155–157 pulled and embedded — the Playwright `download` event now crashes the MCP browser, so the bytes came from the signed CDN link at the end of the bbcswebdav redirects, fetched with curl; `ingest/pull_files.mjs` unchanged; ~~Inbox open: 3 data gaps awaiting Stack's dismiss, #544~~ — corrected 2026-09-24: Stack answered #544 at 20:15Z and dismissed 541–543 at 20:28Z that evening, so 0 are open and those 4 wait in `v_inbox_queue` for the next `/inbox-apply`). Before that, **2026-09-22** (**sprint 1 closed** — see "Sprint 1 — closed"; planning docs reorganised by sprint under `docs/planning/`, index in `docs/planning/README.md`; Phase 13 skipped; sprint 2 intake open). Earlier the same day: Inbox feedback loop, automation half: `/inbox-apply` skill, migration 090 archived state live, first run archived 31 rows, Inbox "Apply answers" button; **PR open**, [PR #23](https://github.com/emstacho-su/bb2dash/pull/23) on `feat/inbox-apply`; row 16 under "What has been done"). Before that, **2026-09-21** (Phase 12b **tail PR open**: recurring planner events, planner popover + assignment page, migrations 082–083, 088–089 live; row 15 under "What has been done"). Earlier the same day (post-merge reconciliation, PR #21): Phase 12b fine-tooth-comb pass MVP **merged**, [PR #20](https://github.com/emstacho-su/bb2dash/pull/20), `6f20a00`, 2026-09-17, production deployed; row 14 under "What has been done"; its post-MVP tail — recurring events, small popover — waits for Stack's go; the crawler v4 proof sync has not run yet). Earlier on 2026-09-17: Phase 12 Electron shell **merged**, PR #19. Before that, 2026-09-16 (post-merge reconciliation), Phase 10b grade model + what-if **merged**
+> Updated upon each PR. Last update: **2026-10-26, night: SPRINT 2 CLOSED on Stack's word; the record and every carried item in `docs/planning/sprint-2/121_SPRINT2_CLOSEOUT_2026-10-26.md` (section "Sprint 2 — closed 2026-10-26"); the Google Calendar push has failed since 2026-10-19 (token expired, Stack's re-mint)**; before it, **2026-10-26, evening: migration 223 MERGED (#138) and APPLIED byte-identical (section "Phase 26")**; before it, **2026-10-26: Stack's own due date (migrations 221 and 222 on prod byte-identical; PR #137 open, not merged), and ECN 304 Quiz 5 moved back to Thu 10/22 with it (section "Due-date override")**; before it, **2026-10-26: Phase 26 follow-up, migration 223 (an announced day is never replaced by a bound column without asking), built and dry-run, PR open, not applied (section "Phase 26")**; before it, **2026-10-20, afternoon: Phase 25b CUT OVER on Stack's word (202 to 206 and 220 on prod byte-identical; `workspace` rebuilt, `workspace-2` up, doctor 2 of 2 runners); #129, #130, #131 merged; **ACCEPTED by acceptance run `20261020T222413Z` (green, from `main` at `67a4e6f`)** after pack fixes #132 and #134 (section "Phase 25b")**; before it, **2026-10-20: Phase 25b (second runner, proposals Stack approves and may edit) built, reviewed, looked at and MERGED on his word; not cut over: 202 to 206 written and dry-run only (section "Phase 25b")**; before it, **2026-10-19, night: Phase 25a MERGED (#121, bb2dash-stack #9) and CUT OVER on Stack's word: 200, 207, 201 on prod byte-identical; `sync`, `egress`, `workspace`, `apply`, `workspace-ingest` rebuilt alone and healthy; the first logged-in Workspace turn passed the log watch (section "Phase 25a")**; before it, **2026-10-19, evening: Phase 26 CUT OVER on Stack’s word, ahead of Phase 25 (210–213 on prod byte-identical, `sync` and `apply` rebuilt and healthy; section "Phase 26")**; before it, **2026-10-19: Phase 25a (brief 119) built and reviewed, PR open, not merged and not cut over: the sync's text insert behind a function (200, 201), the doctor's index watch (207), the name-checking egress proxy (section "Phase 25a")**; before it, **2026-10-19: Phase 26, the announcement reader, built on `feat/phase26-announcement-reader` (section "Phase 26"); ECN 304 Quiz 5 added by hand on Stack’s OK**; before it, **2026-10-18: the desktop half of Phase 24b's walk closed on Stack's word ("assume the walk passed"), Q-3 and Q-2's shell half recorded as passed and not seen by the PM (section "Phase 24b, part 2", Next)**; before it, **2026-10-15, night: the course rail restyled after the grouped side nav Stack chose (a Zenkit settings nav, his download of the day), PR [#110](https://github.com/stack-dev-personal/bb2dash/pull/110) MERGED as `44b1a18` on his word "merge and cut over to main", production deployed, branch removed** (a heading in sentence case, the rows in one card, a subject tile, the title over the code line, a chevron, the current course a solid ink row with the red mark; tokens only, the drawer untouched; section "Course rail after the grouped side nav"); before it, **2026-10-15, evening: Phase 24b part 2, the page, built, reviewed and walked by the PM on the branch preview; MERGED 2026-10-15 21:46Z as PR [#109](https://github.com/stack-dev-personal/bb2dash/pull/109) `aa4f702` on his "merge 109, push to main", CUT OVER 21:52Z (`workspace` rebuilt alone from `main`, the memory jobs on); the first counting `just accept 24` (run `20261015T222036Z`) was red at stage `page` on a fact of the pack's own, step 18's count of the panel's Open buttons read before the rows had rendered, fixed as #112 (`5f78ed4`); the second counting run (`20261015T223433Z`) passed `page` and was red at `walk` on 24a's own steps read against the new page (step 8's fixed sentence is the turn's line; two operator verdicts on the playbook's words), the pack's walk stage corrected as #113 (`0ccda79`); the third run (`20261015T230406Z`) red at `page` once more on step 18's count, a course file's Open coming after the files list loads where a remembered item's comes at once, the pack now waiting for both, #114; the fourth run (`20261015T233524Z`) red at `find`, the first on the product's side: the search function's cold start (10.4 s) outran the runner's 8 s budget a call, raised to 20 s with the batch's to 30 s as #115 (`c085c0d`, `workspace` rebuilt 2026-10-16 03:30Z); the fifth run (`20261016T033116Z`) red at `page` on the operator's doubt of step 18's count, eleven Open buttons for twelve rows, the planner row's Open being a link, which the count now takes (#116); the sixth run (`20261016T034110Z`) reached step 20, two stages from the end, and was red on the playbook's own words for its picture, a chip the page clears once the question is sent (#117); **ACCEPTED 2026-10-16 by the seventh, acceptance run `20261016T041410Z`, green from `main` at `7590d54`, 04:14Z to 04:31Z: every stage and every host proof passed, the remembered item seen and deleted** (W-87 and W-88 on Opus in three rounds, and a fourth from Stack's look at the preview: the screen fills the pane's height, the column is centred, the side bars have clear edges; both reviews run and their findings fixed; the walk in Chromium, both themes, 390 to 1440 px, the live pack steps 17 to 21 twice with the live runner; pack 24 extended with the page's steps; Phase 22's walk box repaired after a part 1 regression; `compose.yaml` memory `on` for the cut-over; gates green at the head: 209 files / 3,885 tests, 93.89 % lines; the desktop half of the walk waits for his sign-in; section "Phase 24b, part 2"); before it, **2026-10-15, later: Phase 24b part 1, the data layer, MERGED as PR [#108](https://github.com/stack-dev-personal/bb2dash/pull/108) `022812c` (16:50Z) on Stack's words "merge to main" and "merge 108"** (the one exception to one PR per phase, DECISIONS 2026-10-15; nine new `web/src/lib/` modules, the page's wording, the stream hook's `sources` and `markStopped`, 14 test files; both reviews run and fixed; gates green at 7e71eb7 after the phase branch merged `origin/main`; nothing visible on the live page; section "Phase 24b, part 1"); before it, **2026-10-15, Phase 24a MERGED (2026-10-14), CUT OVER and ACCEPTED** (bb2dash [#97](https://github.com/stack-dev-personal/bb2dash/pull/97) `2b7c388` and bb2dash-stack [#8](https://github.com/stack-dev-personal/bb2dash-stack/pull/8) `22f35a3` merged 22:04Z on Stack's word; the five services rebuilt from `main` one at a time on his word "cut over", 14:12Z to 14:16Z; `just accept 24` green from `main`, run `20261015T141817Z`, 14:18Z to 14:25Z; the old transcript volume removed; Phase 24ab done; section "Phase 24a"); before it, **2026-10-14, later: Phase 24ab walked 24a on the real site** (every step of pack 24 and every host proof passed, P-7 passed; its one defect, D-1, fixed the same hour: the runner's floor 0.81; the two PRs of `feat/workspace-24` are open on Stack's merge word ([#97](https://github.com/stack-dev-personal/bb2dash/pull/97); bb2dash-stack [#8](https://github.com/stack-dev-personal/bb2dash-stack/pull/8)), and the cut-over and `just accept 24` wait for his word; section "Phase 24a"); before it, **2026-10-14, a file whose link redirects to another site is saved as a link** (branch `fix/redirect-outside-links`, migration 164, Known issues); before it the same day, **Phase 23 closed out**: an apply of Stack's own answers worked (request 5089) and the phase's worktrees, branches and test image are removed (section "Phase 23 follow-ups"); before it the same day, **Phase 22 (styling) MERGED** on Stack's word ([PR #93](https://github.com/stack-dev-personal/bb2dash/pull/93), `dff1e05`, 19:00Z, production deployed the same hour; direction D on every screen in dark and light, the theme control, the Menu at 720 px, the frame, the desktop shell's title bar and 960 px minimum, the app icon; the section "Phase 22" has the gates, both counted walks, the desktop look and what is open); before it, **2026-10-13, Phase 23 and its follow-ups are ACCEPTED** by acceptance run `20261013T003231Z`, green from `main` against production (the section "Phase 23 follow-ups" opens with the record and with what the run did not exercise); before it, **2026-10-12, work resumed on Stack's word ("continue, merge")**; before it, **2026-10-09, 18:30Z, a pause on his word** (**Phase 23's follow-ups are merged and cut over (187, 188 and 107 on prod; `apply` rebuilt; the export task registered; the SQL suite 82 of 82) and are NOT ACCEPTED: two counting acceptance runs were blocked, trial runs found three defects in the pack and one in the product, and the fixes wait in PR #91; development is paused, and the section "Phase 23 follow-ups" opens with where it stands and what is still owed**; the same evening: **the calendar token's third death is on record**: 2026-10-09 12:23Z to 18:10Z, 174 failed push runs, ended by Stack's re-mint on a new OAuth client; the consent screen stays in Testing, so the next expiry is about 2026-10-16 18:10Z; docs only; Known issues, "Calendar token, third death"; DECISIONS 2026-10-09). Before that, **2026-10-09, later** (**the SQL units that failed on `main` are audited and six corrected**, test side only: the suite reads 79 of 81 with Phase 24a's port merged in, and the two left are true; then, on his second word, the grades-view defect the audit found is fixed by migration 107 (on prod), file 2851 (a scan) has text by OCR but is not embedded yet, and the search eval's stale question is replaced; Known issues, first three bullets, and `docs/planning/sprint-2/verification/115_SQL_UNITS_AUDIT_2026-10-09.md`). Earlier the same day, on `feat/workspace-24`: **2026-10-14** (**Phase 24ab planned**: Stack named a phase to finish 24a and ready 24b; brief `118_PHASE24AB_walk_and_handover.md` holds the road from 24a to 24b and the session's start prompt; brief 111 gained "Amendments after 24a, as built"). Before that, **2026-10-09** (**Phase 24a, the Workspace assistant behind the page, is built and reviewed on `feat/workspace-24`**: migrations 190 to 199 are on prod and byte-identical, the edge functions `workspace-search` and `workspace-embed` are deployed, both reviews ran and their findings are fixed; not done: the PM's walk, the ingest image's first build (blocked by the laptop's network that night), the merge and the cut-over; section "Phase 24a" below). Before that, **2026-10-09** (**Phase 23's follow-ups are built and reviewed, and migration 187 is on prod.** A skipped answer is held, the transform reads archived answers and stamps session links, the decisions exporter is scheduled (notes only), `just up` knows `apply`, and acceptance pack 23 is written; two PRs, bb2dash and bb2dash-stack, on Stack's merge word of 2026-10-09 ("apply/merge"); the cut-over (skills, his `.env` line, `apply` rebuilt, 188, the scheduled task, the first export) waits for his word, and `just accept 23` follows it; section "Phase 23 follow-ups" below, brief `docs/planning/sprint-2/briefs/110_PHASE23_followups.md`, record `verification/110a_PHASE23_FOLLOWUPS_VERIFICATION.md`). Before that, **2026-10-08, later** (**Phase 21 is accepted.** Both acceptance-run PRs merged on Stack's word ("merge."), bb2dash [#82](https://github.com/emstacho-su/bb2dash/pull/82) `8269fac` then bb2dash-stack [#5](https://github.com/emstacho-su/bb2dash-stack/pull/5) `c4a54f8`, and the first run that counts, `just accept 21` from `main` against production, came back green: run `20261008T041753Z`, all eleven automated steps passed, ten of them with a proof the host read itself; step 1 (Usage credits off, his `/usage` numbers) stays Stack's and the run did not check it; since that run's go-live the Workspace is answered from bb2dash-stack as `bb2dash-workspace-1`; the old test container `bb2dash-wt21-workspace-1` is stopped and its removal is owed; sections "Phase 21" and "Acceptance run" below). Earlier the same day (**the acceptance run was built, reviewed and proved twice against production, and both PRs were marked ready**, `feat/acceptance-run` in bb2dash [#82](https://github.com/emstacho-su/bb2dash/pull/82) and bb2dash-stack [#5](https://github.com/emstacho-su/bb2dash-stack/pull/5): `just accept <phase>` carries out a phase's acceptance walk by itself, with a Claude session in a throwaway sandbox container as the hands, the host doing the Docker steps and proving the facts from the database, and a fully green run counting as acceptance; `/code-review` and `/security-review` ran on both PRs and every finding is fixed or recorded; two proof runs against production, the second after the review round, were green on steps 2 to 9 (a proof run never counts); section "Acceptance run" below). Before that, **2026-10-07** (**Phase 23: Inbox auto-apply merged and cut over on Stack's word ("merge.") the same evening, bb2dash [#79](https://github.com/emstacho-su/bb2dash/pull/79) `d454f6f` and bb2dash-stack #4 `ec0e304`; 183 on prod, `sync` rebuilt, `apply` running; the first live run archived 13 of his 16 answers and left three session-link answers unapplied, see "Phase 23"**; **Phase 21: the Workspace is built, walked by the PM and merged on Stack's word ("Merge.") on 2026-10-07, before his acceptance walk**, from `feat/workspace-21` in bb2dash and in bb2dash-stack, **bb2dash [#78](https://github.com/emstacho-su/bb2dash/pull/78) and bb2dash-stack [#3](https://github.com/emstacho-su/bb2dash-stack/pull/3), bb2dash first; the fifteen acceptance steps are now his to walk on `main`**: a chat page at `/workspace` whose questions a container runner answers with the pinned `claude` CLI on Stack's Claude subscription, read-only in v1, three tiers (Haiku, Sonnet, Opus) picked by a hand-written router; migrations 140, 141, 142 (applied 2026-10-06) and 143 (applied 2026-10-07) live and byte-identical, 144 to 149 the phase's slack; web 2863 tests, runner 810, SQL 67 of 70 (the three failures are prod-data units, not this phase's), bb2dash-stack 70; the image built on 2026-10-07, tasks 12 and 13 passed on it, and it was rebuilt on the final runner code and runs as test project `bb2dash-wt21`; both reviews run on the branch and on the delta: CR-1 to CR-14 and SR-1 fixed or recorded; the `/code-review` run on the delta's range found eleven things, none CRITICAL or HIGH (R2-1 to R2-11): its three MEDIUM ones are fixed in runner fix round Z (PM ruling Z1, merged) and the eight LOW ones are recorded; bb2dash-stack's own `/code-review` found fifteen, and its one HIGH (S-1: the Workspace was documented as started through a whole-project `just up`, which can recreate the live `sync` container) is fixed; **the PM's walk ran on 2026-10-07 in two sittings, on the preview and in a second desktop window: twelve live turns on Stack's plan and nine screenshots; it found three things on the real screen, two fixed and shown fixed (W-1, W-2) and one settled by his ruling of 2026-10-07 (W-3: the page now strips Markdown's bold markers); not shown live: the health check through an answer longer than 90 s, and the plan's usage percentages**; **next: Stack's 15-step acceptance after Phase 14's; of the six things put to him he answered three on 2026-10-07 (the screenshots stay, the firewall is left as it is for now, the bold markers are stripped) and three are open**; section "Phase 21" below; Known issues and section "Phase 14 deferred (R-96)" carry this phase's notes). Before that, **2026-10-05** (**Storage keys keep only the characters Storage accepts**, `fix/storage-key-safe-chars`, [PR #75](https://github.com/emstacho-su/bb2dash/pull/75): file 2489's curly apostrophe drew `400 InvalidKey` on every sync of 2026-10-05, because `storageKeyFor` replaced only `#`; now every character outside storage-api's allowed set becomes `_` in JS and, through **migration 095 (applied 2026-10-05, md5-identical)**, in `sync_file_stored`'s gate as `bb_file_storage_key(relpath)`; an occupied sanitised key is refused, not recorded; ingest 86, sync 136, SQL unit 095 PASS; `/security-review` clean, `/code-review high` round 2 applied; the container takes the JS half at its next image rebuild; section "Phase 14 deferred" gains the md5-match refinement and the web drop zone). Before that, **2026-10-05** (**daily sync on a kept-alive login**, `fix/sync-daily-enqueue`, [PR #73](https://github.com/emstacho-su/bb2dash/pull/73): the runner's login watch queued the day's sync only on *entering* alive, so a login the 20-minute keep-alive held through the night of 2026-10-04/05 queued nothing on 2026-10-05; now the first alive check at or after 06:00 New York asks `sync_enqueue('login')` once, only an id settles the day, a null answer backs off an hour, a real login still asks at any hour; sync vitest 148; `/security-review` clean, `/code-review high` round 2 applied; the container takes it at its next image rebuild; DECISIONS 2026-10-05). Before that, **2026-10-05** (**Inbox undo**, `feat/inbox-undo-answer`, [PR #74](https://github.com/emstacho-su/bb2dash/pull/74), web only: every answered, unapplied Inbox row offers Undo, which puts the row back to `open` as raised; item 3426 was put back by hand the same way before the next fold could apply its wrong answer; section "Inbox undo" below). Before that, **2026-10-05** (**Phase 14 follow-up — the Sync button after cut-over**, `feat/sync-button-runner-indicator`, [PR #72](https://github.com/emstacho-su/bb2dash/pull/72), web only: a press files the row and copies nothing; the label follows the container's runner (`container: starting… / crawling… / pulling files…`), names a Claude Code session's claim, and offers the paste command only for a row nothing claimed in 75 s; section "Phase 14 follow-up" below; file 2489's `InvalidKey` recorded under Known issues). Before that, **2026-10-04, late** (**desktop update helper**, `fix/desktop-update-helper`, [PR #71](https://github.com/emstacho-su/bb2dash/pull/71): both update buttons, *Update now* and *Update desktop app*, had never swapped a build, because the helper PowerShell was spawned detached and Windows PowerShell 5.1 exits at once without a console; the helper is now handed off through a hidden first stage and the app quits only after the helper's `swap-pending` marker names the build; desktop vitest 824, e2e 23, Pester 75; `/security-review` clean, `/code-review high` round 2 applied; section "Desktop update helper (2026-10-04)". The same evening Stack's Phase 14 acceptance sitting walked A1–A4 and the first login-triggered sync ran; section "Phase 14", "Where the product is"). Before that, **2026-10-04** (**Phase 14 — containers**, built on `feat/containers-14` + agentic-harness `feat/containers` + bb2dash-stack `feat/containers-14-stack`, launcher PR #62; **all four PRs merged 2026-10-04 on Stack's word, before his acceptance sitting**: migrations 091, 093, 094 live and md5-identical; the sync runs in the `sync` container since 2026-10-03 22:52Z with Stack's Blackboard login; task 28's live proofs and task 27's image proofs pass; A1–A9 owed — section "Phase 14"). Before that, **2026-10-03, evening** (**sprint 2 status and requirements audit**, `docs/planning/sprint-2/108_SPRINT2_AUDIT_2026-10-03.md`: the 81 requirements R-29..R-109 read against `main` f86c818 and prod by five Opus auditors, read-only; 48 met, 10 built but unproven live, 11 partly, 5 closed by decision, 7 open; the syncs of 2026-10-01 and 10-03 settled most of what Phase 18 owed; Phase 14 is in flight in its own session and its container runner has served prod since 22:52Z; gates on `main` this evening: SQL suite 58/59 (the one FAIL, `phase15_100_db_test_runner_role.sql`, expects `db_test_runner`'s memberships without the `sync_runner` that Phase 14's live 094 added; the branch's one-line change is ported byte-identical in [PR #65](https://github.com/emstacho-su/bb2dash/pull/65)), web vitest green, web typecheck exit 2 only because the main checkout's `web/node_modules` lacked `@playwright/test` since Phase 17, 0 errors after `npm --prefix web ci`; rows 18–21, the What's-next table, the Security paragraph and Known issues corrected below; seven DECISIONS rows). Before that, **2026-10-03** (**Phase 19 — content identity, per-crawl history, sync honesty**, **merged 2026-10-03 on Stack's word "merge this phase" ([PR #60](https://github.com/emstacho-su/bb2dash/pull/60), 206ee3a), production deployed**: migrations 130–139 and 170–172 live and md5-identical (13 of 13; 170–179 is the overflow block); `bb_content` keyed by Blackboard item, 21 rename ghosts merged; per-crawl material history and New/Changed material posts; a sync reads "running" from its claim, folds only when complete, and reads "interrupted" after 30 minutes (proven live 2026-10-03, run 592); SQL suite 56/56, web 2302, desktop 708; walk 6/6 on the preview; first register-first sync proven live by Stack's sync 866 (run 800, task 27 true) — row 21 under "What has been done"). Before that, **2026-10-02** (**lecture-number session links**, `feat/lecture-number-session-link`, migration 162: a numbered lecture takes its week's only non-exam session, or its rank among the week's lectures; a lone lecture in a two-session week still asks; **162 applied to prod 2026-10-02 on Stack's word; 163 (review fix: archived answers still count) applied the same day on his word; merged 2026-10-02, PR #56, fb8a0a6**. 2026-10-01: **pull keeps existing text**, `fix/pull-keep-existing-text`: a first pull whose unit POST answers 409/23505 keeps the units already there and still emits the bytes update (`textKept`), so a row like 163 is no longer stuck; ingest 100/100. **Sync 443 was the clean gate:** 161, 452, 966, 967 pulled and embedded, 72 and 144 re-checked, missing parts 0, db-test 45/45, gaps 547 and 549 archived; 163 written by hand by the PM after the 409. Next: Phase 19). Before that, **2026-10-01** (**sync file pull through Chrome**, `fix/sync-file-pull-chrome`, PR not opened yet: after sync 394 pulled no file, step 4b runs in Stack's logged-in Chrome only — Chrome saves each file and `ingest/collect_download.mjs` moves it for `pull_files.mjs` (no `--fetch`); outside links (738–746) leave the manifests, `files_not_pulled` and the Inbox gaps via migration 161 (**applied 2026-10-01, md5-identical** dfe6812c…; the 9 gaps closed) and read "Outside link" in the web; the crawler prefers the anchor's href so file 161 moves to the live Fall copy; the live Chrome probe passed (a PDF saved via `?xythos-download=true`, the inline fallback saved `bb2dash-161.pdf`, the collector took both, no Chrome prompt); review: no critical/high, the medium (unreported name mismatch) and two lows fixed; Phase 18's 122 and golden Q7 tests follow sync 394's 150/162 → 967 swap; ingest 98/98, web vitest 2221, db-test 44/45 (post-embed (a) lists 161, 452, 966, 967 until a sync pulls them); **after merge:** refresh `~/.claude/skills/bb-sync/SKILL.md` from `main`, Stack reruns the sync, the PM checks file 161's new `source_url` and bytes, gap 547 archived, and re-reads the gate's BLOCKED rows). Before that, **2026-09-30** (**search collapsed to an icon**, `feat/search-icon`: the top bar's wide "Search ⌘K" box is one search icon that expands in place into a "Search materials" field with results in a panel under it, ⌘K kept, the centered dialog removed; web vitest 2184, automated walk 25/25 on the preview, shot 28; T-24 dropped on Stack's word, DECISIONS). Before that, **2026-09-30** (**Phase 20 — harness closure**, PR-C #48 merged on Stack's word: PR-A bb2dash #39 (R-97, 2904b20) and PR-B agentic-harness #36 (ea0e199) merged on Stack's word, plus harness #37 (00539be); hook reinstalled (L20-a), back-fill applied (L20-b), V-2 walked on live data in `docs/planning/sprint-2/verification/101a_V2_VERIFICATION.md`, **V-2 closed on Stack's word (2026-09-30)** — row 20 under "What has been done"). Before that, **2026-09-30** (**Phase 18 — ingest and corpus**, `feat/ingest-corpus-18`, **merged on Stack's word "merge this phase" before its gate sync ran**: migrations 120–129 live and md5-identical, 160 (review fix: a replacement must be new in its crawl; overflow block 160–169) live and md5-identical; notes labelled in search (121, latency repaired by 129), replaced files superseded by rule (122/124), file week and session links (123), GEO chapters off-platform (125), per-item Blackboard links (126), iCal poll retired (127), file 68 extracted by hand; ingest 83/83, SQL suite 39/40 (post-embed (a) waits on the first sync); **tasks 16–19, 26, 28 and task 14's 48 h re-read are owed to the first `/bb-sync` on `main`, which is now the phase's gate** — row 19 under "What has been done"). Before that, **2026-09-30** (**Phase 17 — web polish**, merged as PR #43; built on `feat/web-polish-17`, PR open, not merged: the planned T-tasks plus Stack's nine round-3 notes; migrations 110–119 and 150 live and md5-identical to the repo (11 of 11); web vitest 2069, SQL suite 30/30, desktop 564; round-3 walk 24/24 on the preview at b2698bf; waiting on Stack's T-24 desktop sitting, T-26 production sitting and his look at round 3 on the preview — row 18 under "What has been done"). Before that, **2026-09-29** (**desktop logon build**, [PR #31](https://github.com/emstacho-su/bb2dash/pull/31) **merged 2026-09-29** as 6295b83 from `feat/desktop-logon-build`, after PR #30 (6ef3933) and before PR #32 (795bcf6), all three on Stack's word that day: `desktop/launch/` stands the shell up after sign-in on the new laptop (`stack-laptop`, checkout `C:/Users/stack/projects/bb2dash`) and rebuilds it in an ephemeral `docker compose run --rm` container only when `desktop/` changed on the build ref; two Task Scheduler entries, `Bb2dash-LogonBuild` (logon + 2 min, below normal) and `Bb2dash-App` (the exe, normal priority, no time limit); builds keyed by the `desktop/` tree hash under `%LOCALAPPDATA%\bb2dash-launch\builds\`, a `current` junction repointed only while the app is closed; `wt.ts` joins with `node:path/win32` so the unit suite passes on Linux; no Phase 14 container is in it — a repo-root `compose.yaml`, when Phase 14 adds one, is brought up by the same task; see "Known issues / operational notes"). The same PR carries the `estac` → `stack` path pass: every live doc (state docs, the sprint-2 plan, run sheet, briefs, research and verification, the skill and ingest docs, the desktop docs and unit fixtures) now names `C:/Users/stack/...`, sprint 0–1 records keep the old paths as history, the desktop `repoDir` default is derived from the home folder, and the Task 0 record `docs/planning/sprint-2/verification/82b_NOVNC_SPIKE.md` exists with its eight pending rows (DECISIONS 2026-09-29; see "Known issues" for what is not stood up on this laptop yet). Before that, **2026-09-28** (**Phase 15 — database hygiene and the SQL test runner, [PR #30](https://github.com/emstacho-su/bb2dash/pull/30) merged 2026-09-29 as 6ef3933** from `feat/db-hygiene-15`, built through the evening of 2026-09-27 and opened after midnight: migrations 100, 101 and 102 live and md5-identical to their committed blobs; `node scripts/db-test.mjs` → `passed 21, failed 0, units 21`, exit 0, the first time the suite has ever run as a set; the security advisor's mutable-`search_path` list is empty (was 7); no planner series outlives its last occurrence on any delete path; eight stale assertions across seven `db/tests` files repaired, four of them units no worker owned, absorbed on Stack's decision; seven DECISIONS rows; nothing visual, so no preview walk — row 17 under "What has been done". Earlier the same day: **sprint 2 briefs verified, batch answered by delegation**: [PR #28](https://github.com/emstacho-su/bb2dash/pull/28) merged as 67269b5 from `docs/sprint2-planning`; briefs `95_`–`103_` verified in three Opus rounds, record `105_BRIEF_VERIFICATION_2026-09-27.md`; ORCHESTRATOR §6 one prompt per phase; Stack delegated the 59 batch answers and the plan approval, written as DECISIONS rows dated 2026-09-27; the calendar push has run `ok` since 2026-09-24 17:03Z but the consent screen's publishing status is still Stack's to read before 2026-10-01; execution run sheet 106 on `docs/sprint2-execution`, [PR #29](https://github.com/emstacho-su/bb2dash/pull/29), merged as 931260b). Before that, **2026-09-27** (**sprint 2 briefs verified, batch answered by delegation**: [PR #28](https://github.com/emstacho-su/bb2dash/pull/28) merged as 67269b5 from `docs/sprint2-planning`; briefs `95_`–`103_` verified in three Opus rounds, record `105_BRIEF_VERIFICATION_2026-09-27.md`; ORCHESTRATOR §6 one prompt per phase; Stack delegated the 59 batch answers and the plan approval, written as DECISIONS rows dated 2026-09-27; the calendar push has run `ok` since 2026-09-24 17:03Z but the consent screen's publishing status is still Stack's to read before 2026-10-01; execution run sheet 106 on `docs/sprint2-execution`, the execution PR (open)). Before that, **2026-09-24** (**sprint 2 planned** on `docs/sprint2-planning`, PR open: requirements `91_`, research `92_*`/`93_`, phases `94_`, briefs `95_`–`103_`; state docs corrected to the truth the same day — see "What's next — Sprint 2"; the calendar push was down 2026-09-23 19:57Z → 2026-09-24 17:03Z, see Known issues). Before that, **2026-09-23** (operations only, no code: sync request 39 → `sync_runs` 62 `ok`, 7 courses, 3 new tentative gradebook columns, 3 new course files; `/inbox-apply` request 40 archived 537–540 and raised #544 (ECN.304 Quiz 3 date), log in `docs/inbox-decisions/2026-09-23.md`; files 155–157 pulled and embedded — the Playwright `download` event now crashes the MCP browser, so the bytes came from the signed CDN link at the end of the bbcswebdav redirects, fetched with curl; `ingest/pull_files.mjs` unchanged; ~~Inbox open: 3 data gaps awaiting Stack's dismiss, #544~~ — corrected 2026-09-24: Stack answered #544 at 20:15Z and dismissed 541–543 at 20:28Z that evening, so 0 are open and those 4 wait in `v_inbox_queue` for the next `/inbox-apply`). Before that, **2026-09-22** (**sprint 1 closed** — see "Sprint 1 — closed"; planning docs reorganised by sprint under `docs/planning/`, index in `docs/planning/README.md`; Phase 13 skipped; sprint 2 intake open). Earlier the same day: Inbox feedback loop, automation half: `/inbox-apply` skill, migration 090 archived state live, first run archived 31 rows, Inbox "Apply answers" button; **PR open**, [PR #23](https://github.com/emstacho-su/bb2dash/pull/23) on `feat/inbox-apply`; row 16 under "What has been done"). Before that, **2026-09-21** (Phase 12b **tail PR open**: recurring planner events, planner popover + assignment page, migrations 082–083, 088–089 live; row 15 under "What has been done"). Earlier the same day (post-merge reconciliation, PR #21): Phase 12b fine-tooth-comb pass MVP **merged**, [PR #20](https://github.com/emstacho-su/bb2dash/pull/20), `6f20a00`, 2026-09-17, production deployed; row 14 under "What has been done"; its post-MVP tail — recurring events, small popover — waits for Stack's go; the crawler v4 proof sync has not run yet). Earlier on 2026-09-17: Phase 12 Electron shell **merged**, PR #19. Before that, 2026-09-16 (post-merge reconciliation), Phase 10b grade model + what-if **merged** Before that, **2026-09-30** (**Phase 16 — grades V-1**, PR open from `feat/grades-v1-16`: six sittings done 2026-09-29, 105 and 106 written and proven in rolled-back runs, applied after PR #40; row 19 under "What has been done"). Before that, **2026-09-30** (**Phase 17 — web polish**, built on `feat/web-polish-17`, PR open, not merged: the planned T-tasks plus Stack's nine round-3 notes; migrations 110–119 and 150 live and md5-identical to the repo (11 of 11); web vitest 2069, SQL suite 30/30, desktop 564; round-3 walk 24/24 on the preview at b2698bf; waiting on Stack's T-24 desktop sitting, T-26 production sitting and his look at round 3 on the preview — row 18 under "What has been done"). Before that, **2026-09-29** (**desktop logon build**, [PR #31](https://github.com/emstacho-su/bb2dash/pull/31) **merged 2026-09-29** as 6295b83 from `feat/desktop-logon-build`, after PR #30 (6ef3933) and before PR #32 (795bcf6), all three on Stack's word that day: `desktop/launch/` stands the shell up after sign-in on the new laptop (`stack-laptop`, checkout `C:/Users/stack/projects/bb2dash`) and rebuilds it in an ephemeral `docker compose run --rm` container only when `desktop/` changed on the build ref; two Task Scheduler entries, `Bb2dash-LogonBuild` (logon + 2 min, below normal) and `Bb2dash-App` (the exe, normal priority, no time limit); builds keyed by the `desktop/` tree hash under `%LOCALAPPDATA%\bb2dash-launch\builds\`, a `current` junction repointed only while the app is closed; `wt.ts` joins with `node:path/win32` so the unit suite passes on Linux; no Phase 14 container is in it — a repo-root `compose.yaml`, when Phase 14 adds one, is brought up by the same task; see "Known issues / operational notes"). The same PR carries the `estac` → `stack` path pass: every live doc (state docs, the sprint-2 plan, run sheet, briefs, research and verification, the skill and ingest docs, the desktop docs and unit fixtures) now names `C:/Users/stack/...`, sprint 0–1 records keep the old paths as history, the desktop `repoDir` default is derived from the home folder, and the Task 0 record `docs/planning/sprint-2/verification/82b_NOVNC_SPIKE.md` exists with its eight pending rows (DECISIONS 2026-09-29; see "Known issues" for what is not stood up on this laptop yet). Before that, **2026-09-28** (**Phase 15 — database hygiene and the SQL test runner, [PR #30](https://github.com/emstacho-su/bb2dash/pull/30) merged 2026-09-29 as 6ef3933** from `feat/db-hygiene-15`, built through the evening of 2026-09-27 and opened after midnight: migrations 100, 101 and 102 live and md5-identical to their committed blobs; `node scripts/db-test.mjs` → `passed 21, failed 0, units 21`, exit 0, the first time the suite has ever run as a set; the security advisor's mutable-`search_path` list is empty (was 7); no planner series outlives its last occurrence on any delete path; eight stale assertions across seven `db/tests` files repaired, four of them units no worker owned, absorbed on Stack's decision; seven DECISIONS rows; nothing visual, so no preview walk — row 17 under "What has been done". Earlier the same day: **sprint 2 briefs verified, batch answered by delegation**: [PR #28](https://github.com/emstacho-su/bb2dash/pull/28) merged as 67269b5 from `docs/sprint2-planning`; briefs `95_`–`103_` verified in three Opus rounds, record `105_BRIEF_VERIFICATION_2026-09-27.md`; ORCHESTRATOR §6 one prompt per phase; Stack delegated the 59 batch answers and the plan approval, written as DECISIONS rows dated 2026-09-27; the calendar push has run `ok` since 2026-09-24 17:03Z but the consent screen's publishing status is still Stack's to read before 2026-10-01; execution run sheet 106 on `docs/sprint2-execution`, [PR #29](https://github.com/emstacho-su/bb2dash/pull/29), merged as 931260b). Before that, **2026-09-27** (**sprint 2 briefs verified, batch answered by delegation**: [PR #28](https://github.com/emstacho-su/bb2dash/pull/28) merged as 67269b5 from `docs/sprint2-planning`; briefs `95_`–`103_` verified in three Opus rounds, record `105_BRIEF_VERIFICATION_2026-09-27.md`; ORCHESTRATOR §6 one prompt per phase; Stack delegated the 59 batch answers and the plan approval, written as DECISIONS rows dated 2026-09-27; the calendar push has run `ok` since 2026-09-24 17:03Z but the consent screen's publishing status is still Stack's to read before 2026-10-01; execution run sheet 106 on `docs/sprint2-execution`, the execution PR (open)). Before that, **2026-09-24** (**sprint 2 planned** on `docs/sprint2-planning`, PR open: requirements `91_`, research `92_*`/`93_`, phases `94_`, briefs `95_`–`103_`; state docs corrected to the truth the same day — see "What's next — Sprint 2"; the calendar push was down 2026-09-23 19:57Z → 2026-09-24 17:03Z, see Known issues). Before that, **2026-09-23** (operations only, no code: sync request 39 → `sync_runs` 62 `ok`, 7 courses, 3 new tentative gradebook columns, 3 new course files; `/inbox-apply` request 40 archived 537–540 and raised #544 (ECN.304 Quiz 3 date), log in `docs/inbox-decisions/2026-09-23.md`; files 155–157 pulled and embedded — the Playwright `download` event now crashes the MCP browser, so the bytes came from the signed CDN link at the end of the bbcswebdav redirects, fetched with curl; `ingest/pull_files.mjs` unchanged; ~~Inbox open: 3 data gaps awaiting Stack's dismiss, #544~~ — corrected 2026-09-24: Stack answered #544 at 20:15Z and dismissed 541–543 at 20:28Z that evening, so 0 are open and those 4 wait in `v_inbox_queue` for the next `/inbox-apply`). Before that, **2026-09-22** (**sprint 1 closed** — see "Sprint 1 — closed"; planning docs reorganised by sprint under `docs/planning/`, index in `docs/planning/README.md`; Phase 13 skipped; sprint 2 intake open). Earlier the same day: Inbox feedback loop, automation half: `/inbox-apply` skill, migration 090 archived state live, first run archived 31 rows, Inbox "Apply answers" button; **PR open**, [PR #23](https://github.com/emstacho-su/bb2dash/pull/23) on `feat/inbox-apply`; row 16 under "What has been done"). Before that, **2026-09-21** (Phase 12b **tail PR open**: recurring planner events, planner popover + assignment page, migrations 082–083, 088–089 live; row 15 under "What has been done"). Earlier the same day (post-merge reconciliation, PR #21): Phase 12b fine-tooth-comb pass MVP **merged**, [PR #20](https://github.com/emstacho-su/bb2dash/pull/20), `6f20a00`, 2026-09-17, production deployed; row 14 under "What has been done"; its post-MVP tail — recurring events, small popover — waits for Stack's go; the crawler v4 proof sync has not run yet). Earlier on 2026-09-17: Phase 12 Electron shell **merged**, PR #19. Before that, 2026-09-16 (post-merge reconciliation), Phase 10b grade model + what-if **merged**
 > ([PR #15](https://github.com/emstacho-su/bb2dash/pull/15), `c1e471d`, production deployed: engine `web/src/lib/grade-model/`, "Our model" on `/grades` and the
 > course Grades tab, what-if + target solver + "Counts toward…" picker + score history;
 > migrations 057–058 and 080–081 live; V-1 stubbed by Stack, so the model leaves out parts with
@@ -31,17 +31,379 @@ Live in prod (Supabase `bb2dash`, ref `goultdzqcavefcgnifdy`):
 
 | Layer | State |
 |---|---|
-| Raw capture | `bb_raw` crawls via `ingest/bb_crawler.js` **v4** (anon insert, unique per run/kind/shell; versioned envelope; attempts read the way Blackboard's UI does — grade → attempts → detail, `80f`; `runAll({ runId })`); last crawl 2026-09-23 19:56Z (`sync_runs` 62; `sync_runs` 63 on 2026-09-24 is the daily iCal poll, not a crawl; sync 34 on 2026-09-22 was the v4 proof: 26 attempts, 55 gradebook columns; 52 attempt rows and 58 latest columns on 2026-09-24). Folded automatically: `transform_tick()` on pg_cron every 2 min stages only crawls registered on an owner-claimed `agent_requests` row; unregistered runs are quarantined once |
+| Raw capture | `bb_raw` crawls via `ingest/bb_crawler.js` **v4** (**v5 on `main` since Phase 18**, 2026-09-30: probe, author resolution, `feedbackToUser`; six v5 crawls by 2026-10-03, the first on sync 394 of 2026-10-01) (anon insert, unique per run/kind/shell; versioned envelope; attempts read the way Blackboard's UI does — grade → attempts → detail, `80f`; `runAll({ runId })`); last crawl 2026-09-23 19:56Z (`sync_runs` 62; `sync_runs` 63 on 2026-09-24 is the daily iCal poll, not a crawl; sync 34 on 2026-09-22 was the v4 proof: 26 attempts, 55 gradebook columns; 52 attempt rows and 58 latest columns on 2026-09-24). Folded automatically: `transform_tick()` on pg_cron every 2 min stages only crawls registered on an owner-claimed `agent_requests` row; unregistered runs are quarantined once |
 | Typed warehouse | migrations 001–058, 060–069, 073–089 (repo numbering; see note below; all on `main` and live); **`grade_scenarios`** (10b's saved what-ifs; unused since 12b removed what-if, 0 rows, kept in the DB) and **`grade_column_links`** (Stack's column → part links and "Not graded"), both owner-only, never touched by a sync; views `v_grade_model_items` (77 items: 41 item + 5 attendance + 31 placeholder on 9/16), `v_grade_model_total` (`bb_running` read from the total's formula; IST.323 true; no app reader since 12b), `v_gradebook_history` (5 changed columns); 7 courses, 80 assignments, 145 sessions, planner tables; `attention_items`, `agent_requests`, `app_settings` (+ `gcal_*`, `web_base_url`), `calendar_events` mirror (keyed `(source, ref_id)` since 068), `calendar_push_runs`, `v_calendar_push_items` (assignment + planner arms), **`planner_events`** (owner-only, own IANA zone per row, 0 rows until Stack creates some), `v_announcements_unread`; **`bb_gradebook`** (append-per-run mirror: 45 rows from the 9/14 crawl + 48 from 9/16; IST.323 total 14.8/104), **`bb_attempts`** (52 rows on 2026-09-24; filled since sync 34); every public view `security_invoker`, anon revoked |
 | Gradebook mirror (10a) | `stage_gradebook` + `stage_attempts` in `run_transform` after `stage_assignments`; `v_gradebook_latest` (`column_kind` item / attendance / total / calc_other / letter, `assignment_id`, `linked_assignments`, `counts_toward_grade`), `v_assignment_grade`, `v_course_grade`, `v_attempts_latest`, `v_assignment_attempts`; registered runs only; reconciliation 45/45 columns and scores against `bb_raw` on the 9/14 crawl; every figure carries `seen_at`, nothing summed |
 | Effort model | migration 015 `effort_base` (19 types) + 016 `v_work_items` (152 items, effort + source) |
-| Document corpus | 84 current files on 2026-09-24 (93 rows, 9 superseded), all with bytes in Storage (file 17 only through file 15's key); 82 text-extracted, 2 `text_status = na` (~~image-only, R-16's OCR pair~~ corrected 2026-09-24: 17, a duplicate of 15, and 68, a legacy GEO.103 `.doc` with no extractor; neither is image-only); 784 text units; supersession seeded by 022 and by re-uploads since (a re-upload gets its own key and supersedes the older row, 2026-09-22) |
+| Document corpus | **2026-09-30 (Phase 18): 97 current files of 108; 785 units on current files; 1,733 gte-small parts on current files; 0 units without an embedding; `na` = 17 (twin of 15) and 810 (a staged file); file 68 extracted by hand; 161, 162, 452 catalogued, not yet pulled.** Earlier: 84 current files on 2026-09-24 (93 rows, 9 superseded), all with bytes in Storage (file 17 only through file 15's key); 82 text-extracted, 2 `text_status = na` (~~image-only, R-16's OCR pair~~ corrected 2026-09-24: 17, a duplicate of 15, and 68, a legacy GEO.103 `.doc` with no extractor; neither is image-only); 784 text units; supersession seeded by 022 and by re-uploads since (a re-upload gets its own key and supersedes the older row, 2026-09-22) |
 | Search: FTS | tsvector+GIN on file text / content / announcements; `search_file_text(…, p_include_superseded)` |
 | Search: vectors | 1,545 gte-small embeddings (384-dim) on 2026-09-24, 0 units without one; `part_range` = code points, audit clean (023); `match_file_text()`, `hybrid_search_file_text()` (`p_min_similarity` floor, single-source `similarity`, **matched-passage `snippet` + `part_no` + `snippet_source`**, superseded filter — migrations 012–013, 021, 024–025); keyword snippets come from the highest-`ts_rank` part that actually contains the query, ~27 ms at limit 12 |
 | Edge functions | `embed-corpus` **v5** (resume-safe batch embedder; chunks by code point), `search` **v5** (retrieval API; **default mode: hybrid**; optional `min_similarity` floor; optional `include_superseded`), `calendar-push` **v5** (Google Calendar upsert/delete by deterministic event id — `bb…` for due dates, `pe…` for planner events; planner body carries the kind in the title, a per-kind colour, `✓` on a done task, `dateTime` + `timeZone` or an all-day date pair; both sides read page by page, a partial read aborts; `verify_jwt` off, `x-push-secret` from Vault; fired by pg_cron `bb2dash-calendar-push` when `app_settings.gcal_dirty`) |
 | Retrieval MCP | `mcp-server/` — stdio MCP server for Claude Code: `search_materials` (+ `include_superseded`) / `get_material_text` / `list_courses`; 86 vitest tests |
-| GUI (`web/`) | Next.js 16 + TS, Supabase Auth. Screens: Today (56-day fetch, 14 visible, ◂ ▸ paging; needs-attention row from `v_sync_status`), Course = Stream / Classwork (Blackboard folder tree, `?view=timeline` keeps the week rail) / Grades (Phase 10a) / Info, Materials, ⌘K search, `?item=` assignment + session popouts, **courses sidebar** (☰ toggles it; on the right, `--sidebar-side` flips; overlay drawer under 1024px), **Inbox** (`/inbox`, resolve + why-note per row), Sync button (enqueues `agent_requests`, copies `claude "/bb-sync <id>"`), Activity list, **Grades** (`/grades` by course: "Blackboard's number, as of <seen_at>" / "Blackboard publishes no total" / "not synced yet"; item rows with status pill, `score / possible`, seen, feedback disclosure; uncounted attendance, letter and non-total calculated columns in a collapsed group), **course Grades tab** (same table for the course's shells), **popout submission block** (status, attempt N of M, pulled-back and staged files with a sha256 match chip; no score line; feedback and score history moved in by 12b), **staged-upload drop zone** (popout + Classwork rows → Storage + `bb_files` row, "Staged in bb2dash — attach in Blackboard ↗"; no control reads "Submit"), **Planner** (`/planner?week=`, Mon–Sun week grid: class blocks with room + session topic, due items by New York wall clock or nested in their class block, Assignments band, today + now-line, quick-edit, click-to-popout; **planner events** (Phase 11b): click an empty half-hour slot or an Events-band cell → `PlannerEventForm` (six kinds, zone picker, in-person or online location, notes, course), per-kind blocks placed by New York wall clock with a zone chip for other zones, task checkbox, Events band for all-day, edit/delete from the block), **bell** (unread badge from `v_announcements_unread`; opening marks seen), **Announcements** (`/announcements`, all courses newest-first), public `/privacy` + `/terms` (for the Google consent screen), **graded so far** (Phase 12b replaced 10b's "Our model" line, projections, agreement sentence, what-if cells, placeholder rows, target solver and Reset scenario with one deterministic figure per course from mirrored scores, `grade_components` and column links, naming under it the parts it leaves out; the "Counts toward…" picker stays; score history moved to the popout); vitest 1812 tests (2026-09-21, row 15) |
+| GUI (`web/`) | Next.js 16 + TS, Supabase Auth. Screens: Today (56-day fetch, 14 visible, ◂ ▸ paging; needs-attention row from `v_sync_status`), Course = Stream / Classwork (Blackboard folder tree, `?view=timeline` keeps the week rail) / Grades (Phase 10a) / Info, Materials, ⌘K search, `?item=` assignment + session popouts, **courses sidebar** (☰ toggles it; on the right, `--sidebar-side` flips; overlay drawer under 1024px), **Inbox** (`/inbox`, resolve + why-note per row), Sync button (enqueues `agent_requests`; since 2026-10-05 its label follows the container's runner, and `claude --model sonnet "/bb-sync <id>"` is copied only as the fallback for a row nothing claimed), Activity list, **Grades** (`/grades` by course: "Blackboard's number, as of <seen_at>" / "Blackboard publishes no total" / "not synced yet"; item rows with status pill, `score / possible`, seen, feedback disclosure; uncounted attendance, letter and non-total calculated columns in a collapsed group), **course Grades tab** (same table for the course's shells), **popout submission block** (status, attempt N of M, pulled-back and staged files with a sha256 match chip; no score line; feedback and score history moved in by 12b), **staged-upload drop zone** (popout + Classwork rows → Storage + `bb_files` row, "Staged in bb2dash — attach in Blackboard ↗"; no control reads "Submit"), **Planner** (`/planner?week=`, Mon–Sun week grid: class blocks with room + session topic, due items by New York wall clock or nested in their class block, Assignments band, today + now-line, quick-edit, click-to-popout; **planner events** (Phase 11b): click an empty half-hour slot or an Events-band cell → `PlannerEventForm` (six kinds, zone picker, in-person or online location, notes, course), per-kind blocks placed by New York wall clock with a zone chip for other zones, task checkbox, Events band for all-day, edit/delete from the block), **bell** (unread badge from `v_announcements_unread`; opening marks seen), **Announcements** (`/announcements`, all courses newest-first), public `/privacy` + `/terms` (for the Google consent screen), **graded so far** (Phase 12b replaced 10b's "Our model" line, projections, agreement sentence, what-if cells, placeholder rows, target solver and Reset scenario with one deterministic figure per course from mirrored scores, `grade_components` and column links, naming under it the parts it leaves out; the "Counts toward…" picker stays; score history moved to the popout); vitest 1812 tests (2026-09-21, row 15) |
+| Due-date override (221, 2026-10-26) | `assignment_progress.due_override` (timestamptz, app-owned, no sync writes it) wins over Blackboard's date in `v_work_items` (new columns `bb_due_at`, `due_overridden`) and `v_calendar_push_items`; a statement trigger marks the Google calendar dirty when it changes. Set from the assignment details ("Your plan" → Due date + optional Due time; clearing the date resets it; Planned start/finish removed from the form on his review); the detail page and the planner popover read "your date (Blackboard: …)". One row set by hand at Stack's request: ECN.304/quiz-5 = 2026-10-22 15:30 New York |
 | Auth | one user (`emstacho@syr.edu`, uid `fd0b7c9d…`) created; **RLS owner-scoped** (migration 020, W-9 done) — every authenticated policy is `auth.uid() = public.app_owner()`, owner resolved by email; signups disabled 2026-09-10 per Stack (a dashboard setting SQL cannot read; 1 auth user on 2026-09-24) |
+
+## Desktop updates failing since 2026-10-14: fixed, MERGED as #143 (`987abac`), live 2026-11-11 (build `c23e3c9`)
+
+* **Symptom:** every desktop build since Phase 22's merge (2026-10-14) failed (`logon-build.log`: 4 test files,
+  11 tests), so the app stayed on build `f37723a` (2026-10-05) and the account menu's Update ended "builder exited 3".
+* **Cause:** the build container mounted only `desktop/`. Phase 22 added desktop tests that check the shell against the
+  web app by reading `../web/src/app/globals.css`, the icons beside it and a `docs/` verification note; outside
+  `desktop/` they do not exist in the container, so `npm test` failed there while passing on a developer machine.
+* **Fix:** `desktop/launch/compose.build.yaml` mounts the whole build worktree read-only at `/repo` and `desktop/`
+  writable at `/repo/desktop`. Proven by running the same compose file from the branch: 49 files / 892 tests pass and
+  `win-unpacked/bb2dash.exe` is written. Live: Stack pressed Update on 2026-11-11 and the app relaunched on build `c23e3c9` (12:54 New York).
+
+## Inbox crash follow-ups, 2026-11-11: error screens and the cache guard, MERGED as #142 (`bc55a5b`)
+
+* **Error screens.** `app/(app)/error.tsx` shows `ErrorScreen` inside the shell (top bar and rail stay) with Try again,
+  Clear saved data and reload, Go to Today, and the error's message; `app/global-error.tsx` is the last resort with
+  its own document. In the Inbox each item sits in its own boundary (`InboxItemBoundary`, `catchError`): an item that
+  cannot be drawn is one short card with its id, and the rest stay answerable.
+* **Root cause, closed for every query.** The cache had been saved to localStorage since 2026-09-09 and the labels
+  query returned a Map since 2026-09-29 (`0cd2ff86`); every earlier session question was answered within hours, in the
+  same window session, so no reload hit one until item 9206 stayed open from 2026-11-02. Nothing checked that cached
+  data survives JSON. `lib/persistable.ts` now does: a query whose data JSON would change (Map, Set, Date, class,
+  NaN) is not saved, only refetched, with one console warning naming it.
+
+## Inbox crash on reload, 2026-11-11: fixed and MERGED as #141 (`c84bf7f`)
+
+* **Symptom:** the Inbox fell to Next's "This page couldn't load" (`TypeError: c?.get is not a function`) on any fresh load
+  while a session question was open (item 9206, open since 2026-11-02), most visibly in the desktop window.
+* **Cause:** `sessionLabelsOptions` cached a `Map`. `QueryProvider` persists the query cache to localStorage as JSON, where a
+  Map becomes `{}`; restored on the next load, `InboxCard`'s `sessionLabels?.get(...)` threw, and with no error boundary the
+  whole page went. Inside one page session the Map was still in memory, so it only broke after a reload.
+* **Fix:** the query caches `[id, label]` pairs and builds the Map in `select` (which also runs on restored data);
+  `PERSIST_BUSTER` `v1` → `v2` drops the broken blobs already saved. Test: `web/test/inbox-session-labels-persist.test.tsx`
+  (JSON round trip, restored-cache `select`, the Inbox drawn from a restored cache). No other query caches a Map or Set.
+* **Next:** reaches the desktop only once deployed (merge → Vercel production). Not done: an `(app)` error boundary, so one
+  card's error stops taking down the screen.
+
+## Due-date override, 2026-10-26: built, migrations 221 and 222 on prod, MERGED as #137 (`c7b1d40`)
+
+- **What prompted it.** ECN 304 Quiz 5 was taken in class Thu 10/22 but sat on Tue 10/27 beside Quiz 6. The professor made its gradebook column on 10/26 and Blackboard gave it its default due date, "created + 1 day" (10/27 16:53Z); the row was `tentative`, so `stage_assignments` copied it in. A hand edit to `assignments` would not have held.
+- **What shipped.**
+  - Migration 221 adds `assignment_progress.due_override`, Stack's own due instant, which no sync writes.
+  - `v_work_items` and `v_calendar_push_items` use it first. A trigger re-pushes Google Calendar when it changes.
+  - In the assignment details, "Your plan" has Due date and an optional Due time (blank = 11:59 PM, never Blackboard's clock, which can be a placeholder too). Clearing the date puts Blackboard's date back. On Stack's review (2026-10-26) Planned start and Planned finish left the form, and so did the hint line and the Reset button; the columns stay for the Workspace assistant's proposals.
+  - The detail page and the planner popover show "your date (Blackboard: …)".
+- **Data.** Quiz 5 was set by hand at Stack's request to 2026-10-22 15:30 New York, its class time (the row's `event_start`).
+- **Tests.**
+  - `db/tests/fix_221_due_override.sql` is new. The 073 and 089 column pins were updated for the two appended columns.
+  - 4 new or extended vitest files. The web suite is green (223 files, 4,048 tests).
+  - The full DB suite: 107 of 112 before the 073 pin fix, then that unit passed. The 4 still red assert live data this change does not touch: `grading_invariants` (IST.323 Exam 2 has no component), `phase10b_grade_model` and `phase16_105` (a confidence value), `phase18_post_embed_checks` (file 4574 `na`).
+- **Next.**
+  - Stack looks at the review page.
+  - Merge on his word.
+  - The placeholder follow-up is covered by migration 223 (#138): an announced day is no longer replaced by a new column's "created + 1 day" date without asking.
+
+## Phase 25b: the assistant (brief 119, D and E), 2026-10-19 to 2026-10-20: built, reviewed, looked at, MERGED on Stack's word, CUT OVER 2026-10-20, ACCEPTED 2026-10-20 by acceptance run `20261020T222413Z`
+
+Branch `feat/phase25b-assistant` (worktree `bb2dash-wt-25b`, from `main` e88a1a74); bb2dash-stack
+`feat/phase25b-w103-doctor`. Contract for E: `docs/planning/sprint-2/briefs/119b_PHASE25B_contract.md` (PM, frozen
+before E's streams were cut). Record: `verification/119a_PHASE25_VERIFICATION.md`, sections from "25b" on.
+**Nothing of 25b is on prod or in a running container.** Migrations 202 to 206 are written and dry-run only
+(PGlite, and rolled back on prod with the files fetched at their commit, SHA-256 matched; each unit also run
+without its migration and stopping at "not applied"; prod checked unchanged afterwards). 208 and 209 are the slack.
+
+**What it does, once cut over:**
+* **D, two runners (W-103).** `workspace_claim_v3(runner, 2)` (202): at most two answers at once across runners, one
+  open request per conversation. A beat per runner (`workspace_runner_beats`); `v_workspace_status` gains
+  `runners_alive` and `alive_runners`. `workspace-2` in `compose.yaml` extends `workspace` (same image, no build of
+  its own, same secrets, network and egress port 3128). Runner names come from the compose project:
+  `workspace@bb2dash-workspace`, `workspace@bb2dash-workspace-2`; a test project gets its own. bb2dash-stack's
+  doctor has a `workspace-2` row and a `workspace runners` row (expects both names). Probe P-4 first (2026-10-19):
+  ten turns in five simultaneous pairs on Stack's subscription, no error, no limit message.
+* **E, proposals Stack approves (W-104a, W-104b).** The assistant has a third tool, `propose_planner_change`, served
+  by a credential-free MCP server in `workspace/` that hands each call to the runner over a per-turn socket; the
+  runner files it through `workspace_propose` (204) on its own login and request: five filed a turn at most, ten
+  calls; `status` and `notes` on both progress tables, `planned_start` and `planned_finish` on assignments; a note is
+  the whole new text, at most 2,000 characters; 204 reads the old value itself. Each proposal is a
+  `workspace_proposals` row (203) and an Inbox item of the new kind `assistant_proposal` (205), which every
+  apply-side reader leaves out. A card under the answer shows the value read and the value proposed with Approve and
+  Reject; the Inbox shows the same card. Both call `workspace_proposal_decide` (206, SECURITY INVOKER, as Stack): it
+  re-reads the row and writes it (`applied`) or marks it `stale`; a second decision is refused (55000) and the page
+  shows where it stands. Decided, a card shows only its outcome. Unanswered for 7 days a proposal expires (the view,
+  206, and a sweep every five minutes). The planner feed carries item ids so the model can name a row.
+  `workspace_runner`: fourteen functions, still no table grant (`v_workspace_runner_proof`, 206).
+* **Stack edits a proposed value before approving (W-106, his look of 2026-10-20).** On an open card a grey "edit"
+  shows on hover of the Proposed box (always on a phone) and turns to the strongest text colour on hover; it opens a
+  select, a date input or a textarea; Enter (Ctrl+Enter for a note) or Save keeps a draft marked "edited by you" with
+  Reset; Escape or clicking off drops it; Approve and Reject wait while a box is open. Approve sends the draft as
+  `p_value` to 206, checked by `workspace_proposal_value_check` (204's rules, `authenticated` only), and the value
+  written is kept in `approved_value` (203; fixed once set). "Planner has" stays read-only. 203 to 206 were amended in
+  place (none was on prod). Rulings E-1 to E-5 (119a, DECISIONS).
+* **Pack 25** (`acceptance/25/`, W-105): both runners alive, two questions answered at once by two runners, a
+  proposal made, approved on the card and seen in the Inbox, one rejected in the Inbox and seen on its card, second
+  decisions refused, decided cards without values, one made stale, the planner restored to what go-live read, no
+  proposal in the apply queue, the runner's grants. Step 1 (usage) stays Stack's.
+
+**Gates (phase branch after round 3):** web 3991 tests, typecheck, build; workspace 1090 and typecheck; mcp-server
+143; sync 207; apply 177; workspace-ingest 120; scripts 378; acceptance 64; docker 110; bb2dash-stack doctor suite;
+`web/e2e/walk25b.spec.ts` 4 of 4 in the walk box (run `20261020T053004Z`, dark and light, 1280 and 390 px). SQL
+units: green in the rolled-back prod dry run of 202 to 206; `phase19_135_136` fails the same with and without them
+(not this phase's). `/security-review`: no finding at confidence 8 or above. `/code-review main high`: nine findings
+(two HIGH: 205 restated 212's `run_transform`, so 205 now leaves it alone; fixed runner names would let a test
+project close the live runner's turn, so names now carry the compose project), all fixed but R2-6 (ruled: the owner
+may PATCH his own proposal's state; nothing writes the planner that way); a second review of the fix round found no
+defect.
+
+**Stack's look (2026-10-20), on review pages:** round 1 (https://claude.ai/artifact/CeJCGXyFRbiEkyyc2w1rUx) yes on 01 to
+05, 07, 08 and no on 06 (asking for the edit); round 2 (https://claude.ai/artifact/EAV3TFe58aDxRs8CaoXzNR, walk run
+`20261020T165210Z`, 4 of 4) "looks good. merge." The edit's review: no security finding; one MEDIUM (Approve during an
+open edit wrote the old value) and four LOW, all fixed. Gates after the merge of W-106: see 119a.
+
+**Preview:** the Vercel branch preview has no proposal rows until 203 to 206 are on prod (the page then reads the
+missing view as "no proposals", no banner), so the look is the walk box's shots in
+`docs/planning/sprint-2/walks/walk-25b/` (demo data only).
+
+**The cut-over, on Stack's word only, never during a turn or a sync, nothing inside Nov 30 to Dec 13:**
+1. Apply 202, 203, 204, 205, 206 in that order under the files' names, each byte-identical (md5 checked).
+2. Regenerate `web/src/lib/supabase/database.types.ts` (PR or follow-up).
+3. From bb2dash-stack, between turns: `docker compose up -d --build workspace`, then `docker compose up -d workspace-2`.
+4. `just doctor`: both rows healthy, `workspace runners` 2.
+5. `just accept 25` from `main`.
+
+**Cut over 2026-10-20 (19:05Z to 19:25Z), on Stack's words "cut over and merge 129-131" and, after the first
+session stopped mid-way, "apply 220, then cut over 25b and apply 202-206 and rebuild":**
+* #129 (`ee1f842`), #130 (`db99cc7`), #131 (`aedfa08`) merged first. The session that began the cut-over stopped
+  before its apply of 202 committed (prod held nothing of 202 to 206, checked object by object); a new session took over.
+* Applied in order, each byte-identical (md5 of the stored statement = the repo file): 220 `08792336`, 202 `f351f3ab`,
+  203 `abab7ad1`, 204 `15bb5162`, 205 `b25020b8`, 206 `7e2b4a62`. Nothing open on prod at any apply.
+* Step 2: `database.types.ts` regenerated from prod (this PR; it also catches up Phase 26's tables). tsc clean, web 4024/4024.
+* Step 3: bb2dash-stack pulled to `9ab98d9` (#10), then `docker compose up -d --build workspace` (compose also
+  rebuilt and restarted `egress`, its dependency; nothing was in flight), healthy, firewall self-check passed, runner
+  `workspace@bb2dash-workspace`; then `docker compose up -d workspace-2`, healthy, runner `workspace@bb2dash-workspace-2`.
+* Step 4: `just doctor`: `workspace` and `workspace-2` healthy, `workspace runners` 2 of 2 alive, search 16.7 ms. Its six
+  problems are none of 25b's (Blackboard login needed; nightly job; harness doctor; vault repos unpushed).
+* Step 5: the first run, `20261020T192538Z`, RED on the pack's own words, the product right: prepare, go-live, step 2
+  (two answers at once) and step 6 (second decisions refused, 55000) passed; the operator was unsure on 3, 4, 5, 7:
+  open cards count three buttons since W-106 (`edit` beside Approve and Reject) where the playbook said two, and the
+  Inbox pictures scroll the `Archived` tab out of frame. Fix: PR #132 (pack only). The run stopped after step 4, so
+  its note on the target row and its conversation were put back (DECISIONS 2026-10-20). #132 merged `3e4c90a`.
+* The second run, `20261020T194257Z`: steps 2 to 7 passed; step 8 `blocked` unrun, the operator looking for
+  `3.proposal_id` in its own empty output folder (the carry-over is handed in apart). Steps 8 and 9 now run first and
+  are `blocked` only on the test's own `carry.json` error, as pack 24 words it: #134 merged `67a4e6f`. Its leftovers
+  put back the same way.
+* The third run, `20261020T220647Z`: red at the host's sign-in, before any test: the shared Playwright cache had lost
+  `chromium_headless_shell-1243` (another project's install collects builds no registered project names, and
+  bb2dash's web checkout was not registered). `npx playwright install chromium` from `web/` put it back and registered it.
+* **The fourth run, `20261020T222413Z`, is GREEN and counts as acceptance** (22:24:13Z to 22:31:15Z; bb2dash `67a4e6f`,
+  bb2dash-stack `9ab98d9`): steps 0, 2 to 11 pass; two runners alive, two answers at once, proposals 5, 6, 7
+  applied, rejected and stale, second decisions refused (55000), the planner restored (step 9 and `planner-restored`),
+  no proposal in the apply's queue, the runner with 14 definer functions and no grant. Step 1 (usage) stays Stack's.
+  Operator notes, none changing the verdict: a refused second decision comes back as HTTP 500 (the playbook takes
+  400 or more; a 4xx would be cleaner), and the planner feed the assistant is given left out the graded row it
+  proposed on (the tool found it by id).
+* Step 1 answered 2026-10-21: usage credits are off (the week's usage had reset, so no percentages were noted).
+* **Both operator notes fixed (2026-10-21): PR #135 MERGED `86268ff` on Stack's "merge then cut over", CUT OVER, and
+  ACCEPTED by run `20261021T224728Z` (green from `main` at `86268ff`):**
+  * Migration **208** (`208_workspace_proposal_decide_409.sql`) replaces `workspace_proposal_decide` with 206's body but
+    for the one refusal, now raised as SQLSTATE `PGRST` with code `55000` and the same words in a JSON message and
+    `{status: 409}` as its detail: PostgREST answers **409**, the body still says `55000`, so the web app is unchanged.
+    New unit `phase25b_208_decide_409.sql`; 206's unit reads the `PGRST` form. Pack 25's step 6 now expects `409`.
+    Dry run on prod in a rolled-back transaction: the migration and its unit PASS; 206's unit PASS via `db-test` before 208.
+  * The feed: each score line now carries the id of the assignment its column is linked to (`course | id | name | …`),
+    so a graded row older than the work window can be named in a proposal. Runner code only (`workspace/src/context/feed.ts`,
+    the frozen `feed-block.txt` updated); 196 is untouched. The tool's schema now says an id may come from a score line.
+  * The feed's ceiling rose from 12,000 to **14,000** bytes, on Stack's pick: prod's feed of 2026-10-21 (60 work rows,
+    43 score rows, all linked) renders at about 11.8 KB without the ids and 13.1 KB with them, so at 12,000 the oldest
+    graded rows would have been cut first. The attached documents' floor fell from 33,600 to 31,600 so a question of
+    the full 32,000 bytes still gives a 128,000-byte prompt; an ordinary question is unchanged (brief 109 amended).
+  * Review notes left as they are: 203's `approved_value` guard still raises 55000 (a 500), but only a direct PATCH of
+    that column reaches it and the app sends none; a SQL caller of 206 now reads the code from the JSON message.
+  * Cut-over (2026-10-21, 20:16Z to 20:20Z): 208 applied under its file's name, byte-identical (md5 `aa982f3c`);
+    `phase25b_206_decide.sql` and `phase25b_208_decide_409.sql` PASS verbatim via `db-test`; `workspace` rebuilt alone
+    (`--no-deps`, so `egress` was left as it was), then `workspace-2` recreated alone on the same image; both healthy.
+  * Acceptance: run `20261021T224728Z` GREEN, steps 0 and 2 to 11; step 6's second decisions answered **409** with code
+    `55000` ("already applied", "already rejected"); the planner row back to its reading (md5 `77888c0d` without
+    `updated_at`), no proposal open, no session of the run left. Three runs before it did not finish: `20261021T202321Z`
+    red at the image build (30-minute timeout, during the network fault below), `20261021T205615Z` and `20261021T220133Z`
+    stopped by Claude Code for low memory on the host. `205615Z` stopped inside stage decide and left its note on
+    `ECN.304/exam-1` and its conversation open: put back by guarded SQL (the row's md5 equals the reading above) and
+    archived; its one app session, which its sign-out could not end (the token had expired), deleted by id on Stack's word.
+  * Found at the cut-over, not caused by it: a network fault about 20:06Z left the session pooler holding dead connections,
+    all 4 of `inbox_apply_runner`'s and all 4 of `workspace_ingest_runner`'s (each role's limit), so `apply` and
+    `workspace-ingest` were down from about 20:09Z ("too many connections", 53300). Their idle backends older than
+    5 minutes, and `workspace_runner`'s, were ended with `pg_terminate_backend`; both reconnected at 20:21:38Z, healthy.
+    The runners' 60 restarts since 2026-10-20 are the same kind: the watchdog 3 times, and the entrypoint refusing to
+    start while the pooler's name did not resolve (one stretch 02:54Z to 16:46Z, the host offline). Nothing changed for it.
+
+## Phase 25a: hardening after 24b (brief 119), 2026-10-19: built, reviewed, MERGED (#121 `9d6d5dec`, bb2dash-stack #9 `9dfcd01`) and CUT OVER
+
+**Cut over 2026-10-19 (21:50Z to 22:40Z), after Phase 26's, on Stack's words "cut over" and "migrate and cut everything over":**
+* 200 (md5 `8c3b6682`), 207 (`c6bac184`) and 201 (`d4fa53f0`) applied under their files' names, byte-identical.
+* `sync` rebuilt alone (21:52Z; again at 22:05Z by Phase 26's #124, from a `main` that holds 25a); `egress`, `workspace`, `apply`,
+  `workspace-ingest` each rebuilt alone, all healthy; each client's firewall self-check passed (DNS answers nothing, `example.com`
+  refused at egress and directly, its allowed host tunnelled through egress on its own port).
+* `just doctor`: `workspace search` ok, median 21.2 ms.
+* 201's gate: sync 6020 pulled no new file, so 200 had stored nothing. On Stack's "migrate and cut everything over" the gate was
+  met by a probe instead: inside the live `sync` container, as `sync_runner`, in a transaction rolled back, 200 answered
+  `inserted 0, present 1` for an existing unit and refused an empty call with 22023. Then 201 went on. SQL units on prod: 200, 201,
+  207, the store proof, 198 and every unit that pins the eighteen `sync_runner` or twelve `workspace_runner` functions pass.
+* **Step 8 passed (2026-10-19, 23:04Z):** Stack asked "What caused the Great Recession, according to the ECN 304 lecture
+  slides?"; Haiku (lookup) answered with 12 sources (ten slides of `The Great Recession_v3HO.pptx`, the syllabus, a memory item,
+  the planner). Egress for that turn: only `port=3128 TCP_TUNNEL … bump=splice` to the project host and `api.anthropic.com`;
+  the only refusals since the cut-over are the three start-up self-checks. **Phase 25a is fully cut over.**
+* The first sync after the cut-over (6020) found Phase 26's not-pulled ids sent as strings; Phase 26 fixed it in #124.
+
+
+Brief `docs/planning/sprint-2/briefs/119_PHASE25_after_24b.md` (frozen 2026-10-19 on Stack's answers, given on a
+decision page and confirmed in the terminal); record `docs/planning/sprint-2/verification/119a_PHASE25_VERIFICATION.md`.
+Branch `feat/phase25-after-24b`; three Opus workers, each in its own worktree. No page change.
+
+* **B, the sync's text insert behind a function (W-101).** Migration 200 `sync_file_text_put` (SECURITY DEFINER,
+  `sync_runner` only; eighteen functions with Phase 26's two) is the one way the sync and the Windows fallback store a course file's
+  text units; 201 drops `bb_file_text_anon_insert` at the cut-over, once a rebuilt sync has stored text through 200.
+* **C, the index watch (W-102).** `just doctor` gains a `workspace search` row: ok under 45 ms, watch 45 to 60, move
+  over 60 (Stack's 60 ms rule; 23.7 ms on 2026-10-18). It measures inside the database through migration 207
+  `workspace_search_timing()`, `workspace_runner`'s twelfth function (Stack's ruling, 2026-10-19), called by
+  `workspace/dist/search-probe.js`. Until the cut-over the row reads `unknown: not deployed yet`. bb2dash-stack
+  branch `feat/phase25-w102-index-watch`.
+* **A, egress by name (W-100).** The `egress` service (Squid 6.13, peek-and-splice, nothing decrypted) is the only
+  way out for `workspace`, `apply` and `workspace-ingest`: one port and allow-list per network, a tunnel only when
+  the CONNECT host and the TLS server name are both listed; firewalls allow only egress and the pooler; DNS closed.
+  Probes P-1 to P-3 passed (`docker/egress/PROBES.md`); an end-to-end run in a throwaway project passed 64 of 64
+  checks. `sync`, `bb2dash-mcp` and `harness-jobs` stay open (question 2).
+* **Review:** a code review and a security review found two HIGH holes in `squid.conf` (Squid resolved refused names, so DNS
+  stayed a way out; a bare IP address passed the name check through its reverse DNS) and one MEDIUM (the shared 5432
+  pooler, now named as open by decision); all fixed with the LOWs (119a, "Round 1 fixed"); the egress e2e passed 92 of 92.
+* **Tests on the final branch:** workspace 1033, apply 137, mcp-server 143, workspace-ingest 120, sync 189 (vitest);
+  scripts 378, acceptance 56, docker 100, ingest 177 (node --test); bb2dash-stack 400; typecheck and builds clean. SQL suite: the units
+  for 200, 201 and 207 and the function-count units wait on prod; `phase18_post_embed_checks` (a) is red on file
+  3713, a GEO.103 reading Blackboard no longer lists (outside the phase; Stack's call).
+* **Cut-over (waits for Stack's word; `docker/egress/README.md`):** apply 200; rebuild `sync` between syncs; one
+  sync, text landed; apply 201; apply 207; then `egress`, `workspace`, `apply`, `workspace-ingest`, each alone, by
+  name; watch Squid's log through the first logged-in turn; `just doctor` shows the search row.
+
+**Next:** 25b, the second runner (D, 202) and planner proposals Stack approves on the answer or in the Inbox (E,
+203 to 206), after 25a merges; a preview before its merge; `just accept 25` after it.
+## Phase 26: the announcement reader, 2026-10-19: MERGED (#120 `f1aeaa8`, guard fix #122 `16f7b8a`) and CUT OVER the same day
+
+Brief `docs/planning/sprint-2/briefs/120_PHASE26_announcement_reader.md`, approved by Stack on 2026-10-19.
+Branch `feat/phase26-announcement-reader`. Migrations 210–212 in block 210–219, built in parallel with Phase 25.
+
+* **Why:** the sync stored announcements but nothing read them. On 2026-10-19 ECN 304 posted "Quiz 5 This
+  Thursday (10/22)" and the planner had no Quiz 5. It was added by hand the same day, on Stack's OK
+  (`ECN.304/quiz-5`, tentative, titled "Quiz 5" so the gradebook column binds by title).
+* **What runs:**
+  1. After a sync closes done, the `sync` container files an `announcement_review` request
+     (`sync_request_announcement_review`, 210) when an announcement is new or edited. The sync holds no LLM (B-43).
+  2. The `apply` container takes the request when it has no Inbox work. It runs one `claude -p` of
+     `/announcement-review` (Sonnet) per batch of at most six posts.
+  3. For each post, scoped to its course, the reader searches the planner rows and the course materials. It then
+     adds work nothing records, asks on changes, or does nothing.
+* **Its one write path:** `announcement_review_record` (211), through the `record_review` tool.
+  * Every value must be quoted from the post, and the database checks that the quote is there.
+  * Adds are inserted `tentative`.
+  * Each add raises a `deadline` notice; a field change raises a `conflict` ("Accept the announcement" /
+    "Keep mine", applied by `apply_resolutions`); anything vaguer raises `stack_must_confirm`.
+  * No new Inbox kind: the items carry `suggested.source = 'announcement'`, and the Inbox cards show the post's
+    title and quote.
+* **No duplicates:** `bind_announcement_rows` (212) runs in `run_transform` before `stage_assignments`. It binds a
+  new gradebook column to the one announcement row that matches it.
+* **First run:** reads the last 14 days. 210 marks older posts `before_floor`.
+* **Activity fix (213, Stack, same day):** each sync showed the same three lines: two staff disagreements he
+  had settled, "Files: 0 pulled, 1 not pulled", and file 3713 (404). Now only newly raised disagreements, and
+  only new or changed file failures, get a line.
+* **Review round:** `/code-review` (high) made 10 findings, all fixed: Blackboard link kept, no clash with
+  Blackboard conflicts, explicit time offsets, stricter quote check, poison posts refused after two failed runs,
+  own daily cap of 6, pinned function lists updated.
+* **Tests:**
+  * SQL: 210–212 tested in rolled-back transactions on prod. Nothing was applied.
+  * Worker and web tests: see the PR.
+* **Cut over 2026-10-19 (~21:34Z), on Stack’s word, ahead of Phase 25 (his pick "Go now, fix both checks"):**
+  * 210, 211, 212 and 213 are on prod, each byte-identical (md5 of the stored statements = the repo file: `81d2fdaf`, `980576b4`,
+    `2f78504e`, `62d6d1ac`). They were applied with no sync or apply request open.
+  * 213’s guard and the five pinned tests ignore Phase 25’s `sync_file_text_put` (#122). 200’s guard got the mirror change
+    on Phase 25’s branch (`7425e99`).
+  * `sync` and `apply` were rebuilt alone from `16f7b8a`. Both are healthy, and the apply worker’s idle passes are clean.
+  * 27 posts older than 14 days are `before_floor`; 7 wait for the first review, which the next sync that closes done will file.
+* **Follow-ups the same night (recorded 2026-10-20 by the Phase 25b PM):**
+  * First live review: requests 6040 and 6041. Quiz 5: nothing to add (already in the planner). IST.323's cancelled
+    class and IST.466's Synchrony team each became a question in the Inbox. Four posts: nothing.
+  * Sync 6020 sent not-pulled file ids as text, and 213 refused them all. Its reasons also held a Playwright call log
+    with a Blackboard session cookie, stored only in request 6020's result. **#124** (`8d1d202`, on his "merge") sends the
+    ids as numbers and keeps only a reason's first line; `sync` rebuilt alone. Request 6020's result was scrubbed on his
+    word: no cookie is left in `agent_requests`, `sync_runs`, `attention_items` or `bb_file_pull_failures`.
+  * **#125** (`32f7268`): migration 214 gives `db_test_runner` the reads Phase 26's units need. Applied byte-identical
+    (md5 `5e61d4b8`); all four `phase26_*` units pass through `node scripts/db-test.mjs`, `phase26_211` verbatim
+    included.
+  * Two SQL units drifted with Phase 26, the product right in both: `phase19_135_136_sync_driver.sql` (212 added a tenth
+    fold stage, `bind`) and `phase23_181_inbox_apply_runner.sql` (since 210 the apply worker also claims
+    `announcement_review`). The test fix is **#129** (test only, both PASS on prod), waiting for his word. The suite on
+    `main` (2026-10-20) read 100 of 103; the third, `phase18_post_embed_checks` (a), is live data: file 3713 (a 404) and
+    4365 (IST.323's Lecture 9 slides, first seen in sync 6020, whose pull outcomes 213 refused before #124). The next
+    sync should pull 4365.
+  * The four Phase 26 worktrees were removed on his word.
+* **Live record to 2026-10-26 (PM assessment):** every sync since the cut-over filed a review (syncs 6020, 6602, 6604,
+  6606; requests 6040, 6041, 6603, 6605, 6607, 6608, all `done`, about $0.50 in all); 18 posts read, 12 `nothing`,
+  6 `acted`: Quiz 6 added (tentative, a `deadline` notice), Exam 2's move to 11/10 asked as a conflict and accepted,
+  three questions answered. 212 bound Quiz 5's column on 10/26. 213: no staff line and no file 3713 line in four syncs.
+* **Follow-up, an announced day is never replaced without asking (migration 223, branch
+  `fix/phase26-announcement-dates`):** when 212 bound Quiz 5's column, Blackboard's placeholder due date ("created +
+  1 day", 10/27 16:53) filled the row's empty `due_at`, so the in-class quiz of 10/22 moved to 10/27 with no question
+  (Activity said only "1 tentative value(s) replaced"). Quiz 6 (`due_date` 10/27) would have been overwritten the same
+  way. 223 redefines `stage_assignments` (220's body, patched by script): for a row whose `source_ref` starts
+  `announcement `, the held day is `due_at`'s, else `due_date`, else `event_start`'s New York day. A held day or points
+  that Blackboard never gave for that column in an earlier crawl (`bb_gradebook`) is the post's: a different Blackboard
+  value raises a conflict and leaves the row. The same day, or no held day, fills as before, and a value Blackboard gave
+  before moves with Blackboard. On any row, while the reader's own question is open: on `due_at` or points that field is
+  held (nothing written, nothing raised, counted as `held_for_reader`, not as a disagreement), so the post's question is
+  never overwritten; on `due_date` the row is not moved to another day, and the transform's own `due_at` question is
+  still raised beside it. Three review rounds: round 1 found the "Blackboard filled it" and reader-question cases,
+  round 2 the gaps in round 1's `bb_last_seen` window (a kept row, `due_date` questions, other rows, the out-of-term
+  branch), fixed by round 3's data rule; round 3's review led to round 4 (the held count, the `due_date` question, the
+  index-friendly reads). Left as known, each erring toward asking or agreement: a placeholder that lands on the held
+  day is filled with its clock time; a re-created column has no history, so its first value is asked; rows from other
+  sources keep 220's rule (the placeholder itself is not detected; a sprint 3 candidate). `/security-review` found
+  nothing. Unit `phase26_223_announcement_dates.sql` (nineteen cases and the stage's counts) fails at case (a)
+  without 223, with Quiz 5's very date, and passes with it in a rolled-back dry run (texts fetched at the commit and
+  their SHA-256 checked);
+  the units that run the transform pass with it, except `phase16_105` (already red on `main`: IST.466's
+  major-project-1 is confirmed now) and two that switch to a runner role the dry run's login cannot (`phase26_211`,
+  `phase25b_205`; run through `db-test` after the apply). Quiz 5 itself is set right by Stack's own date (221, #137),
+  not here. **MERGED 2026-10-26 as #138 (`eacd550`) on his "merge 138"; 223 APPLIED the same day** (version
+  `20261026211035`, stored text md5 `edca6701` = the file, the live body md5 `ab5579ed` = the file's body; two earlier
+  `apply_migration` calls failed with "Invalid or expired requestState" and changed nothing). `db-test` against prod:
+  `phase26_223`, `phase26_211` and `phase25b_205` PASS; suite 106 of 112, the six red all older than 223 (073 and 089
+  pass from `main` after #137; `grading_invariants` on IST.323/exam-2-fall-2026, a column row of 10/22;
+  `phase10b_grade_model` and `phase16_105` on rows Stack since confirmed; `phase18_post_embed_checks` (b) on file 4574,
+  an image). Nothing to rebuild: the transform runs in the database. Live proof owed: Quiz 6's column.
+* **Still open:** the live proof (Quiz 6's column), and his "remove" for `bb2dash-wt-26-dates`.
+
+## Course rail after the grouped side nav (2026-10-15)
+
+PR [#110](https://github.com/stack-dev-personal/bb2dash/pull/110), **merged 2026-10-15 as `44b1a18` on Stack's word "merge and cut over to main"**.
+Production, Vercel's deploy of `main`, was READY on that commit within the minute, so the merge was the
+cut-over: there is no container to rebuild. Branch `feat/course-rail-zenkit-nav` removed, local and
+remote. Out of phase, like the lecture-number links of 2026-10-02: one visual change to the shell, cut
+from `main` after Phase 24b's merge.
+
+- **The reference:** Stack's download of 2026-10-15, `Edit_Profile_.mp4`, a Zenkit settings window whose
+  left nav is grouped rows under a heading: an icon tile, a label with a muted second line, a chevron, the
+  rows in one rounded card, the current row filled solid. His words: "replicate the side nav bar design
+  for my sidebar of classes".
+- **What changed** (`web/src/components/shell/CourseSidebar.tsx`, its stylesheet, and `courseKindLabel`
+  beside `courseCode` in `web/src/lib/queries.ts`): the heading "Courses" in sentence case; the rows in one
+  card on the panel with hairlines that start past the tile; each row the subject on a rounded square in
+  the mono face, the short title over `CODE · Kind · SECTION` (a lecture names no kind; the line may wrap,
+  so a recitation's word is never clipped), and the shell's caret, drawn and not read; the current course
+  the primary button's fill with its words in the ground colour, rounded, the 2px red mark kept on its
+  leading edge, its tile round and inverted, its focus ring in the ground colour. Tokens only; the token
+  audit unchanged; the drawer under 1024px, `--sidebar-side`, `html[data-sidebar]` and the
+  navigation-close rule untouched.
+- **Tests:** three rail cases in `web/test/CourseSidebar.test.tsx`, the kind helper's six values, and
+  `web/test/course-sidebar-css.test.ts` pinning the look; the whole suite, typecheck and lint green at
+  `7c30498`.
+- **Seen before the PR:** the PM rendered the real stylesheet on a static mock of the rail in Chrome, dark
+  and light, and fixed the one defect it showed (the recitation's word clipped); the live preview needs
+  Stack's sign-in.
+- **Review round** (`6aa1545`): six findings, none a bug, all fixed: the card composed from the large
+  card primitive; no hairline under the current row; the hairline's inset named once; a dead class and the
+  orphaned `--size-58` token removed; the stylesheet test made non-vacuous.
+- **Done.** Nothing waits. Grouping the rail by term or kind is a follow-up if he asks.
 
 ## What has been done (by phase)
 
@@ -136,7 +498,7 @@ Live in prod (Supabase `bb2dash`, ref `goultdzqcavefcgnifdy`):
    automated. Stopped/deferred: `stage_courses` never writes `meetings` (~~no schedule payload
    shape seen yet~~ corrected 2026-09-24: the course payload's `schedule` key has been empty on every
    crawl and the calendar feed holds only gradebook items, so there is nothing to read; `meetings`
-   are still the seed rows that Phase 2's course maps confirmed); `announcements.author` null until the crawler key is confirmed live.
+   are still the seed rows that Phase 2's course maps confirmed) — **closed 2026-10-04 (R-73): Stack accepted the crawl evidence (112 course payloads, 98 with a `schedule` key, 0 with an entry); the 11 confirmed `meetings` rows, 7 `blackboard` and 4 `syllabus`, are the record and no meetings migration is written (DECISIONS 2026-10-04)**; `announcements.author` null until the crawler key is confirmed live (filled by the v5 crawls since 2026-10-01: 27 of 27 on 2026-10-03).
 10. **Phase 10a — Grades: mirror, screens, submissions** (`feat/grades-10a`, [PR #13](https://github.com/emstacho-su/bb2dash/pull/13), **merged 2026-09-16**;
    brief + frozen contract + Stack's ten answers in `docs/planning/sprint-1-hub/briefs/67_PHASE10A_grades.md`,
    evidence in `66_W17_VERIFICATION.md`). Two Opus workers (W-17 db + ingest, W-18 web) on
@@ -218,8 +580,9 @@ Live in prod (Supabase `bb2dash`, ref `goultdzqcavefcgnifdy`):
    the zone (069, round 2: a task tick 47 ms → 0.1–0.5 ms). `calendar-push` v4 then **v5** (round 2:
    paged reads that abort on a partial side, mirror write errors thrown, writer split into
    `store.ts`); kind colours Event 9 / Task 1 / Out of office 4 / Focus time 8 / Working location 2 /
-   Appointment slot 5, pending Stack's nod (2026-09-24: no nod recorded; kept as picked, no colour item in
-   the 12b intake; keep-or-change is R-59, sprint 2 question batch item 31, default keep). **Live proof 2026-09-16** on the real calendar (runs
+   Appointment slot 5, ~~pending Stack's nod (2026-09-24: no nod recorded; kept as picked, no colour item in
+   the 12b intake; keep-or-change is R-59, sprint 2 question batch item 31, default keep)~~ kept (B-31, DECISIONS
+   2026-09-27 and 2026-09-29; R-59 closed in Phase 17). **Live proof 2026-09-16** on the real calendar (runs
    17–24): 9 SQL-inserted test rows (one per kind + Los Angeles + all-day + online) → 9 inserts,
    zero-write re-run, time move + ✓ on a ticked task (2 patches), timed→all-day + cleared location
    (2 patches), 9 deletes, zero-write re-run; due-date events 0 writes in every run; end state Google
@@ -292,8 +655,8 @@ Live in prod (Supabase `bb2dash`, ref `goultdzqcavefcgnifdy`):
    and graded so far. **Planner:** Assignments band collapsed by default with counts, rows grow by what
    overlapping items need (`planner-rows.ts`, one `slotToPx`), no inner scrollbars, wrapped text, PR
    #16's three CSS risks fixed. **Inbox:** each button says what it does for that row ("recorded only"
-   where nothing applies), rows show source, age and a link, `v_inbox_feedback` hook for a later agent (2026-09-24: that agent is
-   `/inbox-apply`, row 16; it reads 090's `v_inbox_queue`, and nothing reads `v_inbox_feedback`).
+   where nothing applies), rows show source, age and a link, `v_inbox_feedback` hook for a later agent (dropped by migration 116, Phase 17;
+   that agent is `/inbox-apply`, row 16, which reads 090's `v_inbox_queue`; `v_inbox_feedback` retired by 116, R-57).
    **Grades:** Stack read the dummy-data comparison (`80e`) and kept the 10b engine's arithmetic with
    the what-if layer and both silencing rules removed — one deterministic "graded so far" per course
    with the parts it leaves out named under it; courses collapse; title is the link; feedback and
@@ -384,6 +747,144 @@ Live in prod (Supabase `bb2dash`, ref `goultdzqcavefcgnifdy`):
    record every advisor warning kept, plus a seventh for the absorbed units. Nothing visual, so no preview
    walk; R-54's browser proof is Phase 17's. Tests: db suite 21/21, web 1852 (107 files), `node --test
    scripts/` 51, mcp-server build + smoke clean.
+18. **Phase 17 — web polish: quick fixes, carried bugs, Inbox and planner leftovers, live proofs** (`feat/web-polish-17`,
+   worktree `bb2dash-wt-17`, built 2026-09-29/30, **merged as [PR #43](https://github.com/emstacho-su/bb2dash/pull/43) (d9d5ee9)**; brief
+   `docs/planning/sprint-2/briefs/97_PHASE17_web_polish.md`, frozen 2026-09-29; evidence
+   `docs/planning/sprint-2/walks/walk-17/97w_PHASE17_WALK.md`). Four Opus workers on disjoint files (W-44 db, W-45 course
+   pages, W-46 home / materials / inbox, W-47 shell / harness / planner CSS / desktop), PM-integrated. **Planned tasks:**
+   the Upcoming strip scrolls with a plain mouse (wheel and a 5 px drag, S2-home-1); Undated folds just above Needs
+   attention and Materials folds a whole course from its header, both remembered (`collapse-state.ts`, S2-home-2,
+   S2-materials-1); Stream posts link per kind with a status select on assignment posts, and "unread" follows the bell
+   (110, R-37); Classwork never draws rename ghosts, hides stale nodes behind a counted toggle and shows file notes (111,
+   R-39, R-40), and the three Knowledge Check drop zones moved to the live rows (112); pasted `?item=` links no longer
+   throw #418 (R-43); Info's false groups caption is gone (R-45); IST.466's starred sessions carry the attendance marker
+   (R-49); planner time ranges wrap (R-44); favicon (R-50); Home says when the sync scheduler or the calendar push has
+   stopped or keeps failing (113 + 118, schema `private`, R-52); gaps close themselves (114, R-56); Activity names
+   auto-graded items, linked readings and returned files (115, P-72); `v_inbox_feedback` retired (116, R-57); the C-7
+   toast outputs fixed (B-58); both React Compiler lint rules at error, 0 warnings (R-51); the logged-in walk harness
+   (`web/e2e/`, `@playwright/test` 1.63.0); ledger L-1 (⌘K palette modes) fixed. **Round 3** (Stack's preview-walk notes,
+   2026-09-29): the strip shows a slider, reaches back to the term start and claims the wheel only after a click or a
+   1.5 s hover (R3-1); "Apply answers" is the one apply control ("Apply answers now" removed, R3-2); the Inbox is a
+   review queue with tabs, cards, a sticky footer, `j`/`k`, and date-labelled session choices (R3-3); the Stream is the
+   week-divided two-lane timeline and Classwork keeps the folder tree (R3-4); the AI Policy is gone from the app (R3-5)
+   and from the corpus (119: 8 units in 6 courses; 150: IST.323 Appendix B) with the stored bytes untouched (R3-6, R3-6b);
+   `/grades` headers fold and a report-card strip sits above the classes (R3-7); nested planner items are drawn whole
+   (R3-8); the planner's "+" opens a step-by-step event wizard (R3-9); `npm run walk` signs in from `.env.testing`
+   unattended. **Migrations 110–119 and 150 live**, applied under their file names and md5-identical to the repo
+   (11 of 11, read 2026-09-30); 150 opens Phase 17's overflow block 150–159, because 110–119 were full and 140–149 is
+   Phase 21's (DECISIONS 2026-09-29). **Tests:** web vitest 2069 passed; SQL suite `node scripts/db-test.mjs` 30/30;
+   desktop 564; `npx eslint . --max-warnings 0` exit 0; round-3 walk `npm run walk` 24 passed, 0 failed on the preview at
+   b2698bf. web coverage (T-22): 85 % lines (85.22 % measured at integration; the threshold floor is 83). `/code-review`
+   and `/security-review` run on the planned diff and again on round 3; findings fixed (97w). Twenty-two DECISIONS
+   rows (2026-09-29/30). ~~**Open:** Stack's T-24 desktop sitting (toasts, R-108, still unproven), the T-26 production
+   sitting (shots 11, 14, 15, 19–21 and the `staged link` spec), his look at round 3 on the preview, and the password
+   rotation he was asked for.~~ Corrected by the 2026-10-03 audit (108 §4): T-24 was dropped on 2026-09-30 ("Forget about the toasts", DECISIONS); T-26's two halves were done on 2026-09-30 before the merge (97w §T-26; the staging case is row 810 on prod); the round-3 look became moot with the merge word. Still open from this phase: the dead grade-history read (`useGradeHistory`, `historyByColumn`) kept only by tests (R-51), the password rotation (unrecorded), and R-52's live clause (the Home push-failure line was never sighted; the token died 2026-10-01 18:45Z, 308 failed runs, re-minted about 2026-10-02 05:00Z; the next expiry is about 2026-10-09 05:00Z while the consent screen stays in Testing).
+19. **Phase 18 — ingest and corpus: files pulled and embedded in the sync, supersession, notes labels, links**
+   (`feat/ingest-corpus-18`, worktree `bb2dash-wt-18`, built 2026-09-29/30, **merged 2026-09-30 on Stack's word
+   "merge this phase", before the gate sync (task 16) ran**; brief `docs/planning/sprint-2/briefs/98_PHASE18_ingest_corpus.md`,
+   frozen 2026-09-29; evidence `docs/planning/sprint-2/verification/98c`–`98f` and `walks/walk-18/98w_PHASE18_WALK.md`).
+   Four Opus workers (W-48 db, W-49 ingest + corpus, W-50 crawler, W-51 web), PM-integrated; main (Phase 17, PR #43)
+   merged in and `database.types.ts` regenerated. PR #32 had already delivered tasks 2, 3, 15 and most of 4.
+   **Shipped:** `pull_files.mjs --restale` rebuilt so no document text reaches agent-run SQL (new Storage key, owner SQL
+   of ids and hashes only, `--restale-post` over PostgREST); CLI scripts exit cleanly (`process.exitCode`); crawler
+   **v5** (`crawler.probe`: announcement keys, id-shaped values, key-list misses; bare `creatorUserId` kept as
+   `authorUserId`; authors resolved from the course's teachers, then at most one `/users/{id}` per unknown id per run;
+   `feedbackToUser` read first for attempt feedback); `token_budget.py`; the golden set, truth test and committed eval
+   runner; "Open in Blackboard" / "Blackboard ↗" open the item's own Ultra page (`blackboard-link.ts`); no "no files"
+   line on a course with no session-linked files; search docs state each mode's shape (R-74).
+   **Migrations 120–129 live**, each dry-run in `begin; … rollback;`, applied under its file name, md5 of
+   `statements[1]` = the committed LF blob (10 of 10, 98c): 120 two supersession chains + IST.323 syllabus V1.4 · 121
+   notes label in both search functions · 122 `supersede_replaced_files` · 123 `file_week_no` / `link_file_sessions`
+   (18 weeks, 21 sessions, 10 Inbox questions) · 124 `stage_files` runs both on every fold · 125 GEO.103 chapters
+   off-platform, reading 45's url · 126 `assignment_bb_url` (40 rows) · 127 iCal poll unscheduled · 128 test-role
+   grants · 129 materialized search CTEs (latency back to 20.0 / 35.6 ms; not the meetings migration). **Review gate:**
+   a HIGH in 122 (a pre-existing sibling could be named as a deleted file's replacement) is fixed by migration **160**
+   (`160_supersede_new_candidates_only.sql`: only a candidate new in that crawl counts), which opens Phase 18's overflow
+   block 160–169 (120–129 full, 150–159 Phase 17's); it was in progress at this docs commit, so its apply and md5 are
+   in 98c, not here. A MEDIUM in `pull_files.mjs --restale` (a re-run lost the owner SQL for rows already uploaded) is
+   fixed: resumable when the stored object's hash matches. File 68 extracted by hand with `antiword` and embedded (task 20).
+   **Tests:** `node --test ingest/*.test.mjs` 79 pass, 0 fail; web vitest: see the PR (not re-run in the docs
+   worktree; W-50's full run was 1898 before Phase 17's merge); `node scripts/db-test.mjs` → passed 39, failed 1:
+   **`phase18_post_embed_checks.sql` FAILs `(a) no text unit: 161, 162, 452` and will until the first sync pulls those
+   three files** (catalogued since the brief, never pulled); `token_budget.py` max 485 tokens, 0 over; eval hybrid MRR
+   1.000 on 9 queries (`scored=27`, Q10 removed with the AI policy). Corpus (prod, 2026-09-30): 108 file rows, 97
+   current; 785 text units on current files (800 in all); 1,733 gte-small parts on current files (1,776 in all); 0 units
+   without an embedding; `na` files 17 (twin of 15) and 810 (Stack's staged IST.352 file).
+   **Unproven live, owed to the first `/bb-sync` on `main`** (DECISIONS 2026-09-30, "Phase 18 · merge"). **Read again on 2026-10-03 (108 §3): syncs 394, 443, 457, 866 and 1277 settled tasks 14, 17 and 18, the `search` redeploy (v6, byte-equal to `main`) and the 150/162 pair (both → 967 by 160's rule); still owed are `98a` (its §2 and §5 need Stack's tab; §3 closed by his R-73 call on 2026-10-04) and task 28's screenshots; task 19's code half landed 2026-10-04 (the crawler PR: key lists cut, header rewritten, fixture and tests on the live shape; R-66 and R-75 rows) and task 26 closed 2026-10-04 (R-73 row); DECISIONS rows of 2026-10-03 and 2026-10-04.** The list as written at the merge: task 16 (gate
+   sync + probe sitting; `98a_PROBE_SITTING.md` never written); task 17 (in-sync pull counts); task 18's live half
+   (authors after a v5 fold; all 24 announcements had a null author at the merge; 27 of 27 carry one on 2026-10-03); task 19 (crawler key-list cut and R-66/R-75
+   header, waits on the probe — done 2026-10-04, the crawler PR); task 26 (R-73 meetings: no data yet; a meetings migration would take the next free block after 169 — closed 2026-10-04 with no migration, Stack accepted the crawl evidence); task 28's
+   screenshots 05 and 08 and the rest of walk-18 (only the task 20 note exists); task 14's 48 h re-read (127 applied
+   2026-09-29 17:51:00Z, `ical_sync_runs_at_apply=19`; read `sync_runs where source = 'ical'` → 19 after 2026-10-01
+   17:51Z). Also waiting on that fold: file 150 → 162 (the third supersession pair, 122's rule). Not confirmed in this
+   docs pass: the `search` redeploy and its byte comparison (§DoD merge bullet). Note for task 17: its first count
+   (`superseded_by is null and storage_path is null`) reads **13** today: 161, 162, 163, 452, nine ECN.304 readings
+   738–746 (text extracted, no stored bytes) and 810 (Stack's staged file, no `source_url`, so no pull can fill it);
+   the expected 0 needs re-scoping before that sync is read (re-scoped 2026-10-03 to 9, the outside links 738–746; 810 has bytes, a twin of 140). Rows 72 and 144 carried the stale marker until `--restale` re-pulled them on 2026-10-01 16:46Z.
+
+19. **Phase 16 — grades: V-1 sittings and the reconciliation migration** (`feat/grades-v1-16`, **merged 2026-09-30 as [PR #44](https://github.com/emstacho-su/bb2dash/pull/44), 4c310ff**; PR opened
+   2026-09-30; brief `docs/planning/sprint-2/briefs/96_PHASE16_grades_v1.md`, rounds 1–2). Stack sat all six
+   V-1 courses on 2026-09-29 through the fixed launcher (`scripts/validate-grading.mjs`, confined to the
+   `bb2dash` MCP and `docs/planning`); verdicts `docs/planning/sprint-2/verification/96b_*`, summary `96d`
+   (143 rows checked: 28 corrections, 110 citation-only, 6 already applied, 0 left tentative; 18 spot
+   checks, one waived mismatch). **105** (pre-sitting fixes: IST.466 major-project-1 `tentative`, component
+   24's group number, GEO.103's two attendance columns "Not graded") and **106** (the reconciliation: B-12
+   re-cut of IST.323's Final Project 13 / 1, IST.466 participation / attendance on syllabus points and its
+   rolled-over 100-point column "Not graded", IST.471 weighted 70 / 30 with a full letter scale, placeholders
+   dropped, and a P-75 citation on every checked row). Tooling: the export query `scripts/export-grading-schema.sql`
+   (`96a`), the machine-block checker `scripts/v1_recheck.py` (`--check`, `--summary --compare`, `--emit-sql`
+   → `db/tests/phase16_106_v1_recheck.sql`), `db/tests/grading_invariants.sql` (F ceiling 0 after 106). Web:
+   ECN.304's rank rule stated under the figure (R-36). `/inbox-apply` cites `bb_file:<id>#unit:<n>`.
+   Task 10a's seed fix went to `main` as its own PR (#40, Stack's call). ECN.304 Exam 1 counting is no
+   gate (Stack, 2026-09-30); `node scripts/check-ecn-exam1.mjs` is an optional read-only check.
+
+20. **Phase 20 — harness closure: V-2 on record, note quality, checkpoint redaction, vault writers**
+   (brief `docs/planning/sprint-2/briefs/101_PHASE20_harness_closure.md`; three PRs plus one, DECISIONS 2026-09-30).
+   **PR-A** bb2dash [#39](https://github.com/emstacho-su/bb2dash/pull/39) (`fix/inbox-apply-vault-20`, merged
+   2026-09-30 as 2904b20): `/inbox-apply` Step 0 resolves the vault and stops unless the `projects` realm is there;
+   the installed copy prints `vault=C:/Users/stack/vault ingest=C:/Users/stack/agentic-harness/ingest realm=projects ok`.
+   **PR-B** agentic-harness #36 (`feat/v2-closure`, merged as ea0e199): phase spelling with lettered phases and the
+   bb2dash alias table, a per-note 5-tag cap through `hook_tags`, `/checkpoint` redaction (fallback removed), per-machine
+   redaction extras, the sweep under the realm lock, the untagged cadence, `resolve-config.mjs`, the back-fill tool,
+   harness docs for the realm vault. Harness **#37** (merged as 00539be) taught the back-fill the retired home
+   `C:/Users/estac`. **PR-C** (`docs/harness-closure-20`, **merged 2026-09-30 as [PR #48](https://github.com/emstacho-su/bb2dash/pull/48), cb1d7e7**): the re-installed `/checkpoint` (C-21 `equal` x3),
+   `/inbox-apply` Step 0 through `resolve-config.mjs`, `/bb2dash-pm` runs the untagged review first when due, the
+   verification note 101a, these state docs. Live steps on 2026-09-30: gitleaks over all three realms clean; L20-a
+   hook reinstall (C-17 `same` x6); L20-b back-fill over 804 notes (C-18 re-run `changes 0`, top-level 194 = 194,
+   `repo` empty 91 → 0, `hook_tags` over 5 = 0); eval 0.9194 → 0.9355 on 67 cases; the credential test exits 2 in
+   2064 ms; a live resume chain and `include_superseded` proven on Stack's interactive session; the acceptance query
+   and GIN `EXPLAIN` on Phase 12's family; the first untagged review (341 → 38 unclassified, two blind taggers).
+   Stack waived the three-night prerequisite and struck the cloud `/checkpoint` step. **V-2 closed on Stack's
+   word, 2026-09-30.** ~~Open: task 2's first real Apply run (needs an Inbox item), task 29 (refresh the installed
+   `/inbox-apply` after PR-C merges),~~ two harness follow-ups (101a), and the 0-byte note `b46dd7f8` (unrecoverable). Task 2 was settled by request 458 (2026-10-01: 14 notes written to the projects realm, committed 8dd45e6) and task 29 is done (the installed copy equals `main`); the two harness follow-ups are still open on harness main and filed nowhere (108 §2, 2026-10-03).
+21. **Phase 19 — content identity, per-crawl history and sync honesty** (brief
+   `docs/planning/sprint-2/briefs/99_PHASE19_content_history.md`; [PR #60](https://github.com/emstacho-su/bb2dash/pull/60) merged 2026-10-03 as 206ee3a on Stack's word;
+   task ledger `docs/planning/sprint-2/verification/99_PHASE19_LEDGER.md`). Stack's yes at the start (2026-10-02) to
+   B-19's ghost merge and B-20's 30-minute terminal rule, then "apply 131–137"; on 2026-10-03 he asked for the phase
+   to be finished without his input and reviewed at the end. Migrations **130–139 and 170–172 live, md5-identical to
+   the repo (13 of 13)**: 130 merged the 21 rename ghosts (`bb_content` 239 → 218); 131 keys `bb_content` on
+   `(course_id, bb_item_id)` and drops the path key (files 17 and 19 now in Classwork, 225 rows); 132
+   `bb_material_history` (229 backfilled rows, one vanish convention, two GEO.103 stamps restamped); 133 Stream
+   material posts from history; 134 Activity names new, changed and gone materials; 135 a sync is `running` from its
+   claim (trigger on `agent_requests`) and `run_transform` records the `history` stage; 136 a registered run folds only
+   on its calendar row, and the 30-minute terminal rule closes a dead sync with one Inbox item; 137 `v_sync_status`
+   gains `notes`, `interrupted` and R-41's per-stream `streams`. Round 2 from the first code review: 138 (Activity
+   counts materials only; a folder rename no longer marks its contents changed) and 139 (a deleted-and-re-posted item
+   keeps its row and assignment link). Round 3 from the second review (block 170–179): 170 (Activity reads what the
+   Stream posts; uncatalogued files resolve at read time; 10 path-only history rows removed, 229 → 219) and 171 (only
+   an item deleted and re-posted between two crawls is re-keyed); the skill stops on an interrupted run. Web: "New and changed materials" block on the Stream, honest "last synced" and
+   "last sync interrupted" on Home and the Inbox, never-synced streams named; desktop "Sync interrupted" toast opens
+   the Inbox. The `bb-sync` skill registers its run at claim (installed copy refreshed 2026-10-03). Gates: SQL suite
+   59/59, web vitest 2314/2314 (the ledger's final figures; the merge-day note said 56/56 and 2302), desktop 708/708, typecheck and build clean (a 2026-10-03 23:00Z typecheck from the main checkout exited 2 only because that checkout's `web/node_modules` lacked `@playwright/test`; `npm ci` there fixed it, 0 errors), `mcp-server/` untouched; security review no
+   HIGH/MEDIUM; advisor 0 findings on Phase 19 objects. Live proof 2026-10-03: request 580 opened run 592 `running`
+   at claim and the tick reaped it at 17:54Z (Inbox item 2636). Walk 6/6 on the preview (`walks/walk-19/`). **Task 27
+   passed with Stack's sync 866** (2026-10-03): claimed and opened `running` at 19:28:58Z, crawl from 19:29:26Z, folded
+   `ok` at 19:30:01Z with all nine stages; every stream `fresh`. It showed one gap: a new Kaltura video (an LTI item) is
+   recorded in history but not posted, because the Stream counts only document, link and file items (027's rule) — put
+   to Stack. Stack's answer ("only keep the link"): migration 172 posts videos as links and the Stream gives every
+   content post an Open link (a video opens the course's Blackboard page); nothing is downloaded. **Merged on Stack's word before he
+   reported the acceptance walk**; the Stream block's placement stays as built until he says otherwise; Inbox item 2636
+   (the PM's proof run) is his to dismiss. Phase worktrees and branches removed after the merge.
 
 **Migration numbering note.** Prod's `schema_migrations` recorded the GUI migrations under their
 pre-reconciliation names (`012_planner_columns` … `017_sync_contract`) next to main's
@@ -430,7 +931,8 @@ with the New York due day; the IST.471 popout's submission block lists the pulle
 checksum and an Open button; Materials shows both pulled files under "My submissions" ("submitted
 copy · In library"). Two findings: a **direct load** of the assignment page was a 404 (fixed in this
 PR — `CourseAssignment` treated a pending, not-yet-fetching query as "missing" on the server render;
-two RED-first tests), and React #418 on `?item=` popout URLs (S2-carry-9, pre-existing).
+two RED-first tests), and ~~React #418 on `?item=` popout URLs (S2-carry-9, pre-existing)~~ (fixed in Phase 17, T-11: `ItemPopout`
+waits for hydration; row 18).
 
 **Open at close (carried into sprint 2 planning):**
 * ~~Submission bytes not pulled~~ — **fixed in this close-out PR**: `bb-sync` step 4b is now the
@@ -441,7 +943,7 @@ two RED-first tests), and React #418 on `?item=` popout URLs (S2-carry-9, pre-ex
 * V-1 grading validation still stubbed (`059` held); 18 placeholders without points (21 on 2026-09-16); IST.323's
   13-point proposal column ~~counts toward two parts~~ counts toward one part, the 11-point proposal, since
   a "Counts toward…" link of 2026-09-22, so it overfills that part (see Known issues).
-* V-2 session archival (R-27) is **built** in `~/agentic-harness` (its PRs #1–#4, 2026-09-16: capture 2.0 with subagent notes, tag vocabulary, one-time vault migration, ingest on capture, nightly reconcile, metadata-filtered retrieval); the vault itself moved into git realms there on 2026-09-23/24. Carried: bb2dash's acceptance walk of `66_SESSION_ARCHIVAL_RAG.md` and the doc closure (S2-carry-3).
+* V-2 session archival (R-27) is **built** in `~/agentic-harness` (its PRs #1–#4, 2026-09-16: capture 2.0 with subagent notes, tag vocabulary, one-time vault migration, ingest on capture, nightly reconcile, metadata-filtered retrieval); the vault itself moved into git realms there on 2026-09-23/24. Carried: bb2dash's acceptance walk of `66_SESSION_ARCHIVAL_RAG.md` and the doc closure (S2-carry-3). **2026-09-30: closed on Stack's word (2026-09-30)** — Phase 20 walked all 21 lines on live data (`docs/planning/sprint-2/verification/101a_V2_VERIFICATION.md`; row 20 under "What has been done").
 * Phase 13 styling **skipped** by Stack; C-1..C-3 parked (`docs/planning/sprint-2/parked/81_PHASE13_styling.md`).
 * Phase 14 containers brief + 6 research files ready; Stack places it in the sprint 2 list.
 * Known issues below: ~~empty series row after a plain delete of a series' last row~~ (fixed by migration 102,
@@ -487,9 +989,10 @@ re-pulled, `stage_gaps` no longer raising a gap for a file the same sync pulls) 
 branch and stay Phase 18's. The installed skill copy at `~/.claude/skills/bb-sync/SKILL.md` still
 holds `main`'s version, so `/bb-sync` keeps running the old step 4b until that copy is refreshed
 from this branch — deliberately untouched, because overwriting it from an unmerged branch is the
-merging session's call.
+merging session's call. (2026-09-30: PR #32 merged; Phase 18 rebuilt `--restale` and merged too. The live proof is
+still owed, now to the first `/bb-sync` on `main`, after the installed copy is refreshed from `main`; row 19.)
 
-## Sprint 3 — planning opened 2026-09-29 (research phase, nothing built)
+## Sprint 3 — planning opened 2026-09-29 (research phase, nothing built; merged to main 2026-11-11)
 
 One goal, Stack's: **an explicit Blackboard MCP server in place of the crawler feature** (`ingest/bb_crawler.js` pasted into a
 logged-in tab by a Claude session; bb-sync steps 1, 3 and the browser half of 4b). Intake `docs/planning/sprint-3-blackboard-mcp/107_SPRINT3_INTAKE.md`:
@@ -500,9 +1003,1579 @@ collision with sprint 2's Phases 14 (sync half), 18 (crawler v5 tasks) and 19, a
 default each) that Stack answers before anything is built**. Charter `108_` and three Sonnet research streams
 (`research/109_*`: access-routes, comparables-and-parity, mcp-architecture); synthesis `110_` carries the go/no-go.
 Stack's one live step: `scripts/bb-probe.mjs` with a cookie header from Chrome DevTools (status codes and key names only; no
-bodies, no cookie printed). Sprint 3 migrations start at 150. Sprint 2 continues as planned until the synthesis says otherwise.
+bodies, no cookie printed). **Corrected 2026-11-11, when this branch merged:** 150–159 went to Phase 17's overflow the same day, sprint 2
+closed on 2026-10-26 at migration 223, and the synthesis `110_` was never written; sprint 3 is still research only.
 
-## What's next — Sprint 2
+## Lecture-number session links (2026-10-02)
+
+On Stack's Inbox note (item 906) and his scope call, `feat/lecture-number-session-link` adds
+migration `162_lecture_number_session_links.sql` (**applied to prod 2026-10-02 on Stack's word, repo
+file byte-identical; merged 2026-10-02, PR #56, fb8a0a6**). `link_file_sessions` gains one step after Stack's own answer: a file that
+names a lecture number links to the week's only session that is not an exam, or, when the week has
+as many lecture numbers as such sessions, to the session at its rank. A lone lecture in a week of
+two sessions still asks, and an open question the rule clears closes itself. Test:
+`db/tests/phase18_162_lecture_number_links.sql` (7 assertions), green through the runner with
+`phase18_123` and `phase18_124`. Code review found two things, fixed in
+`163_session_link_archived_answers.sql` (**applied to prod 2026-10-02 on Stack's word, byte-identical**): an answer
+`/inbox-apply` has archived still counts, and the number-order rule reads a sibling's answer that
+is not applied yet. Its test `db/tests/phase18_163_session_link_answers.sql` (5 assertions) is
+green through the runner, with `phase18_162`, `phase18_123` and `phase18_124`. Sync 457
+(2026-10-01, run 485, `ok`) also landed: 14 Inbox answers applied
+(`docs/inbox-decisions/2026-10-01.md`), 1 file pulled, `missing_parts_before=0`.
+
+Full suite after the merge (2026-10-02, `node scripts/db-test.mjs`): **passed 46, failed 1, units 47**. The
+one failure is `phase12b_082_083_planner_series.sql`, and it is the test that went stale, not the
+code: scope `all` cuts at `now()` (083/088), and the test's series holds a hard-coded row at
+2026-10-01 18:00 -04:00, which is in the past since 2026-10-02 ("these rows are not in scope for all …
+starting before the cut"). Unrelated to 162/163. **Fixed 2026-10-02** (`fix/planner-series-test-dates`): every fixture date but the past row moved on 53 weeks (weekdays kept, the Thursdays still on their sides of the 2027-11-07 clock change), and a guard under `begin;` fails by name when they run out again on 2027-10-07.
+
+## Inbox undo (2026-10-05)
+
+[PR #74](https://github.com/emstacho-su/bb2dash/pull/74), `feat/inbox-undo-answer`, web only, no migration. Stack, 2026-10-05: "I
+accidentally clicked the wrong input button on an item from the inbox. we need a way to move items from answered not applied back
+to the inbox (an undo)". The press was item 3426, GEO.103's "Exam 1" `due_at` conflict (Blackboard says 2024-09-30, a column from a
+prior year), answered **Accept Blackboard** at 20:06Z with the note "keep mine, date listed on blackboard is from a prior session".
+It was unapplied, and the next fold's `apply_resolutions()` would have moved the due date to 2024, so the PM put that one row back
+to `open` by hand at about 20:10Z with the same guarded statement this PR ships (DECISIONS); Stack answers it again.
+
+* **Undo on every card under "Answered, not applied"** whose row the transform has not stamped `applied_at` and the worker has not
+  archived, with "Back under Needs you with no answer. Nothing has been applied yet, so nothing else changes." under it.
+* **The write** (`web/src/lib/queries.inboxReopen.ts`) puts the four answer columns back exactly as `raise_attention` left them
+  (`state = open`; `resolved_at`, `resolution`, `resolution_note` null). It is guarded in its filter, not only in the UI: `state in
+  (resolved, dismissed)`, `applied_at is null`, `archived_at is null`. Zero rows (the fold or `/inbox-apply` got there first) reads
+  "this answer was already applied or archived, so it cannot be taken back here"; a unique-index refusal (the next sync re-asked the
+  question, so a newer open twin exists under `attention_items_open_dedupe_idx`) reads "the next sync asked this again; answer the
+  newer open item instead". An applied answer has no Undo: the fact changed, and taking it back is a new answer.
+* **Two more rows get no Undo** (`/code-review`, round 1): a session-link question (`ref` `session_link/<file id>`), because
+  `link_file_sessions` (123, 163) writes the pick into `bb_files.session_id` without stamping `applied_at` and reads only files
+  still unlinked, so a reopened one would be a question nothing reads again; and a row the database closed itself (`resolution`
+  null while closed, 084's kind), because Stack's writes always carry a resolution and nothing would raise the question again.
+  Both rules sit in `canReopen` and in the write's filter.
+* **Undo waits while `/inbox-apply` holds the queue**: with an `inbox_feedback` request queued or claimed
+  (`useOpenInboxApplyRequest`), the control is disabled and reads "Apply answers is running; undo after it finishes", since the
+  worker reads the queue before it writes and an undo between the two would leave an applied answer open.
+* The Inbox screen wires the mutation beside resolve and the session choice. The card that owns a write in flight, or the failure
+  to show, is now the one whose write was sent last (`latestWrite` on `submittedAt`), not a fixed order among the three, which let a
+  stale undo failure hide a fresh answer failure on another card. One `invalidateInboxCaches` serves the three mutations and the
+  Apply button's refresh. The card's failure line reads "That change was not saved: …" for all three writes. RLS already lets the
+  owner update the row.
+* Gates: web vitest 137 files / 2427 tests, `tsc` 0, `eslint` clean; `/code-review main high`: 10 findings, 8 applied (the two
+  exclusions, the Apply-worker block, the latest-write rule, a refusal message that names every way zero rows happens, the shared
+  invalidation, the exported `untypedClient`, the card's wrapper). **Two declined, owed as follow-ups in SQL:** a
+  `reopen_attention_item(p_id)` function beside 090's `archive_attention_item`, so the rule is the database's for every caller and
+  has a `db/tests` unit (today it is a PostgREST filter in one browser module under owner-all RLS); and a `state = 'resolved'`
+  re-check on 042's `applied_at` stamp, which closes a millisecond window in which an undo committing between the fold's write and
+  its stamp leaves an open row with `applied_at` set. Neither needs a web change; both take the next free migration number.
+
+## Phase 14 early PR — the desktop launcher (2026-10-03)
+
+The first of Phase 14's PRs (brief 100 task 18, merged before acceptance step A1; the exception to one PR per phase is DECISIONS 2026-10-02 "Phase 14 freeze: one PR per repo" on the phase branch). It adds two desktop config keys and changes nothing by default:
+
+* `syncLauncher` (`terminal`, the default, or `queue-only`; env `BB2DASH_SYNC_LAUNCHER`). Under `queue-only` the Sync button only queues the request for the container's runner; no terminal opens.
+* `novncPasswordFile` (env `BB2DASH_NOVNC_PASSWORD_FILE`, default `<home>.bb2dash-secrets
+ovnc_password`). Under `queue-only`, when an open Inbox item with ref `sync-login-required` (kind `stack_must_confirm`, entity `agent_request`) exists, the app opens `http://127.0.0.1:6080/vnc.html` once per New York day, unlocked through the URL fragment, so Stack only does NetID and Duo.
+
+Nothing raises `sync-login-required` until the phase PR (migration 091 and the runner) and the cut-over land, so with the default `terminal` this PR changes no behaviour. Desktop: 40 files, 787 unit tests, typecheck and build clean, e2e 23 passed (one new case); `/code-review` round 2 applied; `/security-review`: no findings.
+
+## Phase 14 — Containers (R-28), 2026-10-02 → 2026-10-04
+
+Brief `docs/planning/sprint-2/briefs/100_PHASE14_containers.md` (frozen 2026-10-02, re-cut 2026-10-03 for a manual
+Duo login every morning and no overnight waits). Three repos, one PR per repo plus the early launcher PR
+(DECISIONS 2026-10-02 freeze row (5)): bb2dash `feat/containers-14`, agentic-harness `feat/containers`
+(draft [harness PR #39](https://github.com/emstacho-su/agentic-harness/pull/39)), bb2dash-stack
+`feat/containers-14-stack` (private repo created 2026-10-03), and [PR #62](https://github.com/emstacho-su/bb2dash/pull/62)
+(`syncLauncher` + the container login prompt, merged before acceptance step A1).
+
+**What shipped (merged 2026-10-04 on Stack's word "merge", all four PRs, before his acceptance sitting; DECISIONS 2026-10-04):**
+* **The sync runs in a container.** `sync` (`docker/sync/`, `sync/`): a deterministic Node + Playwright runner, no LLM,
+  Chromium headful on Xvfb as `pwuser` under Playwright's seccomp profile with its sandbox on, noVNC on
+  `127.0.0.1:6080` for the Duo login. It claims queued `sync` requests, registers the run first, crawls with crawler
+  v5, waits for the fold, pulls files through Phase 18's signed fetch, extracts with the locked Python set (task 14),
+  embeds in-process, and closes the request with a templated report Activity shows.
+* **The login, kept and watched.** A read-only Ultra page every 20 ± 3 minutes keeps the session warm; a dead
+  check tries one silent re-login before raising "Blackboard login needed" in the Inbox (ref
+  `sync-login-required`); the item closes itself on the next good login. The first login of each New York day
+  queues that day's sync (`sync_enqueue('login')`); no clock.
+* **Database:** migrations **091** (role `sync_runner`, LOGIN NOINHERIT NOBYPASSRLS, no table grants; twelve SECURITY
+  DEFINER functions and a helper), **093** (review fixes: `sync_own_claims()` so the runner finishes its own
+  registered claims, a failed close fails its running run), **094** (the test role may act as `sync_runner`, inherit
+  false). All three on prod, md5-identical. 092 struck. The SQL suite: 64 of 64.
+* **Desktop (PR #62):** `syncLauncher` (`terminal` default, `queue-only`); under `queue-only` the app opens the
+  login page, unlocked through the URL fragment, once per New York day while the container's login item is open.
+* **Materials MCP as an image** (`bb2dash-mcp:local`); the service key moved out of `~/.claude.json` and `bb2dash/.env`
+  into `C:/Users/stack/.bb2dash-secrets/` on 2026-10-03; `claude mcp list` → Connected; a real search passes.
+* **Harness jobs container** (agentic-harness): scheduler with catch-up, ingest and realm sync (dry run until
+  cut-over), checkpoint collection, doctor realm rows; no transcript sweep in the container (DECISIONS 2026-10-02).
+* **Umbrella `bb2dash-stack`:** `compose.yaml` includes both repos, `secrets.example/` (11 names), the eight `just`
+  verbs, the umbrella doctor, and a dev container with its own clones, a hardened egress firewall and no readable
+  secret file.
+
+**Proven live (2026-10-03):** the spike (82b: login survives restart, recreate and `wsl --shutdown`; `Sandbox:
+seccomp`); task 28 (82a): the skill's run A and the container's run B match on every parity check (`2 1`), the
+login path raises the Inbox item and archives it on re-login; task 27: 4 of 4 images clean (filesystem and
+history) under a narrow vendor allowlist; six base manifests, all with arm64. Walk screenshots `walks/walk-14/01–04`.
+Gates: `/code-review` on all four branches with rounds 2 (and 3 for bb2dash-stack) applied; `/security-review`
+on all four: one HIGH in the dev container's firewall cache, fixed in round 3; no other finding.
+
+**Where the product is (2026-10-04 evening):** the container `bb2dash-sync-1` runs the runner's image with Stack's
+login, rebuilt from `main` and recreated by A2's `just up` at 21:10 local with the login intact; the compose project
+`bb2dash` is owned by `bb2dash-stack/compose.yaml` since A2. The desktop app runs build 4987385 (PR #62's
+`syncLauncher`) since 21:07 local, activated by a tray Quit plus `Start-ScheduledTask Bb2dash-LogonBuild`, and is on
+`syncLauncher = queue-only` since 21:18 (cut-over step 2; `%APPDATA%\bb2dash\config.json`, the old file kept beside it
+as `config.json.bak-2026-10-04`), so a Sync press only queues and the container runs it. **Acceptance so far** (evidence
+to be ticked in 82a by the acceptance PR): **A1** the three checkouts side by side at `C:/Users/stack/projects/`, `.env`
+and `machine.env` filled, `just doctor` reads secrets 11 of 11 (the brief's fresh clones were struck by the A2 row of
+2026-10-04). **A2** `just up` exit 0 (images rebuilt, `bb2dash-sync-1` recreated and healthy in 39 s); `just doctor` exit 1
+on one real row only, the vault `projects` realm's one uncommitted session note, which A6's `REALM_SYNC=apply` commits
+(re-run after A6 for the clean exit). **A3** Stack's Duo login at the noVNC page (01:02Z); `just login` prints and opens
+it. **A4** Sync pressed in the app at 01:49:36Z under queue-only: no terminal opened, the runner claimed request 1855
+at 01:50:00Z, crawled 9 rows, pulled 1 file (19 text units) and closed it `done` at 01:52:29Z. The first
+login-triggered sync also ran that evening (the runner saw the login at 01:02:56Z, archived item 3424 itself,
+`sync_enqueue('login')` queued request 1854, run 2e2300a8, 1 file pulled, `done`): R-87 live before A5. The two
+`AgenticHarness-*` Task Scheduler jobs still exist (NightlyIngest disabled, CheckpointCollect ready); the harness jobs
+container is up in dry-run.
+
+**Acceptance on 2026-10-05 (ticks in 82a, section "Acceptance A1–A9"):** **A2 passed on Stack's word** after the doctor
+read of 20:19Z: every row the containers own green; its exit 1 came from two reporting artefacts of the cut-over (the
+harness doctor's `nightly ingest` row reads the host's retired state file, follow-up W-74; the strict `vault … clean`
+rows count notes written since the last nightly). **A6** done both halves: `just ingest-now` exit 0 (91 chunks, realms
+pushed, a `rag` search finds the day's notes) and the catch-up proven at 18:06:39Z (the restarted scheduler ran the
+missed window 13 ms after starting; a first attempt killed mid-run by the restart showed "never twice" and a clean lock
+takeover). **A8 partial** by agreement: the nightly task is unregistered; the checkpoint task stays until the jobs
+container collects checkpoints (deferred list). The sync image was rebuilt from `main` 2e39199 at 22:06Z (PRs #71, #73,
+#75) and `bb2dash-sync-1` recreated with the login intact; the installed skills were refreshed from `main` the same hour.
+
+**Next:** A5's "sync without a press" half on the first morning after 06:00 New York (PR #73's rule), its page-opening
+half on the next dead login; A7 `just dev`; A9 the Windows `/bb-sync` with Docker stopped; the tray Quit that lets the
+logon-build task activate desktop build `f37723a` (PR #71), after which the first update press is the end-to-end proof;
+Stack removes the stale claude.ai `bb-course-*` skills. Follow-ups on the deferred list: W-74 (the umbrella doctor
+reads the container's ingest state), container-side checkpoint collection, the Activity label for login-triggered runs.
+
+**Acceptance, 2026-10-04:** A2's first `just up` found two path bugs (the seccomp profile through the umbrella; the justfile overriding `SECRETS_DIR`); both fixed by this follow-up PR and bb2dash-stack's, before the sitting goes on.
+
+### Phase 14 deferred (R-96)
+
+Nothing below is built in this phase:
+* The terminal launcher's deletion (`desktop/src/main/sync-terminal.ts`, `wt.ts`, the terminal half of
+  `desktop/src/core/sync-command.ts`, `syncDryRun`), after acceptance.
+* A "Blackboard login needed" desktop toast (B-46); the app's login-page opener covers the morning case.
+* The next web PR: ~~the SyncButton's copy after cut-over~~ (done 2026-10-05, [PR #72](https://github.com/emstacho-su/bb2dash/pull/72); section below); the Inbox labels the runner's login item "Raised by the
+  transform"; linking the login item to the noVNC page.
+* The MacBook bring-up (waits on the `@anush008/tokenizers` linux-arm64 gap); per-image arm64 builds; VPS notes.
+* An optional `claude -p` sync summary.
+* A release for a dead-lettered `inbox_feedback` claim (091's sweep only flags it).
+* Hardening noted by the security reviews, below the bar: **(Phase 21, the third code review's R3-1)** the
+  materials server's own secret read (`mcp-server/src/env-file.ts`) does not refuse a key file holding a NUL as
+  the runner's now does, so a service key saved as UTF-16 with no line end would be quoted in a tool error the
+  model sees and the CLI's transcript keeps (the stored file is plain UTF-8 today; the fix is one refusal, its
+  tests and an image rebuild); a websockify token or origin check for the noVNC page;
+  certificate verification (`sslmode=verify-full`) on the runner's database connection (the `sync` runner's; the
+  Workspace runner verifies since Phase 21, DECISIONS 2026-10-07); redacting submitted file names and sizes from the
+  committed crawl fixture. Added by Phase 21's reviews and its docker check (2026-10-06 and 2026-10-07; none is
+  changed in that phase, except the NUL refusal, which its fix round Z closed):
+  * **The pg_net reach.** `pg_net` is the extension that lets the database itself send web requests. `PUBLIC`, which
+    means every database login, may call its `net.http_post` and use its two tables. So any login, `workspace_runner`
+    and `sync_runner` included, can make the database fetch a URL. `postgres` cannot revoke it. Closing it is a
+    later phase.
+  * **The Workspace firewall's allowlist can be walked around on port 443.** The firewall allows addresses, not
+    names. The Supabase project sits on addresses Cloudflare shares among its customers, so code running as `node`
+    inside the container can reach any other Cloudflare-hosted site by dialling an allowed address under another
+    name (shown on 2026-10-07: `example.com` answered 200 through `104.18.38.10:443`). The assistant has no tool
+    that can do it; it takes code running as `node`, which can already read the four secrets. Closing it means a
+    name-checking proxy in front of 443. Put to Stack, not accepted on his behalf (DECISIONS 2026-10-07).
+  * **DNS is a channel out of the Workspace container.** Docker's resolver answers any name for `node`, so a lookup
+    can carry data out even where the connection itself is blocked. The Contract allows DNS to the resolver.
+  * **Two other names answer at Anthropic's allowed address.** `console.anthropic.com` and `claude.ai` share
+    `api.anthropic.com`'s address, so the container can connect to them too (a note from the same docker check).
+  * **`/run/workspace/mcp.json` is writable by `node`.** That file tells the CLI which two MCP servers to start. The
+    runner writes it as `node` at each start; its content is constant, so it could be a root-owned file in the
+    image. Changing it needs code running as `node`.
+  * ~~**A NUL byte in a token file would reach the log.** A token file saved with a NUL byte in it (as UTF-16, say)
+    would put part of the token into the container's log through Node's own spawn error text. `set-secret.ps1`
+    writes UTF-8, so the stored file has none.~~ **Fixed in Phase 21** (fix round Z, PM rulings Z1 and Z3 in 102a,
+    merged 2026-10-07 as `134ee64`): the runner refuses a secret file holding a NUL, with an error that names the
+    file and no part of its value. The database DSN is refused at the runner's start; the sign-in token is refused
+    where it is read, before each CLI start, and that turn ends `sign_in_expired`.
+  * Two smaller notes from the same review: a CA file with a `BEGIN CERTIFICATE` line and no certificate that parses
+    passes the start check and fails at every connect instead (still closed, only later than intended); and the
+    gate's count is per tool name, not per call, which only a CLI that skips its own hook could reach.
+
+## Phase 14 follow-up — the Sync button after cut-over (2026-10-05)
+
+[PR #72](https://github.com/emstacho-su/bb2dash/pull/72), `feat/sync-button-runner-indicator`, web only (no migration, no desktop
+change); R-96's "the SyncButton's copy after cut-over". Stack, 2026-10-05: pressing Sync "no longer spawns the session, instead
+it just queues the sync and tells me what to paste". The container had been taking every press since `syncLauncher = queue-only`
+(2026-10-04 21:18 local; requests 1855 and 1856 claimed by `sync-runner` 24 s and 20 s after the press), but the button still
+copied `claude --model sonnet "/bb-sync <id>"` and said to run it in Claude Code.
+
+* A press files the `agent_requests` row and copies nothing; the toast says the sync container picks it up within about a minute.
+* The label follows what the runner writes, read off `claimed_by` and the `sync_runs` row the claim opened (135's trigger):
+  `sync requested` → `starting…` → `crawling…` (run `running`) → `pulling files…` (run `ok` / `partial`) → `sync done`;
+  `finishing…` for a failed run under an open claim; `Claude Code: syncing…` for any other claimant (the Windows `/bb-sync` skill),
+  with the claimant in the tooltip. The button's arrows circle through the four container phases (`prefers-reduced-motion` slows
+  them); the tooltip names the container. Stack, 2026-10-05, second round: "animate the arrows so that they circle while the crawl
+  is occuring", the label reads `crawling…` and not `container: crawling`.
+* A queued row nothing has claimed after 75 s (three runner polls of 25 s) reads `waiting on the container…`; only then does a
+  second press copy the paste command and show it. The Windows skill stays the fallback (CLAUDE.md), so the command stays reachable.
+  A queued row the runner claimed before (`claim_attempts > 0`: `sync_requeue_orphans()` after a restart) reads `sync requeued…`
+  for ten minutes from its filing (a restart takes well under that), then `waiting on the container…` like any other; a press
+  offers the command in both. The unclaimed tooltip dates the request ("requested 2 min ago", `relativeTime`) rather than
+  counting seconds. The web now reads `claim_attempts`; 091's column comment ("No web or
+  desktop code reads it") is stale from here and the next migration touching the column refreshes it.
+* The tab follows any request it sees open by id, so a close is read (and announced once) after the open lookup stops returning
+  it, and a closed request of this tab's never hides a newer open one. A failed read of any of the three queries renders an alert
+  line instead of a stale label.
+* The close of a request the tab saw moving is announced once with the report's first line ("Sync done · Files: 3 pulled, 1 not
+  pulled"); a request already closed when the page loaded says nothing, that is Activity's. A close that left a file unpulled for
+  a reason the next sync will not retry (the runner's `files.not_pulled[].reason`, anything but `session_expired`; the skill's
+  `files_not_pulled` count, which carries no reasons) stays up until dismissed, with "One file could not be pulled. Its Inbox item
+  has the Blackboard link; open it and say what should happen.", an "Open the Inbox →" link and Dismiss. The manual steps live in
+  the Inbox because the fold already raises a `data_gap` item per file without bytes (`stage_gaps`, `files_without_bytes`; item 3441
+  for file 2489 today) carrying the file's Blackboard `source_url`, and the card records what should happen for `/inbox-apply`.
+  Stack, 2026-10-05, second round: "if the popup indicates that there was a file that needs to be pulled we should be prompted to
+  do the manual steps … (if required)".
+* Code: `web/src/lib/sync-request-phase.ts` (pure: phase, labels, titles, press action, headline), `web/src/lib/queries.sync-run.ts`
+  (the run row by `run_id`, polled every 10 s while the request is claimed; the id is checked as a uuid before it reaches a filter),
+  `web/src/lib/use-now.ts` (the clock as state, so render stays pure under the React compiler lint); `agent_requests` reads carry
+  `run_id` and `claim_attempts`. Gates: web vitest 135 files / 2402 tests, `tsc` 0, `eslint` clean; `/code-review main high`, round 1:
+  12 findings, 11 applied in round 2 (two correctness: a closed request of this tab's could hide a newer open one and let a press
+  file beside it; the close of a sync watched without a press was never announced), one already met (STATUS and DECISIONS landed
+  in the PR's later commits). Accepted, not changed: a second queued row behind a claim the runner is resuming after a restart
+  would read `waiting on the container…` after the grace; the tooltip asks whether the container is busy or down rather than
+  asserting it is dead, and a fallback session's own claim is first-wins against the runner's, so no second crawl starts.
+  Round 3 (on the arrows, labels and prompt commit): 13 findings, 12 applied — the e2e walk finds the button by `data-testid`
+  (its title follows the request now); the clock is an external store (`use-now.ts`, `useSyncExternalStore`) re-read on
+  subscribe, ticking 5 s while the request is queued and 60 s once it has closed, so the done tooltip keeps counting and a
+  row found on focus is dated right; the alert and the toast stack instead of overlapping; a disabled run query's cached
+  error is not shown; a requeued row escalates to unclaimed after ten minutes; `already stored by another writer` asks
+  nothing; a failed press no longer wipes the prompt; reduced motion stops the arrows; one `asRecord` (`json-record.ts`)
+  serves three modules; the unclaimed tooltip dates the request through `relativeTime`. Declined: splitting
+  `queries.sync.ts` (1,400 lines) is its own refactor PR; this PR adds six lines to it.
+  `/security-review` not run: no auth, secret or endpoint touched (one owner-scoped `sync_runs` read, the id checked as a uuid).
+
+**Found the same day, not fixed here:** sync 1297 (request 1856, 2026-10-05 18:07Z) pulled 3 files and left file 2489 unpulled
+with Storage `400 InvalidKey`; see Known issues.
+## Desktop update helper (2026-10-04)
+
+Found while closing Phase 14's wave: every press of **Update now** (the prompt) and **Update desktop app** (the account
+menu) since 2026-09-30 ended with `main.log` saying "helper started … quitting so it can swap" and nothing swapping. Six
+presses on 2026-10-04 alone. No `update-now.log` was ever written, Windows recorded no PowerShell engine start for the
+helper, and the `current` junction stayed on the Oct 3 build while the newer one had sat on disk since 22:12 that night.
+Cause: `desktop/src/main/update-os.ts` spawned `powershell.exe … update-now.ps1` with `detached: true`; on Windows that is
+DETACHED_PROCESS (no console) and Windows PowerShell 5.1 then exits 0 before running its script, while Node's `spawn` event
+still fires. Reproduced from Node against scratch folders: every detached shape fails (with or without `windowsHide`, with
+or without `-WindowStyle Hidden`, through `conhost --headless`); a non-detached hidden spawn runs but dies with the app
+(libuv's kill-on-close job); a non-detached hidden PowerShell that hands off through `Start-Process -WindowStyle Hidden`
+runs and outlives the app (DECISIONS 2026-10-04).
+
+**The fix** (`fix/desktop-update-helper`, worker W-71, [PR #71](https://github.com/emstacho-su/bb2dash/pull/71); record
+`docs/planning/sprint-2/verification/109_W71_UPDATE_HELPER.md`): `update-now.ps1 -Detach` hands the real helper off
+through `Start-Process` (`Invoke-HelperHandoff`; `New-HelperHandoffArgumentList` quotes any element with whitespace,
+doubles trailing backslashes and refuses `"`), and the app runs that first stage as a hidden non-detached child bounded at
+30 s, requires exit 0, then polls for the helper's `swap-pending` marker (up to 20 s) before it quits. A non-zero exit, a
+timeout or a marker naming another build rejects, which both callers already treat as "stay on this build" with a named
+reason; a marker whose write time has not changed since before the press is a leftover and never counts
+(`core/update/swap-marker.ts`). Round 2 (`/code-review high`): the helper refuses while a fresh marker names another
+build; a helper that finds the app still running after its wait starts nothing and says so; a transient read error
+during the poll counts as waiting; the hand-off's log line can no longer turn a successful start into a reported failure;
+the stage-1 timeout says whether the process was stopped; stale contract comments and a duplicated `-WindowStyle` flag
+removed. Gates (the worker's run and the PM's re-run agree): desktop typecheck clean, vitest 824/824 with coverage above the
+90/85/90/90 thresholds, e2e 23/23, Pester 75/75;
+`/security-review` no finding. Live scratch proof: stage 1 exits 0 at about 1 s, the marker appears at about 1.6 s, the
+helper finishes about 4 s after its parent exited and removes the marker; with the app still running it starts nothing.
+
+**How it reaches this laptop:** an app built before the fix cannot deliver it through its own button, so the build
+carrying it becomes current at the next tray Quit plus logon-build run (`Start-ScheduledTask Bb2dash-LogonBuild`
+activates a waiting build while the app is closed; that is how build 4987385 went live at 21:07 on 2026-10-04). A
+throwaway scheduled-task probe (registered and removed in the same command) showed Task Scheduler does not track a
+handed-off grandchild, so the helper's `Start-ScheduledTask Bb2dash-App` relaunch is accepted. The first real press on the
+fixed build is the end-to-end proof: `update-now.log` should read `app started on build <tree>` and the app come back.
+
+## Phase 21: Workspace (S2-workspace-1), 2026-10-05 → 2026-10-08, built, walked by the PM, merged 2026-10-07, accepted 2026-10-08
+
+**Accepted on 2026-10-08** by the acceptance run `20261008T041753Z` (`just accept 21` from `main`, green; Stack's
+answer of 2026-10-07 that a green run counts). The record is the last section of 102a, and the run's own report is
+`C:/Users/stack/.bb2dash-accept/21/20261008T041753Z/REPORT.md` on the laptop. Step 1, which the run does not check, Stack
+answered himself later that day: "usage credits are off." (he did not read out his `/usage` percentages, so none
+is on record). All fifteen steps are now walked, proved, waived or answered. What follows in this section is the phase as it stood at
+the merge; where it says the acceptance is owed, read it as history.
+
+Brief `docs/planning/sprint-2/briefs/102_PHASE21_workspace.md`, frozen 2026-10-05 with Stack's answers ("defaults, usage
+credits is off") after a kickoff audit rewrote it against Phase 14 as built. Record
+`docs/planning/sprint-2/verification/102a_PHASE21_VERIFICATION.md`, with each worker's red and green runs beside it
+(`102_W63_VERIFICATION.md` to `102_W66_VERIFICATION.md`). Two repos, one PR per repo, opened together and merged bb2dash
+first (DECISIONS 2026-10-05, the freeze row): bb2dash `feat/workspace-21` and bb2dash-stack `feat/workspace-21`.
+**Both PRs merged on 2026-10-07 on Stack's word ("Merge."), bb2dash [#78](https://github.com/emstacho-su/bb2dash/pull/78) first, then bb2dash-stack [#3](https://github.com/emstacho-su/bb2dash-stack/pull/3), before his acceptance walk.
+The fifteen acceptance steps were then his to walk on `main`; on 2026-10-08 the acceptance run walked them instead and the "accepted" row is written.** Two small PRs beside the phase are merged: the one-line
+test port [PR #77](https://github.com/emstacho-su/bb2dash/pull/77) (e89aff5, 2026-10-06) and agentic-harness PR #40
+(57ee51f, 2026-10-06: the notes-store server moves to fastembed 2.1.1, so the image can download its embedding model).
+
+**What it is.** A chat page at `/workspace`. Stack types a question. It waits in a queue in the database. A small
+service in a Docker container on his laptop (the runner) picks it up and answers it by running the Claude Code
+command-line tool once, signed in with his own Claude subscription. No API key is involved and Usage credits are off
+on his account, so nothing is paid at API prices; the Workspace shares his plan's limit with his coding sessions. A
+hand-written rule sends lookups to Haiku, middle questions to Sonnet and heavy work to Opus, and a badge under each
+answer names which. The assistant can only read: it searches the course materials and his decision and session
+notes. **v1 is read-only**: nothing it can call writes, and its database login cannot touch the planner, progress or
+any fact. It answers only while the laptop is awake with Docker running; a question asked while it is not waits and
+is answered when the service is back.
+
+**What is built (on `feat/workspace-21`; four Opus workers, each followed by an independent check):**
+* **The page (W-66, `web/`).** "Workspace" is the sixth link in the top bar, after Materials. A conversation list, a
+  message column and a question box (Ask, and Stop while an answer is open). Answers arrive as they are written,
+  over Supabase Realtime Broadcast (the app's first use of Realtime), with a 5-second re-read as the fallback; the
+  stored row is the record. Each answer carries its tier badge ("Haiku · lookup", "Sonnet · standard",
+  "Opus · deep work") and a "Used:" line naming the tools it called. Answers are plain text, never HTML. The page
+  says when the Workspace service is offline, from the server's own clock (143). Chats are archived, never deleted.
+  The message column scrolls inside itself and follows its own end while the reader is there, so a long answer
+  finishes with its "Used:" line in view (the walk's two fixes, below).
+* **The runner (W-64, `workspace/`).** A Node service. It claims one question at a time, picks the tier
+  (`router.ts`, `TIER_ROUTES`), runs one `claude -p` turn of the pinned CLI (2.1.289) with tools off and four read
+  tools allowed, streams the text and stores the answer with its tier, model and the CLI's cost estimate. A gate
+  checks every tool call, and a tool that ran without the gate's allow ends the turn. Limits: 8 minutes per turn; a
+  $1.00 cap per answer that stops the turn (it counts Claude Code's own list-price estimate, not a charge); eight
+  error codes. It measures its own durations on a monotonic clock, so a laptop sleep or a clock resync cannot cut
+  a retry or a turn short, and it refuses a secret file that holds a NUL byte (fix round Z, below). Ollama and a
+  frontier API exist as typed stubs that refuse with `provider_not_configured`.
+* **Database (W-63).** Migrations **140** (four owner-only tables, `workspace_conversations`, `workspace_messages`,
+  `workspace_requests` and `workspace_runner_heartbeat`; the view `v_workspace_status`; `workspace_ask`,
+  `workspace_cancel`), **141** (one receive-only policy on `realtime.messages`), **142** (the login role
+  `workspace_runner`: no table access, exactly five SECURITY DEFINER functions) and **143** (the review round's four
+  fixes, `create or replace` and `comment on` only). 140 to 142 applied 2026-10-06, 143 on 2026-10-07, each by the PM
+  on Stack's word, byte-identical to its file and frozen; 144 to 149 are the phase's slack. Five `phase21_*` SQL
+  units. `DATA_SYNTAX.md` has the section "Workspace (migrations 140-143)".
+* **Container (W-65: `docker/workspace/`, `compose.yaml`, and bb2dash-stack).** The `workspace` service is one image
+  (linux/amd64 only, 1.66 GB) holding the runner, the pinned CLI, the materials MCP server and the notes-store
+  (`rag`) MCP server. It runs as a non-root user behind a default-deny firewall that lets it reach three names only
+  (Anthropic's API, the Supabase project, the database pooler). It sits behind the compose profile `workspace`, so a
+  plain `up` never starts it. bb2dash-stack gains the twelfth secret name (`workspace_runner_db_url`), the profile, a
+  doctor row and README text. Its README starts, restarts and rebuilds the Workspace alone
+  (`docker compose up -d --build workspace`); `just up` rebuilds every service and is never run while a sync is
+  open (S-1, under Reviews below).
+
+**Proven so far (all in 102a):**
+* **Suites at the phase head (2026-10-07):** web 2863 tests in 154 files (2427 at the cut), typecheck and lint
+  clean; runner 810 tests; SQL `passed 67, failed 3, units 70`, the three failures being prod-data units that are
+  not this phase's (Known issues); the container's two file-level suites 13 of 13 and 21 of 21; bb2dash-stack's
+  doctor tests 70 of 70 (52 before its fix rounds). `desktop/` is untouched. Each figure, with the commit it was run
+  on, is in 102a under "The suites at the phase head"; the web run itself is quoted in `102_W66_VERIFICATION.md`
+  ("Walk defects W-1 and W-2", section 6).
+* **The transport (task 5, 2026-10-06):** in Stack's signed-in preview tab one broadcast reached the page about
+  1.3 s after it was sent, with no reload (`walks/walk-21/01-realtime-spike.png`).
+* **The command line (task 9):** recorded on CLI 2.1.289. Every element of the frozen argv behaved as the Contract
+  says, both tool calls were gated, the CLI reported `apiKeySource: none` (no API key in use), and a turn run with a
+  one-cent cap stopped, so the per-answer cap holds.
+* **The runner's database login (task 19, first half, 2026-10-06):** Stack made its password on his laptop and set
+  it himself; it never passed through a chat. With the stored secret the login connects as `workspace_runner` and is
+  refused (42501) on `assignment_progress`, `reading_progress` and `workspace_messages`.
+* **The image (tasks 12 and 13, 2026-10-07):** built from harness `main` 57ee51f. W-65's 41-step list ran top to
+  bottom and every step that ran passed (the last, removing the test container, was left for later on purpose).
+  The container came up healthy as compose project `bb2dash-wt21`. It was the firewall's first run on a real
+  kernel: every probe to an address or port off its list was blocked (the one gap an independent check then found,
+  by way of an allowed address, is the firewall question below). The database's certificate verifies against the
+  pinned CA and against no other; one notes search and one small Haiku turn (the token smoke) passed inside it;
+  gitleaks found no secret in the image's files or history. An independent check tried to refute each pass claim
+  and could not. The live `sync` container's id and start time read the same at every step. For the walk the image
+  was built once more, on the final runner code (image `sha256:a2ef9b28…`; the firewall, the certificate check and
+  the secret scan were read again on it). That container runs from the phase worktree `bb2dash-wt-21`, healthy.
+* **The PM's walk (tasks 19 second half, 20, 21 and 22; 2026-10-07, two sittings, each with an independent
+  check).** Walked by a workflow agent as the PM's hands, on the branch preview, against the test container. Twelve
+  live turns were spent on Stack's plan (nine in the first sitting, three in the second; six on Haiku, one on
+  Sonnet, five on Opus), beside the docker step's one smoke. What it showed:
+  * **The five acceptance questions were answered through the container**, in one conversation, each with its tier
+    badge and its "Used:" line: three on Haiku (a syllabus lookup, a decision lookup in the Inbox-decision notes, a
+    document pull), one on Sonnet, one on Opus. Every tool call of those five answers is stored as run and allowed,
+    and no notes search went outside the two bb2dash collections.
+  * **No API key is in use.** The CLI reported `apiKeySource: none` on every turn, and the container has no
+    `ANTHROPIC_API_KEY`.
+  * **The cap stops a turn.** With the cap set to one cent, the Opus question ended after 2.6 s with "Stopped at
+    the per-answer cost limit."
+  * **Stop works.** Pressed on an answer that was still being written, it ended the turn; the stored row read
+    stopped 5.3 s after the cancel in the first sitting and 4.4 s in the second (the task allows 10 s).
+  * **A waiting question does not expire.** Asked while the service was stopped, it stayed queued for 11 minutes
+    and was answered when the service came back.
+  * **The planner did not change.** Three planner reads were equal before and after in both sittings, and no
+    `agent_requests` row was created or moved inside either pair.
+  * **The same conversation opens in a second desktop window**, started beside Stack's running app, which was not
+    touched.
+  * **Nine screenshots** are in `docs/planning/sprint-2/walks/walk-21/` (02 to 08, 10 and 11; 01 is the Realtime
+    test's). Five were taken again in the second sitting, on the fixed page.
+  * **It found three things on the real screen that the test suites had not.** W-1: a long conversation made the
+    page grow far below its window, into empty space. W-2: after a long answer finished, its "Used:" line landed
+    below the visible part of the message column. Both are fixed (W-66, test-first, merged as `25979bb`) and were
+    shown fixed on the real page in the second sitting. W-3: one answer of the first nine came back with Markdown
+    bold, and the page shows the asterisks as typed. It is recorded and put to Stack (below).
+  * **Two things it did not show** are under "Not done yet".
+* **Advisors (task 18):** no security lint names a Workspace object, 0 `auth_rls_initplan`, no unindexed foreign key
+  on the four tables.
+* **Reviews.** `/code-review main high` and `/security-review` ran on the branch on 2026-10-06: fourteen code
+  findings (CR-1 to CR-14, two of them HIGH), each fixed or recorded with a ruling (CR-14 is this update); the
+  security review reported no finding at its bar, and the one item it held just below it (SR-1: the runner's
+  database connection did not check the server's certificate) is fixed by design. On 2026-10-07, on the delta: the
+  security review's method found nothing at 0.7 or above, and the `/code-review` run on the range
+  (`d4b1b8d..ac41858`) found no place where a fix departs from the rulings, and eleven things of its own (R2-1 to
+  R2-11), none CRITICAL or HIGH. **Its three MEDIUM findings, all in the runner, are fixed** in fix round Z (PM
+  ruling Z1; test-first, read by an independent check with a mutant for every item, merged as `134ee64`). R2-1: the
+  CLI's closing `result` line no longer counts when it is read after the runner's own stop, so a turn cut short
+  cannot be stored as done with the end of its answer missing. R2-2: the runner measures its retry window and its
+  turn limit on a monotonic clock, so a laptop sleep or a clock resync no longer ends a retry early or leaves a turn
+  that has just begun no time. R2-5: a statement the database refuses for its own content is no longer retried for
+  110 s while the queue waits; the request gets one plain close. The same
+  round refuses a secret file holding a NUL, naming the file. The other eight are LOW and recorded, not changed in
+  this phase (ruling Z2; Known issues). **bb2dash-stack had its own `/code-review main high`** the same day:
+  fifteen findings. Its one HIGH (S-1): every documented way to start, restart or wipe the Workspace went through
+  `just up`, which rebuilds the whole project and can recreate the live `sync` container in the middle of a sync.
+  Fixed: the Workspace is started alone (DECISIONS 2026-10-07). Of the other fourteen, seven are fixed and seven
+  recorded; its tests read 70 of 70 at `190fa43`. **After the PRs opened, a third pass read what no review had
+  read** (the three small rounds made after the range review): `/code-review` on bb2dash found eleven things,
+  none HIGH; a second code read of bb2dash-stack found seven, all LOW; the security method found nothing in
+  either. Fixed from it: a question asked while scrolled up is now shown and followed; the walk's spec runs
+  only when switched on and is split under the 800-line limit; the umbrella's wording and three test gaps.
+  The rest is recorded (Known issues; the hardening bullet under "Phase 14 deferred (R-96)"). All in 102a.
+
+**Where the product is (2026-10-08):** the Workspace runs from bb2dash-stack. The acceptance run's go-live stopped
+the test container, added `COMPOSE_PROFILES=workspace` to bb2dash-stack's `.env` and started the service alone;
+`bb2dash-workspace-1` (compose project `bb2dash`) has answered production's questions since 04:18 UTC and was
+restarted once by the run's own offline step. No conversation is listed: the run archived 'spike' and its own
+through the page. The old test project `bb2dash-wt21` is gone: its container, network and volume were removed by
+name on 2026-10-08 on Stack's word, with the sync container's id and start time the same before and after. The
+paragraph below is the state before the run.
+
+**Where the product was (2026-10-07):** the phase is on `main` since the merge of 2026-10-07, and production shows the Workspace link. Until acceptance
+step 13 starts the Workspace from bb2dash-stack, a question asked there is answered by the PM's test container on
+this laptop (compose project `bb2dash-wt21`), which stays up for that. The
+four migrations are on prod and are additive. The new tables hold the test conversations only: one is listed
+('spike', the transport test) and the walk's four are archived. The image exists only on this laptop and runs only
+as the test project `bb2dash-wt21`, started from the phase worktree `bb2dash-wt-21` beside the live stack, never
+inside it. That test container is up and healthy with the usual $1.00 cap, so its runner is connected to prod's
+queue; no question is waiting. The branch has a Vercel preview, and it serves the walk's two fixes. A real sync ran
+at 10:06 UTC on 2026-10-07, after the second sitting (it marked two IST.323 quizzes graded); nothing in it is the
+Workspace's.
+
+**Not done yet:**
+1. ~~**Stack's acceptance walk**, all fifteen steps, now on `main`: he said "Merge." before walking part A. Before
+   step 13 the PM stops the test container; after step 15 it removes the test project and writes the acceptance
+   record.~~ Done by the acceptance run on 2026-10-08 (green; 102a, last section). Step 1 he answered the
+   same day, and the test project is removed.
+2. **Two things the walk did not show live.** Both are recorded as not shown, not as passed:
+   * **The health check through a long answer (task 21 (d)).** The task wants the container read as healthy 60 s
+     and 120 s into one answer, to show that an answer longer than the 90 s "alive" window does not make the service
+     look dead. The first sitting's Opus answer took 27 s. The check was repeated once on a longer request, as the
+     task says: that answer took 76.75 s, so the 60 s reading counts (healthy, the last heartbeat 2 s old) and the
+     120 s reading does not. It was not asked a third time (PM rulings W-R and W-S). What holds it today: the
+     runner's tests on a fake clock, and that one live reading (Known issues).
+   * **The plan's usage percentages.** Only Stack can type `/usage`, and nothing the runner logs or stores holds the
+     figures. None of the twelve turns ended on the plan's limit.
+3. **Stack's acceptance** (task 26, below), then the acceptance record with its DECISIONS row, then the cleanup.
+
+**What Stack has to do:**
+* **Phase 14's own acceptance first** (A5, A7 and A9 are still open; section "Phase 14"). This phase's walk comes
+  after it.
+* **The acceptance walk, 15 steps in two parts** (brief 102, "Stack's acceptance script"). Part A, steps 1 to 12,
+  before the merge, on the branch preview with the PM's test container running: confirm Usage credits are still off
+  (claude.ai, Settings, Usage); ask five set questions (three for Haiku: a syllabus lookup, a decision lookup and a
+  document pull; one for Sonnet; one for Opus); press Stop on one answer and reload the page during another; watch
+  the PM show that no API key is present and that the planner did not change; read the D-1 reversal row and the
+  preview-walk row in DECISIONS; say "merge", or name changes. Part B, steps 13 to 15, on `main` right after the
+  merge: add `COMPOSE_PROFILES=workspace` to bb2dash-stack's `.env`, `just up` (only when no sync is open; the
+  PM reads the queue first), `just doctor`, stop and start the service once, and say "accepted". Two things to
+  know going in. On a long answer the "Used:" line is at the answer's end; the column keeps it in view unless he
+  has scrolled up. And step 4's answer is the one that showed asterisks in the PM's walk; the page strips bold markers since
+  `3d9ebb1`.
+* **Six things were put to him. On 2026-10-07 he answered three ("keep the screenshots. leave for now... Strip the
+  bold asterisks. Merge."): the firewall (item 1) is left as it is for now, the screenshots (item 2) stay, and the
+  page strips bold markers (item 3, done in `3d9ebb1`). Items 4 to 6 are still his. The six, as they were put:**
+  1. **The firewall question.** The container's firewall allows addresses, not names, and the Supabase project sits
+     on addresses Cloudflare shares. A program running inside the container could reach other Cloudflare-hosted
+     sites through them. The assistant cannot do this; it would take code running inside the container, which
+     could already read the four secrets. Closing it means a small name-checking proxy. Live with it in v1, or
+     build the proxy? (DECISIONS 2026-10-07; section "Phase 14 deferred (R-96)" above, bullet "Hardening noted by
+     the security reviews, below the bar".)
+  2. **The walk's screenshots are in a public repository and show real answers.** The nine shots in
+     `docs/planning/sprint-2/walks/walk-21/`, read again file by file on 2026-10-07 as they stand after the retakes
+     (the list first given here was the first sitting's check's, made before five shots were taken again):
+     * `02-empty`: no answer. Like the seven other browser shots it shows his course list (seven course names).
+     * `03-lookup-haiku`: one sentence quoted from the IST.323 syllabus on late work, with the syllabus's file name.
+     * `04-decision-haiku`: that sentence again, and three of his Inbox decisions on ECN.304 Quiz 2 (434, 528 and
+       537) with their dates and the score, 6 of 8 (the tracked decision log already holds the score).
+     * `10-document-haiku`: the end of decision 537, and the section headings of the IST.323 syllabus.
+     * `11-standard-sonnet`: summaries of slides from two IST.352 decks, named by file and slide number.
+     * `05-deep-opus`: the start of a two-week ECN.304 study plan: the course's dates (two units with their class
+       days, Fall Break, "Exam 2 is Thu Nov 5"), slide-by-slide content of the Environmental Economics deck, and a
+       line drawn from his Inbox decision notes 538 and 545 on how ECN.304 quizzes are announced.
+     * `06-stopped`, `07-offline` and `08-desktop`: the end of a four-week ECN.304 study plan: which slides of each
+       deck were read, what `ECN304 F26 Exam1 Study Guide.pdf` says Exam 1 covers, and the line "Several quiz
+       questions above are adapted from it" (06 and 07 also show two of the plan's self-quiz questions).
+
+     **They are already public.** The repository is public (no forks), and the shots have been on pushed branches
+     since 2026-10-07: commit `29f107d` (the first sitting's nine) is on `origin/feat/workspace-21`,
+     `origin/feat/workspace-21-web` and `origin/feat/workspace-21-docs`, and `de6b28a` (the five retakes) is on the
+     first and the last. The first sitting's takes of 05, 06, 07, 08 and 11 are still in that history and show more
+     than today's files: 05 is the whole two-week plan with the required readings by title, and 11 is the whole
+     IST.352 answer.
+
+     **What a rewrite can and cannot undo.** Rewriting the branches takes the shots off them and keeps them out of
+     `main`'s history. It does not take them off GitHub: a commit that a rewrite drops stays reachable by its id,
+     and through any pull request that referenced it, until GitHub Support purges it (GitHub's guide "Removing
+     sensitive data from a repository"), and nothing recalls a copy already fetched. So a rewrite is cleanest
+     before the bb2dash PR exists. No PR has been opened from any of the three branches (read 2026-10-07).
+
+     The brief asks for the shots; whether quoted course text belongs in a public repository is his call. Keep
+     them, or have them replaced with cropped ones and the branches rewritten? The PM opened the bb2dash PR knowing
+     the above: the shots were already on the public branches, so holding the PR back would have hidden nothing,
+     and his kickoff asks for both PRs with the preview link. The question stands and is the first line of the
+     hand-off. (DECISIONS 2026-10-07.)
+  3. **One answer showed Markdown asterisks (W-3).** The answer to the decision question (acceptance step 4) had
+     three lines wrapped in `**`. The page shows text exactly as typed (his O-5 answer) and the assistant is
+     already asked for plain text. One answer of the first sitting's nine did not follow that; none of the second
+     sitting's three had any. Strip the emphasis markers on the page, press the prompt harder, or leave it?
+     (DECISIONS 2026-10-07; Known issues.)
+  4. **`/usage`.** Only he can type it. At acceptance step 1, when he confirms Usage credits are off, he also reads
+     his plan's session and weekly percentages and tells the PM, who writes them into 102a. On 2026-10-08 he
+     confirmed the credits ("usage credits are off.") and gave no percentages; none is on record, and nothing
+     waits on them.
+  5. **`npm ci` in the harness checkout** (`C:/Users/stack/agentic-harness/mcp-server`), which still holds the older
+     fastembed in `node_modules` (Known issues). His to run or to ask for.
+  6. **Three SQL units fail on prod's course data** from any checkout, `main` included. They are not this phase's
+     to fix. The question for him: which session takes them? Two went stale when a later sync superseded files
+     149 and 967; the third is two assignments with no grade component (Known issues).
+
+**Next:** nothing of the phase's own. Merged on 2026-10-07 and accepted on 2026-10-08 (record: PR #83, `a58be34`,
+PR #76's precedent). Closed the same day: step 1 by Stack's word ("usage credits are off."); the `bb2dash-wt21`
+test project (container, network and volume, each by name, on his word after the session's safety check had
+refused it on the standing answer alone); every Phase 21 and acceptance-run worktree and branch in both repos.
+Left on the laptop: task 9's raw recordings (`C:/Users/stack/.bb2dash-w64-rec-out`,
+`C:/Users/Public/bb2dash-w64-rec/`), which are deleted only on his word. Still his, as before: items 5 and 6
+above (`npm ci` in the harness checkout's `mcp-server`; which session takes the three SQL units).
+
+### Phase 21: not in v1
+
+Nothing below is built in this phase (brief 102, "Out of scope"; each is a later phase if Stack asks):
+* Any write tool, on any tier, and any propose-then-approve path.
+* A planner or grades tool for the assistant, and with it a `workspace_reader` role. A score quoted from an
+  Inbox-decision note is what it was that day; the assistant says so and points to the Grades screen.
+* Whole notes from the notes store (`get_document` is denied; answers come from the passages a search returns).
+* A model picker, Markdown rendering, a fourth tier, a tier setting, and the one-turn Haiku classifier.
+* Wiring Ollama or a frontier API (the two stubs only type-check).
+* Deleting a conversation, a daily cap, an Off switch, and an expiry for a waiting question.
+* A read-only login under each of the two MCP servers. Today the container holds two credentials that could write
+  (the bb2dash service key and the notes store's DSN), each read only by its own server; Stack accepted that for v1
+  on 2026-10-05.
+* A linux/arm64 image (the `rag` server's tokenizer has no linux-arm64 build).
+* Recorded by the code review and not changed: the page re-reads every message every 5 s while a request is open,
+  and the claim always returns the history (CR-10); 140 repeats the prompt cap and the error-code list as literals
+  (CR-13; 140 is frozen).
+
+## Acceptance run, 2026-10-07 → 2026-10-08: built, reviewed, merged; its first real run accepted Phase 21
+
+**What it is.** `just accept <phase>` (in bb2dash-stack) carries out a phase's acceptance walk by
+itself and says whether the phase is accepted. Stack asked for it on 2026-10-07, for Phase 21 first
+and for every later phase: "automate the acceptance walk testing by spinning up a claude session
+within a newly spun up testing container", with the container as "a disposable sandbox, with claude
+being the hands manipulating the sandbox (i.e. using tools)". Two parts do the work and are kept
+apart on purpose:
+
+* **The sandbox.** A throwaway container in which a headless Claude session runs each step's
+  browser test with its own tools, opens every screenshot and captured answer, and writes down
+  what it saw. It holds one secret (the Claude sign-in token), has no Docker access, no database
+  login and no app password, a network of its own and a short firewall list. It is thrown away
+  after every stage.
+* **The host script.** It does every Docker step from a fixed list, signs the sandbox in to the
+  app, reads the hard facts itself (the database, read-only, and the Workspace container), and
+  decides green, red or blocked. What the sandbox says is never enough on its own.
+
+**Where it lives.** bb2dash: `acceptance/` (the rules, the schemas and one pack per phase:
+`acceptance/21/` holds Phase 21's step list, playbook and eight proofs), `web/e2e/accept*.ts`
+(the browser tests), `scripts/accept-proofs.mjs`. bb2dash-stack: `scripts/accept.mjs` and
+`scripts/lib/accept-*.mjs`, the `accept` and `accept-prepare` services, the firewall's `accept`
+profiles. A later phase adds `acceptance/<NN>/` and `web/e2e/accept<NN>.spec.ts`
+(`acceptance/README.md`).
+
+**State (2026-10-08).** Both PRs merged on Stack's word ("merge.") at 04:16 UTC, bb2dash first:
+bb2dash [#82](https://github.com/emstacho-su/bb2dash/pull/82) as `8269fac` and bb2dash-stack
+[#5](https://github.com/emstacho-su/bb2dash-stack/pull/5) as `c4a54f8`; production deployed. Built by three
+workers in parallel to one written interface, then brought onto `main` after Phase 23 and its
+session-answer fix (#81). Tests: bb2dash-stack 296, bb2dash's pack and proofs 112 (the scripts
+suite 175), web 2913.
+
+**The reviews (2026-10-08).** Because a green run counts as acceptance, both reviews were held to
+one rule: nothing the sandbox says or writes is enough by itself to make a step green, and no way
+of ending a run leaves the machine worse than it found it (DECISIONS 2026-10-08).
+
+* `/code-review main high`: fifteen findings in each repository. bb2dash: fourteen fixed, one
+  recorded (helpers repeated beside the walk's own: a cleanup, not behaviour). bb2dash-stack:
+  fifteen fixed, plus four rulings of the PM's own (one run at a time; a run does not start while
+  a cut-off run's runner cannot be put back; a stray file that cannot be searched makes its stage
+  red; one clearer error sentence).
+* `/security-review`: bb2dash, no finding; its four notes on proofs weaker than they could be are
+  closed (a stop needs the runner's hand; the question asked while the service was stopped is
+  proved to have waited; one request cannot stand for two steps; the question that waited is held
+  to its words). bb2dash-stack, one finding, medium, fixed: the host read the sign-out token after
+  the stage from a file the sandbox could write, so a sandbox turned against its task could have
+  kept its app session alive. The host now keeps its own copy from before the stage, and a session
+  that could not be ended makes the stage red. Six smaller points are closed or written into the
+  README.
+* Every proof was also read by hand against the real database, read-only: the right request
+  passes; the same request handed in for another step, another question or an earlier run fails.
+
+**The proof runs.** Two, against production, with the old test runner answering; a proof run walks
+steps 2 to 9 only and never counts. `20261007T231426Z` showed the plumbing works and found one
+unclear sentence in the playbook, since fixed. `20261008T034714Z`, after the review round (bb2dash
+`5d257b2`, bb2dash-stack `91b67b4`): steps 2 to 9 green, the seven host proofs of steps 3 to 9
+passed, no API key in the operator's stream, the session signed out with the host's own copy of
+its token, the sync container untouched. It cost seven Workspace questions, three on Opus. Its
+report read "0 of 1 passed" for the steps whose stage had been left out; bb2dash-stack `4223cad`
+makes that line say the proofs were not read (a sentence in the report, nothing else). The
+operator's two notes from that run are not faults: the Courses list shows GEO 103 twice because
+the lecture and the recitation are two courses, and the answer after a stop may open by saying the
+earlier reply came back empty.
+
+**Known and left as they are.** What the page showed is the sandbox's word, since the browser
+tests run inside it; step 2 has no host proof, and every report names the steps that rest on the
+sandbox alone. The sandbox's firewall allows by address on port 443 and leaves name lookups open,
+so a session turned against its task could send out the Claude sign-in token and the app session
+it holds for the stage: the same exposure left for the Workspace runner in v1, with the same
+follow-up (an outbound proxy that allows by name). A run against a branch preview is designed and
+not built. A run started while a sync or Inbox apply is open stops at once as "blocked", before it
+stops a container or asks a question.
+
+**The first run that counts (2026-10-08).** `just accept 21` from `main`, run `20261008T041753Z`,
+04:17:53 to 04:26:27 UTC, bb2dash `8269fac`, bb2dash-stack `c4a54f8`: **green, and it counts as
+Phase 21's acceptance** (Stack's answer of 2026-10-07). All eight stages passed. The eleven
+steps the sandbox walks (2 to 9, 14a, 14b, 15) passed, ten with a proof the host read itself and
+step 2 on the sandbox's record alone; the three steps the host does (10, 11, 13) passed. The go-live stage stopped the old test runner, added the profile line to bb2dash-stack's
+`.env` and started the Workspace alone; the offline step stopped and started it again. The sync
+container's id and start time read the same before and after. The step-by-step record is 102a's
+last section. Not automated, and the record says so: step 1 (Usage credits off, Stack's `/usage`
+numbers) and the desktop-window half of step 2, which stands on the PM's shot of 2026-10-07.
+
+**What the run's operator noted** (the sandbox's words, not checked by the host; none changed a
+verdict). Two are worth a look in a later phase: after Stop, the stopped answer held more text when
+the page was reloaded than it showed at the moment the stopped line appeared; and step 2's browser
+log held one refused request (401) to the scheduler heartbeat view. The rest read as expected: the
+answer after a stop opened by saying the earlier reply was blank, and the button reads Stop while a
+question waits for a stopped service.
+
+**For a later phase.** Add `acceptance/<NN>/` and `web/e2e/accept<NN>.spec.ts` in the phase's own
+PR; after the merge, `just accept <NN>` from bb2dash-stack's `main` (ORCHESTRATOR §3, step 9).
+
+## Phase 23: Inbox auto-apply, 2026-10-07, merged and live; the session-answer fix merged the same day (#81)
+
+**Corrected 2026-10-09.** The session-answer fix merged on 2026-10-07 as
+[PR #81](https://github.com/emstacho-su/bb2dash/pull/81) (`b8d3b13`), `apply` was rebuilt alone the same
+hour, and a later run (request 2515, 2026-10-08 03:30Z) archived items 3435, 3436 and 3437. Where the
+paragraphs below say "not merged" and "Not run live", they give the state before that. The open items
+3, 3a, 3b and 5 below, and items 6 and 7 of the cut-over list, are the follow-ups' (next section).
+
+Stack's ask (2026-10-07): after a sync, check the Inbox's "Answered, not applied" section and, when it
+holds items, run `/inbox-apply`. His three choices and what they amend are DECISIONS 2026-10-07 (six rows).
+Branch `feat/phase23-inbox-auto-apply`, [PR #79](https://github.com/emstacho-su/bb2dash/pull/79) and
+bb2dash-stack #4, **both merged 2026-10-07 21:35Z on Stack's word, and cut over the same hour** (below).
+`/code-review` and the security pass ran on #79; round 1's fixes are in (DECISIONS); neither was re-run on
+the fixes.
+
+**How it works.** The `sync` container closes a sync done and calls `sync_request_inbox_apply` (180), which
+files one `inbox_feedback` request when `v_inbox_queue` is not empty. The Inbox's "Apply answers" button
+files the same request. The new `apply` container's worker claims it, runs `apply_resolutions()`, archives
+by itself the rows that need no reading, hands at most six of the rest to one `claude -p` run of
+`/inbox-apply`, builds the result from the tables and closes; the close files a follow-up for what is left.
+A host script then writes each decision's vault note and repo log entry.
+
+**What is built**
+
+* **Database.** 180 (`sync_request_inbox_apply`, the sync runner's fourteenth function), 181 (role
+  `inbox_apply_runner`, its read and write boundary, the write log `inbox_apply_writes` with its trigger, six
+  worker functions), 182 (`decision_filed_at`, `inbox_decisions_unfiled`, `inbox_decision_filed`) and 184
+  (review round 1: `inbox_apply_claim` releases the worker's own claim only past 16 minutes) are **on
+  prod, byte-identical**. **183 (one open `inbox_feedback` request, a unique index) went on at the cut-over,
+  with the skill, byte-identical.** **185 and 186 (the session-answer fix, below) are on prod,
+  byte-identical** (md5 `487951bcb80ac478df29788c1d271ad7`, `d26fd7e56792e7441967abb3e2f36838`). Units:
+  `phase23_180`, `_181` (run as the role), `_182`, `_183`, `_185`, `_186` pass.
+* **Sync runner** (`sync/src/loop.ts`, `db.ts`): step 11, after a done close only; a failure there is logged
+  and never changes the sync's outcome. 159 tests, lines 91.96%.
+* **Web** (`InboxApplyButton.tsx`, `inbox-apply-phase.ts`): a press files the request and copies nothing;
+  one line of state beside the button (who queued it, that it is running, the worker's first report line);
+  the lookup watches for a request a sync filed, and the page refreshes when the answered count moves; the
+  paste command only when nothing has claimed the request after 75 s. 2895 tests with Phase 21 merged in.
+* **Skills.** `skills/inbox-apply`: one document for the container and for a session, with `context.md` and
+  `writer.md` shared by both; the decision record replaces "archive only after the note exists".
+  `skills/bb-sync`: step 0 is gone; step 5b files the request after a done sync and runs the skill itself
+  only when nothing claims it.
+* **Exporter** (`scripts/inbox-decisions-export.mjs`, `inbox-decisions-pr.mjs`, `lib/inbox-decision-render.mjs`):
+  note, day file, ingest, mark; into a worktree on `docs/inbox-decisions` with one PR kept open. 27 tests;
+  a `--dry-run` against prod resolved the vault and reached both functions.
+* **Worker** (`apply/`): the batch, the tokenizer and the SQL guard, the tool gate, the report, the pass, the
+  `claude -p` run, the SQL MCP server with its two tools (`query`, read-only; `apply_item`, one item in a
+  transaction the server runs). 120 tests, lines 94.67%.
+* **Image** (`docker/apply/`, `compose.yaml` service `apply`, profile `apply`): builds as `bb2dash-wt23`;
+  its own network and volume, three secret files, no port, nothing shared with `sync`.
+
+**The cut-over, 2026-10-07 21:35Z to 21:46Z, on Stack's word ("merge.")**
+
+* Merged: bb2dash [#79](https://github.com/emstacho-su/bb2dash/pull/79) as `d454f6f` and bb2dash-stack #4 as
+  `ec0e304`; production web deployed from `d454f6f`.
+* Skills installed (`inbox-apply`, `bb-sync`; four files, checked by SHA-256). **183 applied, byte-identical**
+  (md5 `22ba65c07f6c7ff9099bde77186b59e4`); `phase23_183`, `_181`, `_180`, `phase14_091_close_sweep` and
+  `phase17_116` pass after it.
+* `sync` rebuilt alone from bb2dash-stack while no sync was open (`up -d --build --no-deps sync`): healthy,
+  the Blackboard login alive, step 11 in the image. **No live sync has run through step 11 yet.**
+* `apply` started (`--profile apply up -d --build --no-deps apply`), container `bb2dash-apply-1`, healthy.
+  bb2dash-stack's `.env` has no `COMPOSE_PROFILES` line: `apply` restarts by itself
+  (`restart: unless-stopped`), but a `just up` does not know the profile until Stack adds it.
+
+**The first live run: 13 of Stack's 16 answers archived, 3 left, and what it showed**
+
+The worker took request 1859 and ran three requests in a chain (1859, then follow-ups 2413 and 2414), six
+items each, 122 s, 169 s and 117 s, reported cost 0.30, 0.43 and 0.39 USD.
+
+* **Four answers applied**, each one logged write on `assignments` in IST.352 (`inbox_apply_writes` 12–15):
+  `project-assignment-8-context-level-0-and-activity-diagrams` (item 3433), `knowledge-check-10-5-26` (3434),
+  `read-chapter-8-pp-133-139` (3668), `knowledge-check-10-7-26` (3669). Each went tentative to confirmed,
+  submission unknown to blackboard, a syllabus citation appended to `source_ref`, and a grading component
+  set: Project Assignment Deliverables (30) for the first, Attendance, Class Contribution (33) for the other
+  three. **The component is the writer's reading of the syllabus, not Stack's words** (on 3668 he said only
+  "add it as a 0 point reading"): his to check.
+* **Nine recorded only.** 3426, 3427, 3666, 3667: already applied by the transform. 3425 (GEO.103.lecture
+  Exam 1, "keep"): the row kept, and **a question for Stack written into the archived record and not raised
+  as an item**: is `GEO.103.lecture/exam-1` the same exam as `GEO.103/exam-1` (component 7), and his note's
+  "highest scoring exam" is not in the syllabus. 3441, 3562, 3563 (files catalogued but never stored):
+  flagged for a code change in the sync's file pull. 3453: flagged for a code change, **wrongly**: file
+  2501 already has session 76; the role cannot read `bb_files`, so the writer could not see it.
+* **Three not applied: 3435, 3436, 3437** (`session_link/2488`, `/2489`, `/2490`, GEO.103.lecture). The
+  writer skipped them, "link_file_sessions application unverified". Two are in fact applied (files 2489 and
+  2490 carry sessions 45 and 44, his picks, set by the fold since 163); 3435 is "none" with a note asking
+  for the file to be organized as reading questions. The cause is the same as 3453's: `inbox_apply_runner`
+  has no read on `bb_files`, and the worker has no rule for a session-link answer.
+* Request 1859 is recorded **failed** (`not_applied`) and raised an `inbox-apply-failed` item; 2414's done
+  close archived that item, though the three were still not applied.
+
+**The session-answer fix, 2026-10-07 (Stack: "fix the session-link gap"), on `fix/phase23-session-links`, not merged**
+
+* **Migration 185, on prod.** The role reads `bb_files` (21 columns that describe a file; never its
+  Blackboard link, its path on the host, its hash or the crawl's ids) and `sessions`, each through its own
+  policy, with no write on either. `inbox_apply_prepare` sends each session answer its file's link
+  (`session_link`: the file, his pick, the session the file carries now).
+* **Migration 186, on prod** (the review of 185). `inbox_apply_close`: `apply-login-required` is archived
+  by a close whose run started Claude and ended done or with an error only a signed-in run reaches;
+  `inbox-apply-failed` by a done close unless an answer a failed run could not apply still waits (and was
+  not answered again since). `inbox_apply_archive` refuses a record that carries `closed_itself`.
+* **Worker** (`apply/src/batch.ts`, `mcp-sql/rpc.ts`): a session answer with no note is archived by the
+  worker itself, as applied by the transform, only when the file already shows it: his pick is on the
+  file, or he said "none" and the file is unlinked. Everything else about a session answer goes to
+  Claude: a note, a pick that is not on the file, a superseded or missing file. The SQL server refuses
+  a record with `closed_itself`. 123 tests, lines 94.78%.
+* **Skill** (`skills/inbox-apply`): a session answer is never written here and always archived, in one
+  of three buckets by what the file shows (applied; not linked yet and answered after the last sync; not
+  applied, flagged); an item about a file always gets a context bundle; "skipped" is the server's word.
+* **Reviews.** `/code-review` on the first three commits: nine findings, eight acted on (the two notice
+  rules, the "not linked yet" promise, the bucket that said applied of every session answer, the
+  writer's missing file facts, the supersede answer, the rule built twice, this record). One declined:
+  having `link_file_sessions` stamp `applied_at` on the answer it consumes, so the worker needs no rule of
+  its own. It is the cleaner design and a change to the sync's transform with a backfill; a follow-up for
+  Stack. Security pass: no finding on the two reads; one LOW (a steered writer could mark his session
+  answer `closed_itself`), closed in the SQL server and in 186. **Neither review was re-run on the round
+  of fixes.**
+* **Live now, before the merge:** 185 and 186 only. The running `apply` image is still the cut-over's: it
+  ignores `session_link`, so the next request still hands 3435, 3436 and 3437 to Claude (which can now
+  read the files, under the old skill text). The worker and skill change go live when this merges and
+  `apply` is rebuilt alone. **Not run live.** Expected then: 3436 and 3437 recorded by the worker, 3435
+  (it has a note) read by Claude.
+* `phase23_181` on `main` reads failed since the cut-over: it counted every archived failure notice,
+  and prod has held a real one since request 2414. The units now count their own transaction's rows.
+
+**Open after the first live run**
+
+1. ~~Session-link answers.~~ Fixed on the branch above; live after its merge and an `apply` rebuild.
+2. ~~A failure notice is closed by any later done close.~~ Fixed by 186, on prod.
+3. **A request filed by a sync carries no memory** of items an earlier run could not apply: an answer
+   Claude cannot apply is tried again after every sync (one run, failed; the notice now stays). Not fixed.
+3a. **A `supersede/<file id>` answer is asked again once archived**: `supersede_replaced_files` (160) reads
+   an answer only while the item is resolved or dismissed. No such item exists on prod yet. The skill now
+   flags it; the fix is in the transform, as 163 was for session links. Not fixed.
+3b. **`link_file_sessions` does not stamp `applied_at`** on the answer it applies (the declined review
+   finding). Not fixed.
+4. A question the writer has for Stack can end in an archived record without an Inbox item (3425).
+5. **Not done from the cut-over list:** the exporter is not scheduled (14 decisions unfiled, test item 3782
+   among them); Stack's acceptance walk; the bb2dash-stack verb and doctor rows.
+
+**The cut-over list, as it was written before the merge**
+
+1. ~~PR #78 (Phase 21) merges.~~ Done 2026-10-07 20:27Z; #79 is against `main`.
+2. ~~Stack sets `inbox_apply_runner`'s password and writes `inbox_apply_db_url` into `SECRETS_DIR`.~~ Done
+   by Stack, 2026-10-07.
+3. ~~One real run under the test project name against a single answered test item.~~ **Done 2026-10-07
+   21:00Z, passed.** `-p bb2dash-wt23 --profile apply run --rm apply node /app/apply/dist/main.js --once`
+   (the `--once` flag was added for this: the worker takes the oldest queued request, which was Stack's
+   1859). Test request 2380, dated before 1859, with the 16 real answers in its skip list; test item 3782
+   asked for one labelled guest row in `course_staff` for IST.471. In 55 seconds: the firewall rose (three
+   names), the worker logged in as the role and claimed 2380, the session started `inbox-context` (16
+   reads) and `inbox-writer` (3 reads, one `apply_item`), the row was inserted and logged in
+   `inbox_apply_writes` against item 3782, the item was archived with a full `inbox-decision/1` record and
+   `applied_at`, and the request closed done, "1 answer applied", with no follow-up. Reported cost 0.20
+   USD. Request 1859 and the 16 real answers were not touched. The test row was deleted afterwards (the
+   role cannot delete); its log row and the archived item stay as the record. **Still unproven live:** a
+   refusal path, a follow-up chain, the templated rows, and the exporter filing a decision.
+4. ~~The Phase 23 PR merges on Stack's word; `node scripts/install-skills.mjs`; **apply 183**.~~ Done.
+5. ~~Rebuild `sync` (step 11 is in its image) only while no sync is open; start `apply`.~~ Done.
+6. **Open.** Schedule `scripts/inbox-decisions-pr.mjs` on the host (with `SECRETS_DIR` and `HARNESS_DIR`); the
+   `bb2dash-stack` verbs and doctor rows.
+7. **Open.** Stack's acceptance walk (the plan's seven steps). The first live run took request 1859 and the 16
+   waiting items in batches of six.
+
+**Known, and said plainly**
+
+* The four units that assert live course data (`grading_invariants`, `phase16_106_v1_recheck`,
+  `phase18_122_supersede_rule`, `phase18_golden_truth`) failed on 2026-10-07; the rows they name were last
+  written by the 18:20Z sync, before this phase's first migration at 19:10Z.
+* `net.http_post` is executable by PUBLIC and cannot be revoked by the project's owner. After review round 1
+  a read cannot use it (the database refuses writes in a read-only transaction) and a write statement is
+  refused unless every call in it is on the allow-list; that list is still the only thing between a steered
+  writer and an outbound post. Worth a ticket with Supabase, or a look at whether pg_net can be dropped.
+* The worker's refusal of an API key reads "the Workspace runs on the subscription token only": Phase 21's
+  sentence, reused with its check.
+* The Vercel preview of the button has not been looked at by Stack.
+
+## Phase 23 follow-ups, 2026-10-08 to 2026-10-13: built, reviewed, merged, cut over, **ACCEPTED 2026-10-13 by acceptance run `20261013T003231Z` (green)**
+
+### Accepted (2026-10-13)
+
+`just accept 23` ran from bb2dash-stack's `main` (`f1e9178`) on bb2dash `08138bb` (`origin/main`) against
+production, 00:32:31Z to 00:40:11Z, and ended **green: "this run counts as acceptance"**. All nine stages
+passed. The run's folder is `~/.bb2dash-accept/23/20261013T003231Z/`; `verdict.json` sha256
+`f71111f127ceb198e6d5426b318e5b4b974fd40bc00d6a38b613f5e734ee1e88`. A green run counts (Stack, 2026-10-08), so
+Phase 23 and its follow-ups are accepted.
+
+| Step | Result | What stood behind it |
+|---|---|---|
+| 0, 8 | pass | No request open, no answer waiting, no login item; the doctor's `apply` row "running, healthy", `exports` exit 0 |
+| 1 | pass, proof `questions-raised` | Four test questions raised; one confirmed, one dismissed |
+| 2 | pass, proof `sync-taken` | Sync pressed, request 5083, taken by the container in 11 s |
+| 3 | pass, proof `recorded-after-sync` | The sync closed at 00:36:09Z and filed request 5084; the worker closed it at 00:36:17Z, "2 recorded only", no Claude run. The page never saw it open (the third way) |
+| 4 | pass, proof `nothing-written` | Both answers under Archived, none left in Answered |
+| 6 | pass, proof `applied-from-button` | A note saved, Apply answers pressed: request 5085 ran by itself through one Claude run (about 0.09 USD), `queued`, `running`, `done`, "1 recorded only" |
+| 9 | pass, proof `transform-answers` | 14 session answers have their pick on the file and none lacks the stamp; 0 stamped since the run began; 0 supersede items looked at, 0 re-asked |
+| 7a | pass, proof `request-waiting` | With `apply` stopped: request 5086 `queued`, then `waiting on the worker…`, then the command naming 5086, readable above the button |
+| 7b | pass, proof `request-taken-after` | `apply` started again and was healthy after 6 s; 5086, filed 00:38:04Z, was taken at 00:39:30Z (86 s) and closed; the fourth question under Archived |
+| 5 | pass, proofs `test-decisions-skipped`, `decisions-filed` | The export started by the run ended exit 0; the run's four test decisions skipped with no note; 0 unfiled; 16 filed with a note path; item 3782 skipped |
+
+**What the green run did not exercise** (as the pack says of itself):
+
+* **The fold stamping a session answer.** Step 9 passed on standing rows: 0 were stamped during the run. It
+  stands on `db/tests/phase23_188_archived_answers.sql` and on the 14 the backfill stamped.
+* **The supersede half of 188** (waived): no `supersede/` question exists on prod. It stands on the same unit.
+* **A held answer** (waived): one cannot be staged on the live site without making a real run fail. It
+  stands on `db/tests/phase23_187_held_answers.sql`, `_b.sql` and the worker's tests. No hold exists on prod.
+* **The export's retry without a network** (#90): built after the pack; it stands on its tests.
+* **Stack's three rows:** one real answer of his own applied after a sync and read in the app; one decision
+  note in the vault read; `just file-decisions` for the day files and their pull request (16 notes wait).
+  **The first is done, 2026-10-14** (below); the other two stay his.
+
+### Closed out (2026-10-14)
+
+**An apply of Stack's own answers worked.** He answered six Inbox items (five file gaps and the IST.352
+knowledge check of 10/14). The PM filed the request a press of Apply answers files (`inbox_feedback`, scope
+`all`, no params): request **5089**, claimed 19:26:48Z, closed `done` 19:29:24Z, one Claude run (about 0.61
+USD), no hold. "1 answer applied, 5 recorded only"; all six archived by it.
+
+* **Applied (6336):** `IST.352/knowledge-check-10-14-26` went from `tentative` to `confirmed`, `submission`
+  `unknown` to `blackboard`, and was placed on component 33 ("Attendance, Class Contribution") with its
+  source cited; one logged write (`inbox_apply_writes` 79). The Grades view now counts that column toward
+  the grade.
+* **Recorded only (6314, 6315, 6316, 6340, 6341):** the five files the syncs could not pull. Stack's notes
+  asked whether a sync had run without the Blackboard login. The worker's reading, flagged for a code
+  change: **it is not the login**; the syncs (runs 1845, 1849) were signed in and their other stages worked.
+  The sync's own downloader refuses these files: "redirect target is not followable (origin or scheme)".
+  The fix is in that redirect check, not a login gate. File 3713 now answers 404 and may be gone.
+* **Flagged for a code change (6336):** Stack asks that IST.352 knowledge checks be expected on class days
+  so the transform stops asking. 10/14 was a session of kind "other" ("Review / knowledge check"), so a rule
+  must cover class days that are not lectures and skip `no_class` days.
+
+Neither code change is built. The sync's file pull is where Phase 24a is working.
+
+**Cleaned up on his word:** the worktrees `bb2dash-wt-23f`, `-db`, `-apply`, `-exports`, `-accept`, `-units`
+and `bb2dash-stack-wt-23f`; the branches of this work, local and on GitHub, in both repositories, each
+checked to be in `main` first; `tmp/23f-pre-merge` and `tmp/23f-pre-round2`; the test image
+`bb2dash-apply:wt23f`. The live `bb2dash-apply:local` and Phase 24's `bb2dash-apply:wt24` are untouched.
+
+**The two runs before it that night, both from `main` and neither a fault of the product:**
+`20261013T001039Z` ended in `prepare` (the sandbox could not raise its firewall; the same sandbox raised it a
+minute later), and `20261013T001423Z` passed every stage through the start of `apply` and ended when the
+host's own sign-in before stage `back` timed out loading the page. Both were written as red.
+
+**Follow-ups this left, none of them blocking, each Stack's to want:**
+
+* The acceptance harness writes **red** for a sandbox that does not come up and for a host sign-in that
+  times out. Neither is a verdict on the product; "blocked" would say so, and the sign-in could try twice.
+* An open Inbox shows no `done` and no result line for an apply request the sync filed when it closes inside
+  the page's 30-second look (step 3's third way is that case). The answers do move to Archived.
+* An answered card reads "Apply answers is running; undo after it finishes." while its request only waits
+  for a worker that is down.
+* The exporter counts any failed connection as "no network" (a certificate error too): such a run waits out
+  its tries and reads `no_network`.
+* Seen by the operator in stage `offline`: one console error, a 401 on a read of `v_announcements_unread`.
+  Nothing on the page looked broken. Not looked into.
+* **Not Phase 23:** the three syncs of that night each ended "0 pulled, 3 not pulled": files 3711, 3712 and
+  3713, "refused: redirect target is not followable (origin or scheme)". The sync's file pull is Phase
+  24a's ground at the moment.
+
+~~Still owed, on Stack's word: the worktrees, the test image and the two `tmp/` branches.~~ **Removed
+2026-10-14** ("Closed out", above).
+
+### How it got there after the pause: 2026-10-12
+
+On Stack's word ("continue, merge"): #88 merged (`bfbe7f7`); #90's MEDIUM fixed test-first (one deadline of
+14 min 30 s holds the whole export run, a bare exit 3 is not tried again, a wait the machine slept through
+ends the run), second look clean, merged (`856d87b`) with bb2dash-stack #7 (`f1e9178`); #91 reviewed (no HIGH),
+its gates green (2923 web tests), merged (`08138bb`); both main checkouts fast-forwarded; production deployed
+at `08138bb`. No further trial run was made: the review had traced step 7b against the page, and the toast
+could only be seen on the live site after the merge.
+
+### Where it stands at the pause (2026-10-09, 18:30Z, on Stack's word: "pause development")
+
+**Resumed 2026-10-12 on his word ("continue, merge").** This record merged first; the list under "To resume, in
+order" at its end is what is being done, and each later PR says what it closed.
+
+**Live and working.** Migrations 187, 188 and 107 are on prod, byte-identical. `apply` runs the image built
+from `main` at the cut-over and its profile is in Stack's `.env` (his line, about 12:15Z); the doctor's `apply`
+row reads "running, healthy". The task `Bb2dash-Exports` is registered and has filed 16 decisions. The SQL
+suite reads 82 of 82. Vercel deploys again and production is `main`. In the trial runs the product did what
+the follow-ups are for: a sync filed its apply request and the worker closed it in five seconds (requests
+5072 and 5073, then 5074 and 5075), a press of Apply answers ran by itself (5076), and a request filed while
+`apply` was stopped was taken when it came back (5077).
+
+**Not accepted.** No counting run of `just accept 23` has got past step 1. The pack that would accept the
+phase had three defects of its own, and the trials found one defect of the product. All four are fixed on a
+branch and none is on `main`.
+
+**Open pull requests of this work, each waiting for Stack's "merge"**
+
+| PR | What | State at the pause |
+|---|---|---|
+| bb2dash [#88](https://github.com/stack-dev-personal/bb2dash/pull/88) | This record: the cut-over, the embed of file 2851, the GEO.103 check, the pause | Docs only. `main` (with #89) is merged in. Ready |
+| bb2dash [#91](https://github.com/stack-dev-personal/bb2dash/pull/91) | Three fixes to pack 23 and the Apply answers toast, which opened below the window | **Visual: Stack looks at the preview first.** **Not reviewed:** the read-only review started before the pause stalled and reported nothing. Stages `back` and `file` are unproven |
+| bb2dash [#90](https://github.com/stack-dev-personal/bb2dash/pull/90) | The scheduled export tries again when there is no network yet (Stack's ask of 2026-10-09) | Tests green. **Reviewed, one MEDIUM open** (below). Not ready |
+| bb2dash-stack #7 | The doctor prints the reason word `no_network` | 346 tests green. Goes with #90 |
+
+Each of #90 and #91 appends a row to DECISIONS and will conflict with whichever merged before it; the later
+merge keeps every row.
+
+**Requirements of brief 110 still to be fulfilled** (its "Definition of done" and its acceptance script)
+
+| Requirement | State |
+|---|---|
+| SOP gates, the Contract, the reviews, the docs (tasks 1 to 19) | Fulfilled at the merge of #85 and bb2dash-stack #6 |
+| The cut-over in its order; the doctor's `apply` and `exports` rows green (task 20) | Fulfilled 2026-10-09 (the `.env` line about 12:15Z) |
+| **`just accept 23` from `main` is green (task 21)** | **NOT fulfilled.** Needs #91 on `main` and deployed, then a counting run |
+| The accepted record, naming what the run did not exercise, and the `Phase 23 accepted` DECISIONS row | Not written: there is no green run |
+
+| Step of pack 23 | Done by | State |
+|---|---|---|
+| 0, nothing open; 8, the doctor's two rows | host | Passed in every run that reached them |
+| 1, raise four questions, confirm one, dismiss one | sandbox | Passed in trial `20261009T180141Z`, with #91's fixes only |
+| 2, press Sync; the container takes it | sandbox | Passed in that trial |
+| 3, the sync's apply request closes with nothing pasted | sandbox | Passed in that trial (the page saw `done`); the new third way is unproven by a run |
+| 4, both answers under Archived | sandbox | Passed in that trial |
+| 6, a note, a press of Apply answers, it runs by itself | sandbox | Passed in that trial |
+| 9, the transform's answers (session stamps) | host | Passed in that trial |
+| `apply` stopped by the host | host | Passed in that trial |
+| 7a, a press while `apply` is stopped: waiting, then the command | sandbox | The test passed; the picture could not be judged (the toast was below the window). Fixed in #91, unproven |
+| 7b, the waiting request is taken after `apply` is back | sandbox | **Never run.** Request 5077 was in fact taken and closed, but no run has judged it |
+| 5, the export started now; the test decisions skipped; none unfiled | host | **Never run.** A run by hand at 18:01Z skipped two test decisions, which is the behaviour, not the proof |
+| 1-real, 5-note, 5-log | Stack | Not done: one real answer applied after a sync and read in the app; one vault note read; `just file-decisions` |
+| 9-supersede, 10-held | nobody (waived) | Stand on their units, as planned |
+
+None of the passes above counts: they came from a branch, and only a run from `main` accepts.
+
+**Open findings, not acted on because of the pause**
+
+* **#90, MEDIUM, CLOSED 2026-10-12 in #90 itself (one deadline for the whole run; the bare exit 3 too).** As found (review, confirmed by reading): the retry has no overall deadline. Each start of the
+  exporter keeps its full 14-minute limit, so waits followed by one slow start can pass the task's
+  15-minute limit; the task is then killed before `state.json` is written, and the doctor shows the run
+  before it. Fix when work resumes: give each start what is left of one deadline, and stop trying when too
+  little is left. Three LOW: every fetch rejection counts as "unreachable" (a certificate error too); the
+  runner trusts a bare exit 3 without the result line; one test's name promises more than it checks.
+* **#91: reviewed 2026-10-12** (no HIGH; see "Phase 23 acceptance runs" below). As it stood at the pause: the review started before the pause stalled after ten minutes and gave no findings.
+* **A fourth trial run** (`20261009T182502Z`) was stopped at the pause while it was still cloning: nothing
+  on the live site was touched, and its container and volume were removed.
+* **Two things the product does that Stack has not been asked about:** an open Inbox shows no `done` and
+  no result line for an apply request the sync filed when it closes inside the page's 30-second look; and
+  an answered card reads "Apply answers is running" while its request only waits for a worker that is down.
+* **The machine:** the second trial ended when the laptop slept and the session's low-memory guard stopped
+  it. A counting run needs the laptop awake for about 40 minutes and memory to spare.
+
+**To resume, in order:** (1) #91's review, run again, and its findings fixed test-first; (2) #90's MEDIUM; (3) one more
+trial from `fix/accept23-step1` to reach stages `back` and `file`, with no Phase 22 walk box running;
+(4) Stack's look at the toast on #91's preview and his "merge" for #88, #91, #90 and bb2dash-stack #7;
+(5) the shared checkouts fast-forwarded, production deployed; (6) a counting `just accept 23` from `main`;
+(7) on green the accepted record and its DECISIONS row; (8) the worktrees, the test image and the two
+`tmp/23f-*` branches removed on his word.
+
+### The build, the reviews and the cut-over
+
+Stack chose all four open follow-ups of Phase 23 on 2026-10-08, and an automated acceptance run for the
+phase. The plan is brief `docs/planning/sprint-2/briefs/110_PHASE23_followups.md` (frozen 2026-10-08, with
+three numbered rounds appended); the record is `verification/110a_PHASE23_FOLLOWUPS_VERIFICATION.md`, and
+each worker's own beside it (`110_W80` to `110_W84`). Branch `fix/phase23-followups` in both repositories,
+one PR each, bb2dash [#85](https://github.com/emstacho-su/bb2dash/pull/85) and bb2dash-stack #6, **on
+Stack's merge word of 2026-10-09** ("apply/merge", given with the word for 187). Built by
+five Sonnet workers (W-80 to W-84, his word) in their own worktrees.
+
+**What is built**
+
+* **A skipped answer is held (his "Remember a skipped answer").** An answer a run could not apply is a
+  row of the new table `inbox_apply_holds`, which no login can write: only `inbox_apply_close` does. The
+  hold stores the answer's `resolved_at` as the run was handed it and holds only while the row still
+  carries that exact time, so an answer he gives again is never held. A sync files no request for held
+  answers alone: no request, no run, no cost. A press of Apply answers tries them again, through its
+  whole chain of follow-ups (O-1's default, ruling R3). The failure notice says so, and names no Undo.
+* **Superseded files and session links (his "Stop re-asking superseded files").** In migration 188, not
+  applied yet: `supersede_replaced_files` also reads an archived answer, so the question is not raised
+  again once `/inbox-apply` archives it; and every fold ends by stamping `applied_at` on each session
+  answer whose pick is the session its current file carries, however the file came by it (ruling R6). A
+  one-time backfill stamps the 14 such answers prod holds today. The worker records a stamped session
+  answer under `link_file_sessions`, never `apply_resolutions`. Nothing applies the pick of a
+  superseded-file answer (O-2, his default).
+* **The decisions exporter is scheduled, notes only (his two answers).** Filing is two steps since 187: a
+  note path alone marks a row filed, and `inbox_decisions_unlogged` lists it until the day-file entry is
+  written. `scripts/exports-run.mjs` runs the exporter with `--notes-only` under the Windows task
+  `Bb2dash-Exports` (at logon plus five minutes and every six hours), which
+  `scripts/register-exports.ps1 -SecretsDir <folder> -HarnessDir <folder>` registers at the cut-over. The
+  run starts no `git` and no `gh`, writes no day file, refuses to run from a checkout that is not on
+  `main`, and writes `~/.bb2dash-exports/state.json`. **A failed export shows on `just doctor` and
+  nowhere else.** The day files and their pull request stay his step: `just file-decisions` in
+  bb2dash-stack. Test item 3782 is marked skipped by 187 ("Mark it filed, no note"); 16 decisions wait for
+  the first export. A decision whose item has a logged write is never skipped (ruling R5).
+* **`just up` knows `apply` (his "Teach 'just up' about apply").** bb2dash-stack: the doctor has an
+  `apply` row and an `exports` row, `.env.example`, the README and the compose header are level, and a
+  tenth verb, `file-decisions`. The one line in `.env`, `COMPOSE_PROFILES=workspace,apply`, is his.
+* **The acceptance pack** (`acceptance/23/`, `web/e2e/accept23.spec.ts`, twelve read-only proofs, five new
+  host actions in bb2dash-stack). The run raises four test questions of its own through
+  `inbox_accept_question` (owner only), walks a sync, an apply after it, an apply from the button and a
+  stopped worker, and starts the scheduled export. A test question the run dismisses is a `data_gap`,
+  because a `stack_must_confirm` card has no Dismiss (ruling R1). Three rows stay his (one real answer
+  applied, one note read, the day files), and two are waived on their units (held answers; the supersede
+  half), which a green run does not exercise.
+
+**The database**
+
+* **187 is on prod since 2026-10-09 01:32Z, on Stack's word, byte-identical** (SHA-256
+  `e93d830d...1df622`, md5 `33440b2a0ee8a457c3605b7ab021f048`), applied with no sync and no apply request
+  open, after two reviews of the database branch, an independent second look and a rolled-back dry run on
+  its final text. Thirteen units pass through the runner: the four `phase23_187_*`, `phase23_180` to
+  `_186` and three `phase14_*`. `sync_runner` still executes fourteen functions and
+  `inbox_apply_runner` seven. The running `apply` worker is the old image until the cut-over: it ignores
+  `held` and sends no `skip_seen`, so no hold is written and the service behaves as before.
+* **188 is on prod since 2026-10-09 04:30Z, byte-identical** (SHA-256 `b4cbfaaa...c4ac387`, version
+  `20261009043022`), applied after `apply` was rebuilt (so the old worker never recorded a stamped session
+  answer under the wrong name), with no sync and no apply request open. The backfill stamped 14 session
+  answers, the number its dry run gave. `phase23_188_archived_answers` passes through the runner.
+* **189 is free.** 180 to 188 are frozen.
+
+**Reviews** (each finding with its ruling is in 110a)
+
+* The database branch, before anything was applied: `/code-review` (ten findings) and `/security-review`
+  (no HIGH, no MEDIUM, one LOW taken). Then an independent second look at the fix round, which found one
+  MEDIUM in the PM's own ruling R3 (a follow-up could hold answers it had not tried), fixed before the
+  apply.
+* Both PRs: `/code-review main high`, ten findings in each repository. The one that mattered most: the
+  registration script's PowerShell path had been corrupted when the file was written and the script
+  could never have registered the task; it now has a test that reads its bytes. `/security-review` on the
+  bb2dash branch: no HIGH, no MEDIUM. A second look at that fix round: ready, seven LOW.
+  `/security-review` on the bb2dash-stack branch: no HIGH, no MEDIUM (nothing the sandbox controls reaches a
+  command, a path or a service name, and no accepted command can touch `sync`). A second look at its fix
+  round: ready, with one MEDIUM (the run's command door still let `compose cp` and a `--scale` form name
+  `apply`) and five LOW, fixed in a last round.
+* Gates on the integrated branch: `apply/` typecheck 0 and lines 94.87 %; `scripts/` 238 tests;
+  `sync/` 159, unchanged; `web/` typecheck and eslint 0 and 2913 tests, `main`'s count; the acceptance
+  suite 41; the docker tests; the firewall regenerated with no diff.
+
+**The cut-over (task 20), done 2026-10-09 04:26Z to 04:35Z on Stack's word ("merge 87 and cut over"), with
+no sync and no apply request open.** Both PRs were merged first (bb2dash #85 `696d35e`, bb2dash-stack #6
+`0fd659f`), then the units PR (#87 `c19cd9a`); `main` had also moved by Phase 24a's test port (#86, files
+under `db/tests` only).
+
+* Both main checkouts fast-forwarded: bb2dash `c19cd9a`, bb2dash-stack `0fd659f`.
+* The skills installed (`node scripts/install-skills.mjs`): `bb-sync/SKILL.md`, `inbox-apply/SKILL.md`,
+  `inbox-apply/writer.md`.
+* `apply` rebuilt alone from `main` (`docker compose --profile apply up -d --build --no-deps apply`, from
+  bb2dash-stack): healthy since 04:28:44Z, connected as `inbox_apply_runner`. `sync` was not touched (the
+  same container, started 2026-10-08 15:15Z).
+* 188 on prod (above).
+* `scripts/register-exports.ps1`: with a folder that does not exist it exits 2 and registers nothing; with
+  the real folders it registered `Bb2dash-Exports` with two triggers (logon plus five minutes, every six
+  hours).
+* The first export, started by hand at 04:34:34Z: exit 0, **16 filed, 0 skipped, 0 not filed**. On prod
+  after it: no archived decision is unfiled, 16 rows carry a note path, item 3782 is marked skipped. None
+  of the 16 has a day-file entry: that is `just file-decisions`, his step.
+* The SQL suite through the runner: 81 of 82 at the cut-over, the one failure being
+  `phase18_post_embed_checks` (file 2851's nine units). **82 of 82 since 2026-10-09 about 12:00Z**, when
+  the embed ran on Stack's word (Known issues, below).
+
+**What was not done at the cut-over.** The line in bb2dash-stack's `.env` (`COMPOSE_PROFILES=workspace,apply`)
+is his; until he put it in (about 12:15Z the same day) `just doctor` showed the `apply` row as a problem ("off, but
+a container of apply is running") and `just accept 23` was not started: its first host stage reads that row.
+What followed is at the top of this section. `just accept 23
+--check` passes (bb2dash at `c19cd9a`; "a green run would count as acceptance"). Once his line is in and no
+Phase 22 walk box is running: `just accept 23` from bb2dash-stack's `main`; a green run counts as Phase
+23's acceptance.
+
+**The live site is `main` again since 2026-10-09 about 12:10Z.** Stack installed Vercel's GitHub App on
+`stack-dev-personal` and reconnected project `web`; production is the build of `c19cd9a`, read with the
+Vercel tools. What stood before, for the record: Vercel had not deployed since the repositories moved to
+`stack-dev-personal` (its GitHub App is not installed there); production is the build of `a58be34` (#83).
+Between that commit and `main` the app's source differs by one line (the picker's write also refreshes the
+gradebook rows, #87) and the generated types, so the acceptance run walks the same Inbox the follow-ups
+expect. The fix is his: install the app on the organization and reconnect project `web`.
+
+**Known, and said plainly**
+
+* 187 is one file of 940 lines, over the 800-line limit. A migration is applied under one name; splitting
+  it would have spent 189, the one number held for a fix after 187 is on prod. Stack's to overrule.
+* 187's comment on `inbox_apply_close` says a `not_applied` notice "says a sync does not try the answers
+  again". Since the last review round that holds only when a hold stands for one of that run's skipped
+  answers; the function's body and its own comment are right. Found after the apply; folded into 189 if
+  189 is ever spent.
+* When a press's first six answers all fail and nothing is archived, no follow-up is filed, so a held
+  answer beyond the sixth is not reached by that press. This is the rule that a run which gets nowhere
+  never loops.
+* Held answers and the supersede half are not exercised by the acceptance run; they stand on
+  `db/tests/phase23_187_held_answers.sql`, `_b.sql` and `phase23_188_archived_answers.sql`. That the
+  schedule fires by itself is not proved by the run either: it starts the task once by hand.
+* The scheduled task starts through a hidden PowerShell; a console window may still flash for a moment
+  as it starts, as the logon task's does.
+* The exporter's first real run on this laptop was the cut-over's (16 filed). The schedule fires by itself:
+  the time trigger ran at 04:44Z (exit 0, nothing to file). **The run at 11:56Z failed** ("the request did
+  not reach Supabase: fetch failed"), five minutes after a logon, before the network was up; `just doctor`
+  showed it, as built, and a run started by hand at 12:12Z was exit 0. A run that finds no network reads
+  as a problem until the next one, up to six hours later. Not changed; a retry or a later logon delay is
+  a follow-up if it recurs.
+
+**Still Stack's, outside this work:** the two grading components the writer set (30 and 33, on items
+3433, 3434, 3668, 3669); the question written into archived item 3425's record; the note on item 3435.
+
+## Phase 22: Styling, 2026-10-08 to 2026-10-14, built, reviewed, walked by the PM, **MERGED 2026-10-14 on Stack's word (PR #93, `dff1e05`; production deployed the same hour), CLOSED the same day**
+
+Brief `docs/planning/sprint-2/briefs/103_PHASE22_styling.md` (R-53, R-46; P-76, P-79; S2-styling-1), frozen 2026-10-08
+with Stack's answer to its nine open items and amended three times the same day (the direction, the scope with the
+component-level changes, the refinement pass and his decisions D-1 to D-5). Branch `feat/styling-22`; worktree
+`bb2dash-wt-22`; workers W-67 (foundation), W-68 (shell and phone width), W-69 (screens A), W-70 (screens B) on Sonnet
+5.5 and W-75 (the walk box), each with a verification file under `verification/103_W<nn>_VERIFICATION.md`; review
+record `verification/103_PHASE22_REVIEW.md`; the refinement pass `verification/103b_PHASE22_REFINEMENT.md` and the
+design system `design-system/bb2dash/`; the walk record `walks/walk-22/WALK.md`; the PR
+[#93](https://github.com/stack-dev-personal/bb2dash/pull/93) with its preview
+`https://web-git-feat-styling-22-emstacho-sus-projects.vercel.app` (Vercel sign-in).
+
+**What ships.** Direction D, "Charcoal" (his pick from the three tiles, refined by `/ui-ux-pro-max`): every screen
+on tokens in dark and in light, dark by default even under a light system; the theme control (Dark, Light, Auto) in
+the account menu, stored under `bb2dash.theme`, stamped before paint by an inline boot script; the type (Source Serif 4
+600 titles, Source Sans 3, Source Code Pro), linked from the root layout; work types as one urgency scale; red only as a
+mark (nine files); one focus ring; hover, press and switched-off states on every control; motion by transform and
+opacity with reduced motion honoured; the Menu at the 720 px fold with the six pages, Search as an icon at every width,
+the Sync label capped at ≤1023.98 px and icon-only at ≤480 px; the seven open states inside the viewport at phone
+width; the gradebook and the planner board scrolling inside their own boxes; the frame with scrolling panes (task 26:
+the shell is exactly the window's height, the pane scrolls by itself with a stable gutter and keeps its position); the
+desktop shell (task 27: the app's bar is the window's title bar with Windows' three buttons in the bar's colours, the
+minimum width raised from 900 to 960 px so the bar clears them, the right-click menu, the app's own menu with no zoom
+and no quit, the failed-load page in direction D, the update prompt redrawn); the app icon and favicon, a square in the
+ink on the dark ground; drawn marks in place of twelve arrow, caret and cross characters; keyboard polish; the token
+audit as a ratchet in `npm test` (`web/test/token-audit.*`, four baselines at 0, the allowlist frozen at task 2).
+
+**Gates on the final tree (2026-10-14, `78a0deb`).** `main` merged a fourth time (e820b29; one stylesheet conflict,
+the Inbox's Apply answers toast, resolved by keeping Phase 22's tokens and #91's placement above the button; DECISIONS
+2026-10-14). W-68's last fix landed first: `app-region: no-drag` after `all: unset` on the bar's icon buttons, found
+with real clicks in the packed window. Web: typecheck, build, `npm test` (191 files, 3,453 tests),
+`eslint --max-warnings 0`, coverage (92.37 % of lines), each exit 0. Desktop: typecheck, `npm test` (892),
+`npm run test:e2e` (33 passed, `chrome.spec.ts` among them), `npm run pack` with the exe and the icon present, each
+exit 0. Every named check of task 20 on target: Baseline sum `0` over all four clusters; Weight check and Time check
+print nothing; Direction check `125 0 77 0 true`; Exit tokens `3 0`; New names `34 0 0`; Ring check `35 0 0`; Field
+check `5 5 5`; No-select check `10 0 0`; Strength check `14 0`; Serif check `7 0 0` (W-70 deleted
+`GradeModel.module.css`'s dead table head, which the command's note allows); Busy sites `24 24`; Mark characters `0 0`;
+`cursor: progress` in eight files, the four named among them; `outline: none|0` exactly two lines;
+`:disabled:not([aria-busy='true'])` six lines, not five (the Inbox's Apply button, visual round V-6); the four
+`## ui-ux-pro-max` sections; Red files nine; Notice files 13; five pre-existing web tests modified and none deleted;
+nothing under `desktop/test` or `web/e2e` modified or deleted; the six package and vitest files and `mcp-server/`
+unchanged; no PNG added. Reviews (task 23): `/code-review main high` twice and `/security-review`, no open row.
+
+**The counted walks (tasks 21 and 22), in the walk box on the final tree.** Phone width, run `20261014T182418Z`:
+54 passed, 0 failed, `pane scrollWidth=` 24 times, six phone shots (40 to 45) opened; fingerprint
+`ea805a486cfece5ad516ed894850d495` before and the same after, `requests_open` 0. Theme walk, run `20261014T183839Z`:
+64 passed, 0 failed (62 surface cases plus `motion off under reduced motion` and `planner targets`), 31 light and
+31 dark shots; fingerprint `ea740eb824c71dcccc17d58294fb5134` before and the same after. It is the repeat of run
+`20261014T182927Z` (also 64 passed on the same tree), inside whose window three Inbox answers of Stack's own landed
+(items 6314 to 6316, his words in their notes, 18:34:49Z to 18:34:51Z), which moved the fingerprint while the guard
+recorded no write attempt; the brief repeats a moved fingerprint in a quiet window, so it was repeated. The 62 shots
+were judged by two independent checkers and the PM: no HIGH or MEDIUM defect; the low notes (a 2 px drawer edge at
+800 px, the Account icon cut at 800 px, three shot-state differences) are on their lines. 0 console messages
+matching `/hydrat|#418/` in every case (P-76). The two existing layout specs: run `20261014T183637Z`, 9 passed. No
+shot is committed; all stay under `C:/Users/stack/.bb2dash-walk/22/`.
+
+**The desktop look (acceptance step 5), on the packed build of the final tree.** A second instance under its own
+profile at a local `next start`, Stack's running app untouched, the laptop's Windows theme unchanged (dark). The
+window opened on the `#050505` ground; at its 960 px minimum the bar held the six links, Sync and the five icons with
+the last icon's edge exactly at the title-bar area's end (the three buttons 137 px, one under `CONTROLS_WIDTH`);
+the window dragged by the bar; a bar link, each of the five icon buttons and the popout's close button took real
+clicks; Light picked with the real mouse turned the three buttons light and Dark turned them back; the right-click
+menu, Alt (nothing), Ctrl+R, Ctrl+Shift+I and the zoom keys (nothing) behaved as the brief asks; the failed-load
+page showed in direction D and dragged by its strip; the update prompt's page rendered dark with its ink and grey
+pills; every scrolling box showed the 10 px themed scrollbar; the three panels arrived at 45 frames with a worst gap
+of 17 ms and left with `data-leaving`. The eight `Desktop …` lines are in `WALK.md`, section 5. Chromium
+152.0.7977.78, Electron 44.4.1.
+
+**Taste calls.** T-1 to T-5 stand with tile D (approved 2026-10-09). T-6 to T-12 were closed by the PM at the brief's
+defaults on his word of 2026-10-09, and T-13 to T-18 were added by the walk (hairline greys, the light drawer scrim,
+the four "where you are" marks, the badge's digits and the assignment card's width, the planner's stretched hour
+rows, the window buttons' block on a page without a bar); all are in `WALK.md` under "Taste calls for Stack" with
+the surface, the shot and the default, and on 2026-10-14, after the merge, Stack ruled on all of them at once, "call everything good" (DECISIONS 2026-10-14): T-1 to T-18 stand as built and no follow-up is opened for any of them.
+
+**Known, and said plainly.** A browser window between 721 px and the bar's idle width (815 px) scrolls sideways to
+the bar's end, as on `main`, and at 800 px the Account icon is cut (freeze row item 3; T-12). The planner's hour
+labels at phone width are clipped by the same 48 px gutter as on `main`, and the wider code face cuts more of the
+hour. A person who picked Light sees one dark frame at each open of the desktop window (accepted by the brief, step
+5). The drawer's left edge under 1024 px measures 2 px (a rule beside a ring pixel), left as built.
+
+**Closed 2026-10-14 on Stack's word** ("call everything good. merge everything to main and close out this phase."). Both specs ran once against production from the `main` checkout (run 20261014T191444Z: 118 passed, 0 failed, 8.1 minutes: the 54 phone-width cases with their 24 pane measures and the 64 theme cases, against production at dff1e05; fingerprint ea740eb824c71dcccc17d58294fb5134 before and the same after). The worktrees `bb2dash-wt-22*` and the branches `feat/styling-22`, `-foundation`, `-shell`, `-screens-a`, `-screens-b` and `-walkbox` are removed, local and remote. Nothing of Phase 22 is open. The desktop
+app takes the new shell at its next "Update desktop app" or logon build (the `desktop/` tree hash on `main` changes
+with the merge), and the web app at Vercel's production deployment of the merge.
+
+## Phase 24a: Workspace assistant, behind the page (S2-workspace-2), 2026-10-08 → 2026-10-15: built, reviewed, walked by the PM (Phase 24ab), **MERGED 2026-10-14 on Stack's word (bb2dash #97 `2b7c388`, bb2dash-stack #8 `22f35a3`), CUT OVER 2026-10-15, ACCEPTED 2026-10-15 by acceptance run `20261015T141817Z` (green)**
+
+### Accepted (2026-10-15)
+
+`just accept 24` ran from bb2dash-stack's `main` (`22f35a3`) on bb2dash `93dedbc` (`origin/main`) against
+production, 14:18:17Z to 14:25:45Z, and ended **green: "this run counts as acceptance"**. All nine stages
+passed; of the twelve automated steps ten have a proof the host read itself and two (2, 11) rest on the
+sandbox's record. The run's folder is `~/.bb2dash-accept/24/20261015T141817Z/`; `verdict.json` sha256
+`f0c6f769f9b3fde94e2aab2e81f4844437d4fb1427429000c33428c9ca23d809`. A green run counts (Stack, 2026-10-07), so
+Phase 24a is accepted. The sync container was untouched (the same id and start before and after) and the
+Workspace never needed putting back. The full table is 109c's last section.
+
+| Step | Result | What stood behind it |
+|---|---|---|
+| 0 | pass | The profile line in place; the Workspace, the parser and the upload worker healthy; the planner fingerprint saved; no request open |
+| 2 | pass (sandbox) | Phase 22's page: the underlined `Workspace` link, `Conversations`, the empty line, the box, `Ask`; channel joined |
+| 3 to 8 | pass, proofs `turn-found`, `turn-lookup`, `turn-planned`, `turn-feed`, `turn-followup`, `turn-empty` | Requests 939 to 944: five `Haiku · lookup` answers and one `Sonnet · standard`; the follow-up in step 3's conversation; the invented-word question got the fixed first line and `retrieval_state empty` (D-1 holds on the live floor) |
+| 9 | pass, proofs `turn-stopped`, `turn-done-after-stop` | 945 stopped partway (`cancelled`), 946 answered in the same conversation |
+| 10 | pass, proof `planner-unchanged` | The fingerprint the same at 14:23:58Z as at 14:18:57Z |
+| 11, 12 | pass (sandbox); pass, proof `upload-indexed` | Document 216, 189 bytes, `stored`; `indexed` by the live worker through its firewall, `attempts` 0, the nonce's hash on the row |
+| 13, 14 | pass, proofs `turn-upload-found`, `upload-one-row` | Request 947 named the memo's lamp, hinges and shade; a second send left one row |
+| 15 | pass, proofs `upload-gone`, `conversations-unarchived` | `deleting` then `deleted`, 0 rows; 0 conversations left unarchived |
+| 16 | pass, five store proofs | pgvector 0.8.2; two 384-dimension columns and two indexes; 1,035 course units indexed, 0 waiting; nothing indexed without a vector; no foreign server, table, link extension or store function that calls out |
+
+**What the run did not exercise:** step 1 (Usage credits, `/usage`), Stack's, **answered 2026-10-15: "usage
+credits are off."**; memory (off by
+`WORKSPACE_MEMORY_JOBS=off` until 24b); the parser service on a file that needs it (the run's file is plain text;
+the parser's own probe is P-11 of 2026-10-09); the six routines, the depth choice, the attached course file and
+the About me note, which have no control on today's page (24b's pack). **The operator's notes**, none a defect:
+the Courses side panel open from step 3 on; step 6's weekdays wrong against their dates (the model worked them
+out itself; for 24b's feed); the Ask button a shade dim after a Stop (109c; brief 111 (f) to (h)).
+
+### Cut over (2026-10-15, 14:12Z to 14:16Z, on Stack's word "cut over")
+
+Nothing open at 14:12Z (no request queued or claimed, no acceptance lock or container). Both main checkouts at
+`origin/main` (bb2dash already at `93dedbc`; bb2dash-stack fast-forwarded to `22f35a3`). From bb2dash-stack, one
+service at a time, each by name: `workspace` rebuilt and made again (image `611e0c34a516`, healthy within 25 s,
+runner `workspace@8bbd677f2c60`); the ingest image built by the worker's name (`6bcae1182bee`), because the parser
+service shares it and has no build of its own, so `up -d --build workspace-extract` on a machine without the image
+is refused (DECISIONS 2026-10-15); `workspace-extract` (healthy in 8 s); `workspace-ingest` (healthy in 9 s, its
+firewall two names, `db: connected as workspace_ingest_runner`, the heartbeat row rewritten by the live worker at
+14:15:16Z); `apply` (image `d59f7672c8ac`, with the runner's modules); `sync` (image `0efd6a64c324`, the same
+`bb-profile` volume, `login: users/me 200 … alive`, nothing queued). The doctor green on every row it has (it has
+no row for the ingest services); `v_workspace_index_status` 1,035 course units indexed, 0 waiting, the worker
+polling. Production was serving `93dedbc` (Vercel READY). The live image ids before and after are in 109c.
+
+### Merged (2026-10-14)
+
+On Stack's word "merge.": bb2dash [#97](https://github.com/stack-dev-personal/bb2dash/pull/97) as `2b7c388`
+(22:04:06Z), then bb2dash-stack [#8](https://github.com/stack-dev-personal/bb2dash-stack/pull/8) as `22f35a3`
+(22:04:30Z), each a merge commit, after `main` had been merged into the branch a fifth time (migration 165) and
+the types file regenerated once more. The worker worktrees and branches (`-db`, `-runner`, `-search`, `-ingest`,
+`-pack`, `-port`, `-floor`, `test/phase24-port`) and the `:wt24` test images were removed the same evening.
+
+Stack's ask (2026-10-08): make the Workspace "a personalized chatbot connected to my materials and rag
+db with RAG pulling (as well as the upsertion pipeline) automated". His seventeen answers are
+`docs/planning/sprint-2/briefs/109a_PHASE24_open_questions.md`; the brief is
+`109_PHASE24_workspace_assistant.md` (frozen 2026-10-08 on his answer "a" to item 23, with its "Freeze
+amendments"); the record is `docs/planning/sprint-2/verification/109c_PHASE24_VERIFICATION.md`, with
+each worker's red and green runs beside it (`109_W76` to `109_W79`, `109_W95`; W-85's is in
+bb2dash-stack). He chose two PRs: 24a, everything behind the page (this section), and 24b, the
+redesigned page, after Phase 22 (brief `111_PHASE24B_workspace_page.md`, not cut). Branch
+`feat/workspace-24` in bb2dash and in bb2dash-stack. Workers were Sonnet 5.5 by his word.
+
+**What changes for him when it is cut over.** The page looks the same and answers better.
+
+* **Every question is searched for him first.** The runner searches his course files, his uploads and
+  what the assistant remembers before the answer is written; the answer no longer depends on the
+  model deciding to look. On a middle or heavy question a cheap planning turn writes the searches
+  first (1.5 s at the median, measured). A lookup is one turn.
+* **A follow-up knows the conversation from the database.** No CLI session is resumed and no
+  transcript is kept; a restart or a new container loses nothing. A long conversation keeps a
+  rolling summary.
+* **It can see the planner and posted scores, and cannot change them.** What is due, what he marked
+  done, and the scores Blackboard has posted come with every answer as a labelled block. The
+  "graded so far" figure stays on the Grades screen; the assistant never works out a grade.
+* **It no longer reads the notes store.** Course materials, uploads, the planner and its own memory
+  only (his answer 7).
+* **When no passage of his files matches, it says so first**, then answers from general knowledge.
+  It does not say that when his planner or the conversation is what answers him.
+* **One pgvector store inside bb2dash's own database** (his answer 17): course files, uploads and
+  memory behind one search that names the kind on every hit, each vector table with its HNSW index,
+  one status row (`v_workspace_index_status`), and a second send of the same file leaves one copy.
+* **Built and waiting for the new page (24b):** attaching a course file, uploading from his device,
+  the six routines, the depth choice, the About me note, memory. Memory stays switched off until the
+  page lets him see and delete what is remembered.
+
+**What is built**
+
+* **Database (W-76).** Migrations **190 to 199, all on prod, each byte-identical to its file, the
+  block used up and frozen.** 190 the store's three tables, its index and the three upload functions;
+  191 the private bucket `workspace-uploads`; 192 `workspace_search` and the attachment read; 193 the
+  login role `workspace_ingest_runner` and its four functions; 194 the options, attachments and
+  routines with `workspace_ask_with`; 195 the turn's record, its sources, the About me row; 196 the
+  runner's six new functions (it executes eleven, with no table grant); 197 the status view; 198 drops
+  the unused policy that let the public key insert a vector; 199 the review round and the view
+  `v_workspace_store_proof`. Eleven `phase24_*` units and the store's proof pass on prod.
+* **Runner (W-77, `workspace/`).** One or two `claude -p` turns a question; the context assembled from
+  stored rows inside fenced blocks; the plan checked by hand; sources stored by id, never text; rolling
+  and memory jobs when idle; logs of ids, counts, states and classes only. 1,007 tests.
+* **Search and embed (W-78).** The batch entry the runner starts (`mcp-server/src/batch.ts`), per-turn
+  limits and course scope in the materials server, and two edge functions, both deployed with JWT
+  checking on: `workspace-search` (version 1) and `workspace-embed` (version 3).
+* **Uploads (W-79, `workspace-ingest/`, `docker/workspace-ingest/`).** Two services of one image:
+  `workspace-ingest` (the worker: no model, no token, no service key, its own network and firewall)
+  and `workspace-extract` (the file parser alone: no network, no secret, a read-only root). They meet
+  in a tmpfs volume. The Workspace image lost the notes server and its secret. The sync embeds on
+  every files pass, and an embed failure on a pass that added nothing no longer fails the sync.
+* **Umbrella (W-85, bb2dash-stack).** The secret's name, the doctor, the README, three host actions.
+* **Acceptance pack (W-95).** `acceptance/24/` and `web/e2e/accept24.spec.ts`: sixteen steps on today's
+  page and the host's go-live step. Not run live yet.
+
+**Proven so far (all in 109c)**
+
+* **Seven probes on the live image before the freeze**: a turn with no MCP server, a turn that stores no
+  session, ten fresh full-size turns under the cap, a 128,000-byte prompt, a per-request MCP config.
+  The planning turn passed under two rulings (thinking off; a plan accepted inside a code fence). One
+  probe failed in one part (this Docker ignores a secret file's mode and owner), which moved the
+  parser into its own service.
+* **The store's proof on prod**, and the two probes of the edge functions: the search finds a
+  synthetic upload with the service key and refuses the public key; the embedder finishes a
+  five-unit document and a repeat stores nothing twice.
+* **Retrieval eval, no model: 8 of 9.** The miss is case 7 of `ingest/eval/golden_set.json`, whose
+  expected files have since been replaced; the search returned the current versions (Known issues).
+* **Both reviews.** `/security-review`: nothing at its bar. `/code-review main high`: ten findings,
+  all fixed in the review round (four of them HIGH by the PM's reading).
+* **Suites on the branch:** runner 1,007; upload worker 120; materials server 143; function tests 39;
+  sync 166; apply 136; web 2,913 with typecheck, lint and build clean; acceptance 55; scripts 261;
+  bb2dash-stack 359.
+
+**Walked (Phase 24ab, 2026-10-14; 109c "Phase 24ab, the walk" and the section after it).** Two windows
+with the live Workspace stopped (20:01Z to 20:22Z, 20:33Z to 20:36Z): the test runner, parser and upload
+worker from the branch's images, merged with `main` the same afternoon, on the restyled page. Every step
+of pack 24 ran once from the host in the spec's order and every host proof was read against prod: a
+course question, a lookup, a Standard question with its planning turn (1.8 s, Sonnet answering), the
+planner question, a follow-up from the database, a Stop and the next answer, the planner unchanged, an
+upload through the page's own session read and indexed by the worker in 2.4 s through its firewall
+(**P-7 passed**), found by a question, sent twice for one row, deleted in two steps, the store's five reads,
+every conversation archived. One defect, **D-1**: a question of invented words scored 0.781 to 0.789
+against seven units, above the runner's 0.78 floor, so the turn stored `found` and the fixed "no passage
+matched" line was not written; W-96 (Opus) measured the floor on prod and raised it to **0.81**
+(`workspace/scripts/eval-floor.mjs` kept; the golden set 9 of 9 at every floor), and step 8 passed on the
+rebuilt image, with step 3 as the control (10 passages at 0.868 to 0.891). Thirteen answers on Stack's
+plan, none on Opus. A sync (request 5091, a press on his side) ran inside the first window; the planner
+read the same and the sync container was untouched.
+
+**Done since the walk**
+
+1. ~~The merge of the two PRs~~ Merged 2026-10-14 on Stack's word (above, "Merged").
+2. ~~The cut-over~~ Done 2026-10-15 on his word, each service alone, nothing open (above, "Cut over"). The old
+   volume `workspace-claude-home` removed at 14:27Z after the green run.
+3. ~~`just accept 24`~~ Green, run `20261015T141817Z` (above, "Accepted").
+4. ~~bb2dash-stack's suite has no verdict for the merged branch~~ Run on Stack's word at 21:01Z: 359 of 359
+   in 11 minutes (109c, "The list after a merge").
+
+**What Stack has to do:** nothing. Step 1 of pack 24 (Usage credits off; `/usage`) he answered on 2026-10-15,
+after the record merged: "usage credits are off." (no `/usage` percentages given, as in Phase 21; nothing waits
+on them). Phase 24a has nothing of its own left. His own step of this phase, the upload worker's login, was done 2026-10-09, proved
+at the walk by the test worker's heartbeat and on 2026-10-15 by the live worker's.
+
+## Phase 24b, part 1: the data layer, 2026-10-14 → 2026-10-15, built, reviewed, **MERGED 2026-10-15 as PR #108 (`022812c`, 16:50Z) on Stack's words "merge to main" and "merge 108"**
+
+Brief `docs/planning/sprint-2/briefs/111_PHASE24B_workspace_page.md` ("The data layer, started early" and "The data
+layer's frozen exports"); record `verification/111a_PHASE24B_VERIFICATION.md`; W-86's record
+`verification/111_W86_VERIFICATION.md`. Branch `feat/workspace-page-24b` (worktree `bb2dash-wt-24b`), cut 2026-10-14
+from `origin/feat/workspace-24` on Stack's answer 3 (the data layer starts beside Phase 24ab), merged with
+`origin/feat/workspace-24` four times while 24ab pushed and with `origin/main` on 2026-10-15 (7e71eb7, once 24a and 24ab
+had landed). Stack's word of 2026-10-15, "merge to main", takes the data layer to `main` ahead of the page: 24b's one
+exception to one PR per phase (DECISIONS 2026-10-15). The page is part 2, from the same branch.
+
+**What it is** (29 files against `main`, every one under `web/` but the three records): nine new modules under
+`web/src/lib/`: `answer-format.ts` (the answer's block tree, a data tree only; links, images and raw HTML stay text),
+`queries.workspace-ask.ts` (asking with options; the three refusals of `workspace_ask_with`), `queries.workspace-files.ts`
+(the upload rules, the storage key from the sha256, register, remove, retry), `queries.workspace-memory.ts` (the memory
+list, forget, the About me note), `queries.workspace-routines.ts`, `queries.workspace-sources.ts` (turns, sources, the
+retrieval line, the index status), `workspace-citations.ts`, `workspace-examples.ts`, `workspace-upload-rules.ts`;
+`workspace-labels.ts` grows by the page's wording (task 3, additions only; the two retrieval lines held equal to the
+runner's `workspace/src/lines.ts` by import); `use-workspace-stream.ts` parses the runner's `sources` event and keeps it
+on the view, and gains `markStopped` (after it nothing the channel sends for that request changes the view; a `done`
+after Stop still refreshes the stored rows); 14 test files, 366 cases, each red first; `web/test/status-vocabulary.test.ts`
+names `queries.workspace-sources.ts` as another vocabulary (`RETIRED_EXEMPT`, with the reason). W-86 (Opus) built tasks 4
+to 6 with probe Q-4 (PASS, median 8.55 ms parsing a 100,000-character answer); its 23 defaults are listed in its record,
+each Stack's to overturn.
+
+**Gates** (at 7e71eb7, from `web/`): `npm run typecheck` clean; `npx eslint . --max-warnings 0` clean over the whole app;
+`npx vitest run` 202 files, 3,734 tests, all passed; coverage: the ten modules 98.4 to 100 % lines (99.71 % together),
+all files 93.3 % (floor 83); the table grep (`.from('workspace_document_text')`, `.from('workspace_text_embeddings')`
+under `web/src`) prints nothing; no file under `web/src/app/(app)/workspace/` or `web/src/components/workspace/`, no CSS
+module, no migration, no edge function, no container.
+
+**Reviews:** `/security-review` on the delta, no findings. `/code-review`: two findings in the delta, both fixed by W-86's
+round 2 (R2-1, HIGH: the request ids are a sorted suffix of the options and turns query keys, so a just-asked request no
+longer reads as having no options row; R2-2: an upload title is trimmed again after the 200-character cut); its twelve
+findings in Phase 24a's code are the 24ab session's, listed outside the repo
+(`C:/Users/stack/projects/CODE-REVIEW-24a-findings-2026-10-14.md`), none changed here.
+
+**On the live page: nothing.** No string `/workspace` imports moved, and the hook's new behaviour sits behind
+`markStopped` and the view's `sources`, which no live component calls or reads. There is nothing to preview.
+
+**Merged** 2026-10-15 at 16:50Z as `022812c` on his "merge 108"; the shared `main` checkout and the phase branch were
+fast-forwarded to it, so part 2 starts from `main` itself. **Next:** part 2 on the same branch: the page's streams on Opus, W-87 (composer and lobby)
+and W-88 (thread and panel; `AnswerBody.tsx` over `parseAnswer`, rendered as React text nodes), typed against brief 111's
+frozen exports; memory on (`WORKSPACE_MEMORY_JOBS`), the extended pack 24, the PM's walk, the preview for Stack and the
+phase's second PR. Done the same day: the section "Phase 24b, part 2" below.
+
+## Phase 24b, part 2: the page, 2026-10-15, built, reviewed, walked by the PM on the branch preview, **MERGED 2026-10-15 21:46Z as PR [#109](https://github.com/stack-dev-personal/bb2dash/pull/109) `aa4f702`, CUT OVER 21:52Z; **ACCEPTED 2026-10-16 by acceptance run `20261016T041410Z` (green, from `main` at `7590d54`)**, after five runs red on the pack's own words (#112, #113, #114, #116, #117) and one on the runner's search budget (#115)
+
+Brief `docs/planning/sprint-2/briefs/111_PHASE24B_workspace_page.md` (its final start prompt, "Frozen at the gate",
+"Round 2"); record `verification/111a_PHASE24B_VERIFICATION.md` ("Part 2"); the workers' records
+`111_W87_VERIFICATION.md` and `111_W88_VERIFICATION.md`. Branch `feat/workspace-page-24b` (worktree `bb2dash-wt-24b`),
+from part 1's merge (`main` 022812c); workers W-87 and W-88 on Opus, cut from the freeze commit (43830a5) and ruling C-1's
+seam (ebb641e); the rulings and defaults of the day in DECISIONS 2026-10-15 (D-F to D-J, C-1, P-1 to P-3, W-3, R2-6).
+
+**What it is** (the page at `/workspace`; every file under `web/` but the pack, the walk box, `compose.yaml` and the
+records): a lobby (`Lobby.tsx`: the greeting with no name, one composer asking into a new conversation, his routines as
+shortcuts, `ExamplePrompts` from his planner with the refresh, Recent with View all, the service line, today's New York
+date with its weekday); the composer rebuilt to the frozen `ComposerProps` (`composer-contract.ts`): it owns its chips
+(course, depth, routine, uploads), restores the course and routine chips from the last options row, puts Deep back to
+Auto after one question, keeps Ask off while a routine's need or an upload is not met and says why under the box; the plus
+menu (an upload from this device, a course file through the `MaterialPicker` grouped by course), the depth menu with its
+four notes, the course menu; `AnswerBody.tsx` renders `parseAnswer`'s blocks as React text nodes with numbered chips for
+the labels the source rows resolve (links, images and raw HTML stay text); the sources row under each answer; the side
+panel (`SidePanel.tsx`: Sources cited first with Open per kind, Files with the upload states, a failure's reason, Try
+again, the two-step delete and the index status, Memory with About me and the remembered items with their delete), docked
+when the content pane is at least 1024 px wide (a `ResizeObserver`, W-3) and a `PopoutShell` sheet under that; the
+conversations rail a sheet under 720 px; the red mark on the picked tab and the picked conversation (D-I); 44 px press
+areas on a phone; the date line (amendment (g)). The modules take Phase 22's tokens only; the token audit's allowlist is
+untouched (frozen: no `@container`, no new `@media` width).
+
+**Pack 24 extended** (task 14): stage `page` first after go-live (17 the lobby and the chips, 18 the sources row and the
+panel), `page-upload` (19, 20), `page-delete` (21; ruling P-3), `page-memory` (22), host `memory-proofs` (23,
+`db.proofUntil memory-item`), `page-forget` (24); five proofs (`options-stored`, `turn-attached`, `page-upload-gone`,
+`memory-item`, `memory-gone`); pack 21 kept in the tree and no longer run. Phase 22's row 12 fixture reads the page
+(`web/e2e/walk24b.lib.ts`). **Task 13:** `compose.yaml` `WORKSPACE_MEMORY_JOBS: "on"`; nothing running changes until
+`workspace` is rebuilt from `main` at the cut-over.
+
+**Rounds:** W-87 (tasks 7, 8) and W-88 (tasks 9 to 11) merged at 8a02fb2; round 2 from the reviews and the first walk
+(W-87: R2-1, R2-3, R2-7, W-2, W-4, merged 7947566; W-88: R2-2a, R2-2b, R2-4, R2-5, R2-6, R2-8, R2-9, W-1, W-3, S-1,
+merged 05e942b); round 3 from the walk's shots (W-87: W-6, aa16c0e; W-88: W-5, 27b099e). **Round 4** (b8b6866, the PM
+in place, on Stack's look at the preview: "the chat window to take up more of the vertical space", "the outlines and
+borders of the side tab/nav bar more clearly defined", "the chat centered"): the screen fills the content pane's height
+and lays its one row to it, so the thread's column grows to the room over the dock and scrolls inside itself with the
+composer at the pane's foot; the page column is centred in its track; the rail is a card with the divider as its edge
+and the pane's full height, the panel the same edge with a rule under its tabs; CSS and the layout spec only (two new
+cases in the shell's pane as written; 7 passed, also in the walk box); seen on the preview in both themes at 1280, 1440
+and 390 px (111a, "round 4"; DECISIONS 2026-10-15).
+
+**Reviews:** `/security-review` over the whole diff against `main`: no finding at the bar; one hardening note, S-1
+(`tab.opener = null`), fixed. `/code-review main high`: thirteen findings, none CRITICAL, two HIGH (the depth lost
+between the lobby and the thread; rich answers blinking to plain on each ask), all fixed in round 2 but two LOW cleanups
+the PM made in place (111a).
+
+**Gates** (at the head, from `web/`): `npm run typecheck`, `npx eslint . --max-warnings 0` and `npm run build` clean;
+`npx vitest run` 209 files, **3,885 tests**, all passed; `npm run test:coverage` **93.89 % lines** (floor 83); the audits
+green; `node --test acceptance/acceptance.test.mjs scripts/accept-proofs.test.mjs` 103; `node --test
+scripts/accept-proofs-db24.test.mjs` 28 (PGlite); the table grep prints nothing; `git grep -l "var(--color-accent-500)"
+-- web/src` lists eleven files (nine before the page; `SidePanel.module.css` and `ConversationList.module.css` are the
+two); no file of the two Workspace folders over 400 lines; `package.json`, the lock file, `db`, `workspace`,
+`mcp-server`, `supabase`, `sync`, `apply` and `desktop` untouched. Phase 22's walk box is green over the page's layout
+spec (run `20261015T205501Z`) after a part 1 regression fixed here: since #108 the web build type-checks five test
+imports of `../../workspace/…`, which the box now copies (`docker/walk/entry.sh`); the fixture's table cells are
+unbreakable so the box's Linux fonts cannot fold them (111a, "the walk box").
+
+**The PM's walk** (111a): headed Chromium over the branch preview
+(`web-git-feat-workspace-page-24b-emstacho-sus-projects.vercel.app`) in three passes, dark and light, 390, 1280 and
+1440 px: four defects found on the real screen and fixed (W-1 the rail's button at 1280, W-2 the menus clipped in the
+lobby, W-3 the 250 px column with the course rail open, W-4 Ask while gated), two more from the shots (W-5 the Files row's
+title broken mid-word, W-6 a failed attached upload's line), each shown fixed; pack 24's page steps 17 to 21 run twice
+with the live runner (requests 948 to 953; every proof passes); probe Q-1 PASS (a 20,971,520-byte upload reached the
+bucket and the worker refused it, `too_many_units`; deleted through the Files tab); Q-2 PASS in Chromium (`#page=3`
+opened page 3 of 7); W-5 seen stacked at 1280 and 390 px. Everything the walk opened is archived and everything it
+uploaded is gone. **The desktop half is Stack's**: a second shell window under its own profile, pointed at the preview,
+waits for his sign-in; Q-3 (the shell's file dialog and a drop) and Q-2's shell half follow it.
+
+**What to look at** (Stack): the lobby and its three menus; "Explain this file" with no file (Ask off, the line under
+the box); a question on IST 323 at Standard: the formatted answer, its numbered chips, the sources row, the Sources tab;
+the Files tab after an upload from the plus menu, then its delete in two presses; the phone width and the light theme;
+the course rail open at 1280 px (the panel becomes a sheet: default D-F's band, W-3).
+
+**Merged** 2026-10-15 at 21:46Z as `aa4f702` on Stack's "merge 109, push to main"; production deployed from `main` the
+same minute. **Cut over** at 21:52Z on his "cut over": from bb2dash-stack `docker compose up -d --build workspace` alone,
+nothing open; healthy in 9 s with `WORKSPACE_MEMORY_JOBS=on` in the container; `sync`, `apply` and the two ingest
+services untouched; doctor's stack rows green (its five problems are vault bookkeeping). **`just accept 24`, first
+counting run** (`20261015T222036Z`, bb2dash at `44b1a18`, after PR #110 had landed and the shared checkout was back
+on `main` and clean): prepare, go-live and step 17 passed; step 18's test passed too, but the operator failed the
+step on `18.json`'s `panel_open_controls: 0`, which the playbook holds to 1 or more: the pack counted the Open
+buttons with `count()` before the rows had rendered (the wait came one line later). Red, nothing accepted; the cleanup
+put everything back. Fix: the count after the wait, `fix/accept24-step18-count` (111a, DECISIONS 2026-10-15), merged as #112
+(`5f78ed4`). **The second counting run** (`20261015T223433Z`, from `5f78ed4`; one start before it blocked by a sync, 5787,
+that began the same minute): prepare, go-live and `page` passed (17 and 18 with the fixed count); red at `walk`, 24a's own
+steps read against the new page, the product right in each: step 8's test held the fixed sentence to be the answer's
+first line, where the page shows it once as the turn's line under the answer (R-1); the operator held step 5 `unsure` on
+`[M820]`-style labels shown as text beside the chips (labels no source row of the answer resolves: the brief's rule) and
+step 9 `unsure` on a picture holding the runner's stored answer, longer than the 233 characters read at the press (the
+stored row replaces the live text, as in 24a; the playbook spoke of the sources row only). The pack's walk stage is
+corrected on `fix/accept24-walk-24b`: the settle helper takes the expected line, step 8 asserts it there and not in the
+text, the playbook's steps 3 to 8 and 9 say each (111a, DECISIONS 2026-10-15); merged as #113 (`0ccda79`). **The third
+counting run** (`20261015T230406Z`): `page` red again on step 18's count, the operator reading ten course-file rows
+without Open in the picture: a course file's Open renders once the current-files list has loaded, a remembered item's
+at once, and with memory on since the cut-over two remembered rows (the earlier runs' step 17 conversations) made the
+first Open visible before the files had come. The pack now waits for a course-file row's Open before the picture and
+the count, and the playbook names the four kinds of row; the earlier runs' leftovers (three step 17 conversations, two
+remembered items) archived and forgotten through the page (111a, DECISIONS 2026-10-15); merged as #114 (`16a5878`). **The
+fourth counting run** (`20261015T233524Z`): `page`, `walk`, `walk-proofs`, `upload` and `indexed` passed, and step 13
+failed on the product's side: the `workspace-search` function took 10.4 s on a cold instance (its embedding model
+loading; 48 calls that day, median 0.65 s, this the one over 4 s) and the runner's search batch allowed 8 s a call, so
+the retrieval failed and the answer drew on no file. The budgets rise to 20 s a call and 30 s a batch
+(`mcp-server/src/batch.ts`, `workspace/src/retrieve.ts`; `fix/search-budget-cold-start`), which the `workspace` service
+takes at its rebuild; the run's leftovers (its step 17 conversation, its synthetic upload) archived and deleted through
+the page (111a, DECISIONS 2026-10-15); merged as #115 (`c085c0d`), `workspace` rebuilt alone 2026-10-16 03:30Z, healthy
+with the budgets in its image. **The fifth counting run** (`20261016T033116Z`): `page` red on the operator's doubt of
+step 18's count, eleven Open buttons for twelve rows: the planner's row has a link that reads Open, and the pack counted
+buttons; the count takes links too and the playbook says it equals the rows (111a); merged as #116 (`c3806bb`). **The sixth
+counting run** (`20261016T034110Z`): `page`, `walk`, `walk-proofs`, `upload`, `indexed`, `find` (the search inside its new
+budget), `delete` and step 19 passed; step 20's test passed (the file attached, the answer from it, 3 sources) and the
+operator failed it on the playbook's own words: the start picture was to show the chip above the question box, and the
+page clears the chip once the question is sent, the file then belonging to the request. The step takes the chip's
+picture before the send and the playbook says what the pictures show (111a); merged as #117 (`7590d54`). **The seventh
+counting run, `20261016T041410Z`, is GREEN and counts as acceptance** (04:14:10Z to 04:31:43Z; bb2dash `7590d54`,
+bb2dash-stack `22f35a3`; fifteen stages, nineteen automated steps, fifteen with a host proof; requests 1001 to 1012;
+the memory item of step 17's conversation seen on the Memory tab after 332 s and eleven reloads, read by the host as a
+memory document with its vector, deleted in two presses; nothing left in the store but Stack's own remembered item).
+The operator's notes, none a fault: one 401 on a read of `workspace_conversations` in step 17's browser log, the
+lobby's Recent heading empty in the lobby picture while the rail listed conversations, bare digits where the stored
+answer text carries citations, a `[text_id 522]` label unresolved in step 9's second answer, the Files row's Index
+heading empty while its view loads (111a). **Phase 24b is accepted.**
+**Next:** the removal words for the phase worktrees and branches (ORCHESTRATOR §4); the follow-ups on his word: the
+runner's feed weekday, a per-file read for the Sources tab's Open, whether a label no row resolves is hidden, the Files
+tab's Index heading while its view loads, the one 401 of step 17. ~~The desktop half of the walk after his sign-in.~~ Closed 2026-10-18 on his word ("assume the walk passed"): Q-3 and Q-2's shell half recorded as passed, not seen by the PM (111a).
+
+## Sprint 2 — closed 2026-10-26
+
+**Closed on Stack's word, 2026-10-26.** Every phase below is merged and live, and each one with an acceptance pack
+is accepted by a green run from `main`. The record, and every item carried out of the sprint (Stack's sittings and
+decisions, the PM's follow-ups, sprint 3 candidates): `docs/planning/sprint-2/121_SPRINT2_CLOSEOUT_2026-10-26.md`.
+**Most pressing carried item:** the Google Calendar push has failed since 2026-10-19 (5,130 runs, last `ok`
+2026-10-15 22:35Z, "refresh token revoked or expired"); Stack re-mints with `scripts/google-consent.mjs`.
+
+The plan as it stood:
 
 Planned 2026-09-24 on `docs/sprint2-planning` ([PR #28](https://github.com/emstacho-su/bb2dash/pull/28), merged as 67269b5 on 2026-09-27): requirements `docs/planning/sprint-2/91_REQUIREMENTS_v3.md`
 (R-29..R-109 carried, P-1..P-113 PM- and research-added, Stack's eight items in §3, 22 still-declined rows in §4),
@@ -515,16 +2588,82 @@ date hold all 59 answers (departures from the defaults: item 10, item 45) and ap
 | Phase | Name | Brief | Migrations | Order |
 |---|---|---|---|---|
 | 15 | Database hygiene and the SQL test runner | `95_PHASE15_db_hygiene.md` | 100–102 live | **merged 2026-09-29** ([PR #30](https://github.com/emstacho-su/bb2dash/pull/30), 6ef3933; row 17 above); gate-out green on `main`, R3 and R4 open |
-| 16 | Grades: V-1 sittings and the reconciliation migration | `96_PHASE16_grades_v1.md` | 105–109 | after 15; Stack's sittings, IST.323 before 2026-12-03 |
-| 17 | Web polish: quick fixes, carried bugs, Inbox/planner leftovers, proofs | `97_PHASE17_web_polish.md` | 110–119 | with 18 |
-| 18 | Ingest and corpus | `98_PHASE18_ingest_corpus.md` | 120–129 | with 17 |
-| 19 | Content identity, per-crawl history, sync honesty | `99_PHASE19_content_history.md` | 130–139 | after 17 and 18 |
-| 14 | Containers (R-28) | `100_PHASE14_containers.md` | 091–099 | long pole from the start; spike gate first |
-| 20 | Harness closure (V-2 on record, note quality, checkpoint redaction) | `101_PHASE20_harness_closure.md` | none here | beside everything; R-97 first |
-| 21 | Workspace chat on the subscription | `102_PHASE21_workspace.md` | 140–149 | after 14 |
-| 22 | Styling | `103_PHASE22_styling.md` | none | last |
+| 16 | Grades: V-1 sittings and the reconciliation migration | `96_PHASE16_grades_v1.md` | 105–106 live | **merged 2026-09-30** ([PR #44](https://github.com/emstacho-su/bb2dash/pull/44), 4c310ff; row 19 above); R-29 waits on Stack's three B-9 dates |
+| 17 | Web polish: quick fixes, carried bugs, Inbox/planner leftovers, proofs | `97_PHASE17_web_polish.md` | 110–119 and 150 live (150–159 its overflow block) | **merged** ([PR #43](https://github.com/emstacho-su/bb2dash/pull/43), d9d5ee9; row 18 above) |
+| 18 | Ingest and corpus | `98_PHASE18_ingest_corpus.md` | 120–129 live; 160 (overflow block 160–169) | **merged 2026-09-30 before its gate sync**; re-read 2026-10-03: tasks 14, 17 and 18 settled by the syncs since 10-01; `98a` §2/§5 and task 28's screenshots still owed; task 19's code half landed 2026-10-04 (the crawler PR) and task 26 (R-73) closed 2026-10-04 on Stack's word (row 19 above; 108 §3) |
+| 19 | Content identity, per-crawl history, sync honesty | `99_PHASE19_content_history.md` | 130–139, 170–172 live | **merged 2026-10-03** ([PR #60](https://github.com/emstacho-su/bb2dash/pull/60), 206ee3a; row 21 above) |
+| 14 | Containers (R-28) | `100_PHASE14_containers.md` | 091, 093, 094 live; 092 struck | **merged 2026-10-04** on Stack's word, before his acceptance sitting (#62, #67, harness #39, bb2dash-stack #1; section "Phase 14" above); A1–A9 owed |
+| 20 | Harness closure (V-2 on record, note quality, checkpoint redaction) | `101_PHASE20_harness_closure.md` | none here | **PR-A (#39), PR-B (harness #36, + #37) and PR-C (#48) merged 2026-09-30**; V-2 closed on Stack's word (2026-09-30); tasks 2 and 29 done (row 20 above) |
+| 21 | Workspace chat on the subscription | `102_PHASE21_workspace.md` | 140–143 live (144–149 its slack) | **merged 2026-10-07 on Stack's word (bb2dash #78, then bb2dash-stack #3), walked by the PM, accepted 2026-10-08 by the acceptance run `20261008T041753Z`** (sections "Phase 21" and "Acceptance run" above): green from `main` against production; step 1 answered by Stack the same day ("usage credits are off."); the test project, the worktrees and the branches removed |
+| 22 | Styling | `103_PHASE22_styling.md` | none | **merged 2026-10-14** on Stack's word ([PR #93](https://github.com/stack-dev-personal/bb2dash/pull/93), `dff1e05`; section "Phase 22" above); **closed 2026-10-14** on his word ("call everything good. merge everything to main and close out this phase."): both specs once against production (run 20261014T191444Z: 118 passed, 0 failed, 8.1 minutes: the 54 phone-width cases with their 24 pane measures and the 64 theme cases, against production at dff1e05), the worktrees and worker branches removed, taste calls T-1 to T-18 ruled good (`walks/walk-22/WALK.md`) |
+| 24a | Workspace assistant, behind the page | `109_PHASE24_workspace_assistant.md` | 190–199 live, the block used up | **merged 2026-10-14 on Stack's word (bb2dash #97 `2b7c388`, bb2dash-stack #8 `22f35a3`), cut over 2026-10-15 on his word, ACCEPTED 2026-10-15 by acceptance run `20261015T141817Z`** (green from `main` against production; section "Phase 24a" above) |
+| 24ab | Finish 24a and make 24b ready | `118_PHASE24AB_walk_and_handover.md` | none | **done 2026-10-15**: tasks 1 to 12 (the merge of `main`, the list after it, the images, the walk, the docs, brief 111 with the walk and the page's start prompt, the two PRs merged 2026-10-14, the cut-over and `just accept 24` green 2026-10-15, the old volume and the worker worktrees removed); left of task 11: the phase worktrees and `feat/workspace-24`, once 24b's branch has merged `origin/main` |
+| 24b | Workspace assistant, the page | `111_PHASE24B_workspace_page.md` | none | **part 1, the data layer, MERGED 2026-10-15 as PR [#108](https://github.com/stack-dev-personal/bb2dash/pull/108) `022812c` on Stack's word**, the one exception to one PR per phase (section "Phase 24b, part 1"); **part 2, the page, MERGED 2026-10-15 as PR [#109](https://github.com/stack-dev-personal/bb2dash/pull/109) `aa4f702` and CUT OVER 21:52Z** (section "Phase 24b, part 2"); **ACCEPTED 2026-10-16 by acceptance run `20261016T041410Z`**, green from `main` at `7590d54`, the seventh counting run: five before it red on the pack's own words (#112, #113, #114, #116, #117), one on the runner's 8 s search budget against a cold search function (raised to 20 s, #115, `workspace` rebuilt) |
+| 23 | Inbox auto-apply, and its follow-ups | Stack's ask (2026-10-07); `110_PHASE23_followups.md` | 180–188 live | **merged 2026-10-07** (#79, #81; stack #4), follow-ups #88, #90, #91 (stack #7); **ACCEPTED 2026-10-13** by run `20261013T003231Z` |
+| 25a | Egress by name, the sync's text insert, the index watch | `119_PHASE25_after_24b.md` | 200, 201, 207 live | **merged 2026-10-19** (#121; stack #9) and **cut over** the same night |
+| 25b | A second runner; planner proposals Stack approves | `119_PHASE25_after_24b.md`, contract `119b` | 202–206, 208 live | **merged 2026-10-20** (#128; stack #10), **ACCEPTED 2026-10-20** by run `20261020T222413Z`; follow-ups #135 **ACCEPTED 2026-10-21** by run `20261021T224728Z` |
+| 26 | The announcement reader | `120_PHASE26_announcement_reader.md` | 210–214, 223 live | **merged 2026-10-19** (#120, #122) and **cut over** the same day; follow-ups #124, #125, #129, #138 (223, applied 2026-10-26) |
 
 How to run them: `106_SPRINT2_EXECUTION_PLAN.md` (dependency order, no calendar). Stack's standing items are ORCHESTRATOR §4. The sessions that run these phases are ORCHESTRATOR §6.
+
+**Next for Phase 20 (2026-09-30):** Stack reads `101a_V2_VERIFICATION.md` and gives his word on V-2 (acceptance step 9;
+the PM writes it into the last DECISIONS row of 2026-09-30); PR-C merges on his word; then task 29 (the PM writes the
+merged `skills/inbox-apply/SKILL.md` over the installed copy, `cmp` 0). Task 2's first real Apply run lands with the
+next answered Inbox item or sync. The two harness follow-ups in 101a (the Session facts newline, the superseded Status
+row) go to the harness backlog, not this phase.
+
+## Phase 23 acceptance runs, 2026-10-09: two counting runs blocked, trial runs from `fix/accept23-step1` (accepted since, 2026-10-13, by run `20261013T003231Z`: "Phase 23 follow-ups", above)
+
+After the follow-ups' cut-over Stack put in his `.env` line and signed in to Blackboard, and the PM started
+`just accept 23` from bb2dash-stack's `main`. Nothing is accepted. What each run did, in order (the run folders
+are under `~/.bb2dash-accept/23/`):
+
+| Run | From | Verdict | What it showed |
+|---|---|---|---|
+| `20261009T122103Z` | `main` (counts) | blocked | The sign-in had started a sync of its own (request 5071); the run refuses to start with a request open. As built. |
+| `20261009T122218Z` | `main` (counts) | blocked | **Pack defect 1.** Step 1 raised its four questions, then looked for its own run tag in a facts file that is written only when the test ends. It could never pass. |
+| `20261009T122929Z` | the fix branch | red | Step 1's test passed. **Pack defect 2:** its picture had the card scrolled under the top bar and the row of tabs out of sight, and the `confirm` card is not first in its list, so the operator was unsure. |
+| `20261009T123422Z` | the fix branch | killed | Steps 1 and 2 passed. **Pack defect 3:** the sync filed apply request 5073 and the worker closed it five seconds later, both answers archived; the Inbox looks for a request it did not file every 30 seconds, so the button never left its resting label and step 3 waited out its nine minutes. The laptop then slept, and the session's low-memory guard stopped the run. |
+| `20261009T180141Z` | the fix branch | red | **Steps 1, 2, 3, 4 and 6, the host's proofs after the walk, and the stop of `apply` all passed.** Step 7a's test passed too, and the operator was unsure: **a defect of the product**, below. `apply` was started again by the run's cleanup, and request 5077 was then taken and closed. |
+
+**The four fixes, all on `fix/accept23-step1` (one PR):**
+
+1. `stepId()` in `web/e2e/accept.env.ts`: an id a step left is read from the running test first, then the
+   stage's folder, then the carry-over. Five unit tests.
+2. `shootCard()`: a card's picture has the card whole, clear of the top bar and the footer, and the page
+   moves no further than that takes; the tab that was selected is checked by the test and written as
+   `tab_at_<shot>`, and the playbook judges the tab by that fact. Seven shots.
+3. Step 3 has a third way to pass: the footer reads `0 answered` with the button at rest, and both answers
+   stand under Archived. The host's proof still reads the request itself.
+4. **The product.** The Apply answers button sits in the Inbox footer, which is sticky at the bottom of
+   the window, and its toast hung 38px UNDER the button (it was written for a button in a page header). So
+   the "Requested…" line was cut mid-sentence and the fallback command, the one thing a person needs when
+   the apply worker is down, was below the window. The toast now opens above the button, at its right edge
+   (`InboxApplyButton.module.css`; `web/test/InboxApplyButton.css.test.ts`). **Visual: Stack looks at the
+   PR's preview before the merge.** Step 7a also brings the command into the window before its picture.
+
+**Seen in the trials and not changed:**
+
+* An open Inbox shows no `done` and no result line for an apply request the sync filed when that request
+  closes within the page's 30-second look. The answers do move to Archived and the count drops. Stack's to
+  want otherwise.
+* While a request waits for a worker that is down, an answered card reads "Apply answers is running; undo
+  after it finishes." The request is queued, not running.
+* The run's own clean-up works: each run's first question archived the cards an earlier run had left, and
+  the exporter skipped the test decisions (0 filed, 2 skipped at 18:01Z).
+
+**Reviewed 2026-10-12** (the first attempt stalled): no HIGH; one MEDIUM accepted by design (step 3's third
+way shows the answers left the queue, and the host's proof `recorded-after-sync` is what requires the request
+closed done); one LOW fixed (the first way allows a starting label of `queued` or `running`). Gates at the
+merge: `web` typecheck and eslint 0, 2923 tests; `acceptance.test.mjs` 41. Stages `back` and `file` are
+still unproven by a run: the review traced step 7b against the page and found no defect.
+
+**Merged 2026-10-12 on Stack's word ("continue, merge"),** which the PM read as his OK on the toast as well:
+he had been told it was the one visual change and that the preview was his to look at. The pictures of step
+7a in the next run show it on the live site; putting it back is two lines of CSS.
+
+**Next:** a counting `just accept 23` from `main`, with no Phase 22 walk box running, the laptop awake and
+memory to spare.
 
 ## Sprint 1 record — Requirements v2 (`docs/planning/sprint-1-hub/60_REQUIREMENTS_v2.md`)
 
@@ -538,13 +2677,13 @@ Stack confirmed the post-Phase 7 direction on 2026-09-10 after five rounds of cl
 | 10a | Grades: gradebook mirror, Grades screens, submission pull-back, staged upload | `67_PHASE10A_grades.md` | **merged** (PR #13, 2026-09-16; migrations 046–056 live). Mirror verified by Stack's 9/16 sync; the attempts probe and step 4b run on the first post-merge sync |
 | 10b | Grades: methodology model + what-if | `68_PHASE10B_grade_model.md` | **merged** (PR #15, 2026-09-16; migrations 057–058, 080–081 live; PM browser walk 7/7 + round 3) |
 | V-1 | Grading schema validation (stream, Stack + a materials-only session) | `63_GRADING_VALIDATION.md`, `64_GRADING_SCHEMA_EXPORT_2026-09-14.md` | **stubbed for later** (Stack, 2026-09-16: a data-accuracy task, no longer a gate for 10b); reconciliation migration stays 059; it should fold `grade_column_links` into `assignments` and fill placeholder points. Launch: `scripts/validate-grading.ps1` |
-| V-2 | Session archival, context tagging, RAG hand-off (R-27; stream in `~/agentic-harness`) | `66_SESSION_ARCHIVAL_RAG.md` | **built in the harness** (its PRs #1–#4, 2026-09-16); the acceptance walk from bb2dash's side and the doc closure are carried into sprint 2; recorded here 2026-09-24 |
+| V-2 | Session archival, context tagging, RAG hand-off (R-27; stream in `~/agentic-harness`) | `66_SESSION_ARCHIVAL_RAG.md` | **built in the harness** (its PRs #1–#4, 2026-09-16); the acceptance walk from bb2dash's side and the doc closure are carried into sprint 2; recorded here 2026-09-24. **Closed closed on Stack's word 2026-09-30 on 101a** (2026-09-30, Phase 20: `docs/planning/sprint-2/verification/101a_V2_VERIFICATION.md`, 21 of 21 lines met or met as restated) |
 | 11 | Planner + Google Calendar push, announcements bell/page, data gaps | `69_PHASE11_planner.md` | **merged** (PR #12, 2026-09-16; migrations 060–066 live, calendar push live and proven; Stack signed off the six-step script) |
 | 11b | Planner events created in bb2dash and pushed to the `bb2dash` calendar | `69b_PHASE11B_planner_events.md` | **merged** (PR #14 + display follow-up PR #16, 2026-09-16; migrations 067–069 live, `calendar-push` v5 live, live proof and browser walk done) |
 | 12 | Electron shell, tray, desktop notifications, Sync button runs the command | `80_PHASE12_electron.md` | **merged** (PR #19, 2026-09-17; Stack walked the shell steps and the tray on the unpacked build and said merge — his "steps 1–5" take in the toast steps 4–5, which stay open; the three toasts are still to be seen live). His first launch found one bug, fixed before merge: the app was named `bb2dash-desktop`, so it read its config from the wrong `%APPDATA%` folder (`productName` now pins `bb2dash`). Shipped: `desktop/` package, Electron 44.4.1, unpacked build `desktop/dist/win-unpacked/bb2dash.exe`; window + single instance + tray (close hides), navigation allowlist, poller with on-disk watermark and the three toasts, Sync button runs `claude '/bb-sync <id>'` in Windows Terminal (`syncDryRun` prints it instead); `core/` has no `electron` import (R-28). 535 unit + 19 e2e tests; `/code-review main high` 10 findings fixed (brief §Round 2), `/security-review` none ≥ 8/10; zero changes under `web/`; no migrations. Notes: `80a`, `80b`, `80d`. ~~**Not yet proven, only Stack can:** real Windows toasts, a real `wt.exe` sync run, the clipboard copy inside the shell, staying signed in after hours in the tray.~~ **Proven since (2026-09-24):** a real `wt.exe` sync run (request 39 → `sync_runs` 62, 2026-09-23; `syncDryRun` false since 2026-09-22) and staying signed in hidden in the tray (19.5 h and 17 hidden-window reloads, `main.log` 1079–1359); Windows received the toasts (12 "showed toast" lines, Action Center). **Still Stack's (R-108):** seeing a toast and clicking one, and the clipboard copy inside the shell. ~~Carried to 12b: `web/src/lib/supabase/proxy-session.ts` drops refreshed auth cookies on its two redirect branches; low-priority hardening: police `will-redirect` / `will-frame-navigate`~~ Both fixed in 12b (P-shell-1 `81ac532`, P-shell-2 `493c4a0`, PR #20) |
 | 13 | Styling pass | `docs/planning/sprint-2/parked/81_PHASE13_styling.md` | **skipped** (Stack, 2026-09-22: more development phases first); its carry-ins C-1..C-3 (phone-width overflow, rank weights shown per exam, favicon) stay parked in the brief |
 | 12b | Fine-tooth-comb pass over every page and feature | `80c_PHASE12B_page_pass.md` | **MVP merged** (PR #20, 2026-09-17; migrations 073–079, 084–087 live; gates run; PM walk in `80d`); **tail merged** ([PR #22](https://github.com/emstacho-su/bb2dash/pull/22), 2026-09-21: T-1 recurring events + T-2 popover and assignment page; migrations 082–083, 088–089 live; walk in `80o`); v4 proof sync **done 2026-09-22** (request 34: 26 attempts, 55 gradebook columns, 21 auto-graded); P-data-1 deferred, P-db-3 declined |
-| — | Inbox feedback loop, automation half (`/inbox-apply`, Apply answers button) | `skills/inbox-apply/SKILL.md` | **merged** (PR #23, 2026-09-22; migration 090 live; Inbox 0 open / 134 archived at merge; 2026-09-24: 0 open, 138 archived, 4 in `v_inbox_queue` — 541–543 dismissed, 544 answered) |
+| — | Inbox feedback loop, automation half (`/inbox-apply`, Apply answers button) | `skills/inbox-apply/SKILL.md` | **merged** (PR #23, 2026-09-22; migration 090 live; Inbox 0 open / 134 archived at merge; 2026-09-24: 0 open, 138 archived, 4 in `v_inbox_queue` — 541–543 dismissed, 544 answered). Counts since Phase 17 are read from `/inbox-apply`'s runs, `v_inbox_queue` (answered, not yet applied) and the decisions store (vault collection `bb2dash-inbox-decisions`, 145 notes on 2026-09-30, each with `decided_by`) |
 | 14 | Containers (R-28): every local process in Docker | `docs/planning/sprint-2/82_PHASE14_containers.md` + `docs/planning/sprint-2/research/82_RESEARCH_phase14_R1…R6` | planned 2026-09-16; **sprint 2 candidate** — Stack decides its place in the sprint 2 list; migration range 091–099 |
 
 **MVP, definition of done, task loops (2026-09-14, PR #11):** every remaining phase and stream
@@ -573,9 +2712,261 @@ catalogue row are invisible; the pull step uploads with the publishable key); `b
 `bb_attempts` owner-only, stage functions `service_role` only; `grade_scenarios` /
 `grade_column_links` owner-only with the initplan-safe `(select auth.uid())` form, the three model
 views `security_invoker` and revoked from anon (`/security-review` of Phase 10b: no findings).
-Remaining advisor items: ~~7 pre-existing mutable `search_path` functions (`set_updated_at`, `classify_bb_file`, `bb_file_relpath`, `suggested_start`, `search_file_text`, `match_file_text`, `hybrid_search_file_text`)~~ — **fixed by `101_search_path_pin` (Phase 15): the advisor lists 0, and `db/tests/phase15_101_search_path_pin.sql` keeps it there, since its guard (a) raises if any non-extension `public` function loses its pin**; two SECURITY DEFINER functions callable by `authenticated` (`app_owner`, accepted 2026-09-10; `calendar_push_now`, accepted 2026-09-27 with its own DECISIONS row), and Auth's leaked-password protection off (a Pro-plan feature; the org is on Free; accepted 2026-09-27 with its own row; signups were disabled 2026-09-10 per Stack); the 21 `auth_rls_initplan` warnings were fixed by 076. **Accepted INFO (R-80): 15 unindexed foreign keys, 3 unused indexes** (`announcements_fts_idx`, `bb_content_fts_idx`, `bb_text_embeddings_hnsw`), each with its reason in the 2026-09-27 DECISIONS row; `bb_attempts_sync_run_idx` was the fourth until Phase 15's own suite runs scanned it, which is the row's evidence for keeping indexes that cover a foreign key.
+Remaining advisor items: ~~7 pre-existing mutable `search_path` functions (`set_updated_at`, `classify_bb_file`, `bb_file_relpath`, `suggested_start`, `search_file_text`, `match_file_text`, `hybrid_search_file_text`)~~ — **fixed by `101_search_path_pin` (Phase 15): the advisor lists 0, and `db/tests/phase15_101_search_path_pin.sql` keeps it there, since its guard (a) raises if any non-extension `public` function loses its pin**; two SECURITY DEFINER functions callable by `authenticated` (`app_owner`, accepted 2026-09-10; `calendar_push_now`, accepted 2026-09-27 with its own DECISIONS row), and Auth's leaked-password protection off (a Pro-plan feature; the org is on Free; accepted 2026-09-27 with its own row; signups were disabled 2026-09-10 per Stack); the 21 `auth_rls_initplan` warnings were fixed by 076. **Accepted INFO (R-80): 16 unindexed foreign keys (15 in the 2026-09-27 row; the 16th, `bb_material_history_bb_file_id_fkey` from Phase 19's 132, accepted 2026-10-03 with its own row), 3 unused indexes** (`announcements_fts_idx`, `bb_content_fts_idx`, `bb_text_embeddings_hnsw`), each with its reason in the 2026-09-27 DECISIONS row; `bb_attempts_sync_run_idx` was the fourth until Phase 15's own suite runs scanned it, which is the row's evidence for keeping indexes that cover a foreign key.
 
 ## Known issues / operational notes
+
+* **A machine's first start of the two ingest services builds their one image by the worker's name first**
+  (`docker compose build workspace-ingest`, then `up -d workspace-extract`, then `up -d workspace-ingest`):
+  `up -d --build workspace-extract` with no image on the machine asks Docker Hub for it and is refused, since the
+  parser service has no build of its own. Seen at the cut-over of 2026-10-15; every later restart keeps the
+  documented order, the parser first (DECISIONS 2026-10-15).
+* **The AI-use policy is cut from every text unit on write (2026-10-14, on Stack's word; migration 165).**
+  On 2026-09-29 Stack had the course AI-use policies taken out of the app and the search corpus (119 cut
+  eight units by hand). The new IST.323 syllabus v1.5 (file 3736, unit 1250, pulled once the file store
+  was allowed) brought one back, and the guard unit `phase17_119_no_ai_policy` failed as designed. Stack:
+  "Strip it now and automatically". `strip_ai_policy(text)` removes, line by line and with the guard
+  unit's own patterns, a policy line, or a policy heading with the long lines after it up to the next
+  short line; text with no match is untouched, and a unit left empty keeps the line
+  `[AI-use policy section removed]`. A BEFORE INSERT OR UPDATE trigger on `bb_file_text` applies it to
+  every writer (the sync, the Windows fallback, a hand insert); an AFTER UPDATE trigger drops a changed
+  unit's embeddings so it is re-embedded. The one-time pass cut unit 1250's one paragraph (257 characters);
+  119's units are untouched. Under-cuts rather than over-cuts: a section ends at the first short line.
+* **A Blackboard file whose link redirects to another site is saved as a link (2026-10-14, on Stack's
+  word; branch `fix/redirect-outside-links`, migration 164; NOT on `main` or prod until his merge word).**
+  Since 2026-10-12 the syncs have not pulled five readings (files 3711, 3712, 3713, 3730, 3731): the
+  sync's downloader refused each with "redirect target is not followable (origin or scheme)". It was not
+  the login (the apply worker's reading of request 5089, confirmed: those syncs were signed in). Stack's
+  rule: when the bytes cannot be pulled and the link redirects to another site, save it as a link and raise
+  no error; with no redirect, flag it. His answers: a redirect to a Blackboard host that is not on the
+  allow-list stays flagged with the host named (that is Blackboard's own file, and its bytes are owed);
+  the migration is 164. What is built: `classifyRedirectTarget` in `ingest/fetch_signed.mjs` (outside site,
+  Blackboard host, unusable), a new outcome `offsite`; the target is still never requested. The sync saves
+  it through `sync_file_outside_link` into the new column `bb_files.outside_url`; the file leaves the pull
+  list, raises no storage_path gap (an open one closes), and Materials shows "Outside link" opening it. The
+  report line reads "Files: N pulled, M saved as links, K not pulled". `sync_runner` executes fifteen
+  functions now. `v_bb_files_current` is re-created so it carries `outside_url` (and `attempt_id`). What is
+  still unknown at the build: where the five redirect. **Live 2026-10-14** (#98 `926e8e6`, 164 on prod
+  20:53Z, version `20261014205334`, byte-identical, test fix #99, classifier fix #100 `a5a1c73`; `sync` rebuilt
+  alone twice, login kept). **Sync 5371 answered it: all five, and the new IST.323 file 3736, redirect to
+  `prod02-use1-prod02-xythos.prod.files.blackboard.com`, Blackboard's own file store.** So they are not
+  outside links and stay flagged, now with that host named; 3713 answers 404. **Then, on Stack's word
+  ("continue"), branch `fix/file-store-allowlist`:** Blackboard's file store, `*.prod.files.blackboard.com`
+  (narrowest pattern seen; never `*.files.blackboard.com` or `*.blackboard.com`), joins the CDN as a signed
+  host (`SIGNED_HOST_SUFFIXES` in `ingest/fetch_signed.mjs`). A signed host is downloaded from without
+  cookies and is never requested by the logged-in walk, so the Blackboard session still goes only to
+  Blackboard's own origin; a signed host must now also be https. If the file store refuses a cookie-free
+  download, the files stay flagged and nothing is widened further without Stack. `phase18_post_embed_checks`
+  fails on these six until they are pulled.
+* **Phase 24a: the retrieval eval reads 8 of 9, and the miss is the golden set's.** Case 7 of `ingest/eval/golden_set.json` names files 149 and 967; 149 was replaced by 2509, and 967 by 2640 and then 2773. The search hides a replaced file and returned 2509 and 2773 among case 7's hits. It is the same stale truth as `phase18_golden_truth.sql` below. `ingest/` was nobody's in Phase 24a, so the file is not edited.
+* ~~**Phase 24a: `phase15_101_search_path_pin.sql` reads red on `main` for one function of the Phase 23 follow-ups**, `inbox_accept_question()` (their 187).~~ Closed: the SQL-units audit of 2026-10-09 put it in the list, and the unit reads PASS on prod from the merged branch on 2026-10-14.
+* **Phase 24a: the ingest image's first build was blocked on 2026-10-08 by the laptop's network** (inside any fresh container `http://deb.debian.org` was answered from 158.115.141.246:443 with an untrusted certificate, so `apt-get update` failed; a certificate failure is not worked around). **Closed:** the network no longer intercepted on 2026-10-09, the image was built that day, P-11 passed in the parser's container then, and P-7 passed in the walk of 2026-10-14. If it intercepts again, the image is built on a network that does not.
+* **`sync/test/integration.test.ts` is load-sensitive** (first seen 2026-10-14 in Phase 24ab's third merge of `main`): its end-to-end replay waits a fixed 5,000 event-loop turns for the first pass to close, while the pass reads files from disk; with another suite running beside it the wait ran out in three of five full runs, and it passed every time alone or on a quiet laptop. Phase 14's test, unchanged by 164 or 24a; a deadline in time instead of turns is a one-line follow-up, nobody's yet.
+* **Phase 24a: the runner's similarity floor (0.81 since 2026-10-14) has a thin margin on both sides.** Invented words have scored 0.818 (September) and 0.804 (October) on this corpus; the golden set's weakest best hit is 0.837. A changed corpus may move the floor again: `node workspace/scripts/eval-floor.mjs` re-measures (the key file's path from `SUPABASE_SERVICE_ROLE_FILE`; it prints counts and similarities only). The materials server's own default stays 0.78, so the MCP tools of a Claude session can still answer gibberish with a hit; that is the September rule, unchanged.
+* **Phase 24a, recorded by the reviews and not changed.** A runner's name is its own word, so "one document at a time" and "one job at a time" hold per name for a holder of that login. `workspace-embed` answers any holder of the public anon JWT, as `embed-corpus` does: it embeds a document by id and tells an id that exists from one that does not, and returns no text. A full-size prompt costs about 0.35 on Opus by the CLI's own estimate before a word is answered, inside the 0.95 answering cap. With thinking off, the planning turn sometimes names course files alone where the question is about an earlier conversation; the check is on a plan's shape.
+* ~~**A fourth SQL unit fails on prod's course data from any checkout: `phase18_123_file_sessions.sql`** (first read 2026-10-09, in the follow-ups' dry runs).~~ Corrected as the unit's own fault by the SQL-units audit of 2026-10-09 (`verification/115_SQL_UNITS_AUDIT_2026-10-09.md`, on `main`); kept here only because Phase 24a's section once named it.
+
+* **The scheduled export tries again when there is no network yet (2026-10-09, on Stack's word; branch
+  `fix/exports-network-retry`).** Twice on 2026-10-09 the task `Bb2dash-Exports` ran right after a logon
+  or a wake, before the network was up, and failed with "the request did not reach Supabase: fetch
+  failed" (11:56Z and 17:24Z); `just doctor` showed a problem until someone started the task by hand.
+  Now the exporter exits **3** when no request of its run was answered (nothing read, nothing written),
+  and `scripts/exports-run.mjs` waits and starts it again: after 15 s, 30 s, 1, 2 and 4 minutes, six
+  tries at the most. One deadline holds the whole run, 14 minutes 30 seconds from its start (the task is
+  killed at 15, and a killed run writes no state): each start gets what is left of it, and no try is made
+  with less than 30 seconds left. An exit 3 without the result line that says 3 is not tried again. A run that never gets through is
+  exit 1 with the reason `no_network` in `state.json` (a new value of `reason`; the keys are unchanged).
+  Every other failure is still one start. **Live only once the shared checkout on `main` holds it**: the
+  task runs `scripts/exports-run.mjs` from there, so nothing is re-registered. bb2dash-stack's doctor
+  prints the new reason word from its own PR; without it the row reads "exit 1" with no word.
+* **The SQL units that failed on `main` were audited on 2026-10-09**
+  (`docs/planning/sprint-2/verification/115_SQL_UNITS_AUDIT_2026-10-09.md`; eleven of 81 failed). Six were the
+  units' own and are corrected: `phase18_123_file_sessions` (an archived answer settles a session question, as
+  migration 163 has it), `phase18_122_supersede_rule` (it pinned file ids of a document the course re-posts; it
+  now follows each file's supersession chain), `phase18_golden_truth` (its Q7 asked for a date in that re-posted schedule; on Stack's
+  word it is replaced by a question answered in two single-version IST.466 documents, files 21 and 39, so the
+  unit no longer goes stale; it stays strict and names the replacing file if a truth file is ever superseded),
+  `phase16_106_v1_recheck` (one recheck
+  counted every 10-point quiz, not the five its verdict names), `grading_invariants` check D (a column placed by
+  the "Counts toward…" picker is placed) and `phase15_101_search_path_pin` (187's `inbox_accept_question`).
+  **With Phase 24a's port (PR #86) merged in and migration 107 applied, two units still fail, both truly:**
+  `phase18_post_embed_checks` (file 2851's units are not embedded yet, below) and `phase23_188` until the
+  follow-ups' cut-over. **Since the cut-over (188 on prod, 2026-10-09 04:30Z) it was 81 of 82, and since the embed of file 2851
+  later that day it is 82 of 82: no unit fails.** The older bullet below, "Three SQL units fail on prod's course data", is answered by
+  this one.
+* **File 2851 is embedded since 2026-10-09 about 12:00Z, on Stack's word ("I am allowing you to run 2"):**
+  `node ingest/embed_corpus.mjs --check` read `missing_parts_before=19`, the run embedded 19 parts in seven
+  calls, and the check then read 0; `phase18_post_embed_checks` passes. What follows is how it came to need
+  that. **File 2851 has text since 2026-10-09, by OCR; its nine units were not embedded at first** (found by the audit;
+  115, "Stack's second word"). It is a scan: nine pages off a copier, no text layer, in ECN.304's readings,
+  pulled by sync 2519 on 2026-10-08. The extractor rightly found nothing and marked it `failed`; the sync's line
+  was "Files: 3 pulled". On Stack's word ("Fix phase 18 as well") the PM read it by hand as file 68 was: OCR on
+  the laptop (RapidOCR, English, 19,422 characters), posted as nine `bb_file_text` units through the public
+  insert the sync uses, `text_status` set to `extracted` with a note. **The embed step did not run**: the PM's
+  session was refused the call. Until `node ingest/embed_corpus.mjs` has run once (with `SB_ANON_JWT`), the
+  file is found by keyword search and not by meaning, and `phase18_post_embed_checks` fails on check (c) for
+  units 1168 to 1176. A sync that says so when a pulled file yields no text is a follow-up for whoever next
+  changes `sync/src/files.ts` (Phase 24a is in that file now).
+* **Fixed 2026-10-09 by migration 107: `v_gradebook_latest.counts_toward_grade` now follows the "Counts toward…"
+  picker** (found by the audit; 115, section C). It read `assignments.component_id` alone, so GEO.103's two
+  attendance columns that Stack marked "Not graded" were still listed among the Grades items, and its Exam 1
+  column, which he placed on "First Exam", read false. 107 is on prod (04:22Z, byte-identical, SHA-256
+  `5b00206c...446a6c`): for an item or attendance column the flag is false under a "Not graded" link, true
+  under a link to a component, and otherwise what it was. Exactly those three rows changed. The apply worker's
+  role gained select on `grade_column_links`, and nothing else, because the view reads that table with the
+  caller's rights. The picker's write now also refreshes the gradebook query (`web/src/lib/queries.grade-model.ts`),
+  so a column moves at once; that half is live with the next web deployment.
+* **Phase 23 follow-ups, known and left** (section "Phase 23 follow-ups", "Known, and said plainly"): migration
+  187 is 940 lines; its comment on `inbox_apply_close` is one condition too broad; a press whose first six
+  answers all fail does not reach a held seventh; a failed scheduled export shows on `just doctor` only.
+* **The top bar between 721 px and its idle width (Phase 21, then Phase 22).** Measured on 2026-10-05 on a static
+  rebuild of the bar, it was 851 px idle with "Workspace" and up to 974 px with the longest Sync label. Phase 22
+  folds the links into Menu at 720 px, caps the Sync label at ≤1023.98 px and shows its icon only at ≤480 px, so the
+  unfolded bar with search collapsed is 815 px idle (`BAR_IDLE_WIDTH`, from the phone-width run's `unfolded bar at
+  721` line) and the desktop window's minimum is 960 px (815 plus the three window buttons' 138, rounded up; task
+  27). A browser window between 721 px and 815 px still scrolls sideways to the bar's end, and at 800 px the Account
+  icon is cut by the window's edge; recorded in `walks/walk-22/WALK.md` as taste call T-12, not fixed (brief 103,
+  §Out of scope).
+* **Three SQL units fail on prod's course data from any checkout, `main` included** (first read 2026-10-06; on
+  2026-10-07 the whole suite reads `passed 67, failed 3, units 70` on the Phase 21 branch). None reads a Workspace
+  object and none is Phase 21's to fix; they are put to Stack. `grading_invariants.sql`: `GEO.103.lecture/exam-1` and
+  `IST.352/project-assignment-8-context-level-0-and-activity-diagrams` have no grade component.
+  `phase18_122_supersede_rule.sql`: the newest run (fcf9d587) wrote the 4 supersede links the unit counts, but three
+  of them point at newer files than it expects (`74->2509`, `150->2640`, `162->2640`, where it expects `74->149`,
+  `150->967`, `162->967`). `phase18_golden_truth.sql` (Q7): files 149 and 967 are no longer current, and 2509 and
+  2640 are not in its truth set. The last two went stale when a later sync superseded files 149 and 967; the first
+  is two assignments with no component.
+* **`web/test/hydration-harness.tsx` prints React's act warning** ("The current testing environment is not
+  configured to support act(...)") in the hydration test files, under the verbose reporter: it calls React's `act`
+  in a suite where `IS_REACT_ACT_ENVIRONMENT` is never set. No test fails on it. Found by Phase 21's web worker; not
+  that phase's to fix.
+* **The Workspace image stores the Claude Code CLI twice** (Phase 21). The layer that copies the CLI is 492 MB for
+  about 250 MB of files, because the copy did not keep the package's link. The image (1.66 GB) works either way;
+  kept for v1.
+* **Workspace: the last try at saving a finished answer can land a few seconds after the database's 10-minute
+  claim** (Phase 21, PM ruling Y1 in 102a). The runner keeps trying to save an answer for 110 s, counted from its
+  first try and not from the turn's start. If the database connection was dead when the turn was stopped at 8
+  minutes, the last try can come about 8 s after the claim runs out. Harmless with one runner: the sweep that would
+  release the request runs only when the runner itself asks for the next question, and a save that does arrive late
+  is refused (22023) and logged. If a second runner is ever added, the fix is to count the deadline from the turn's
+  start.
+* **Workspace: the page keeps a wall-clock fallback it can no longer reach** (Phase 21, finding R2-7 of the range
+  review, PM ruling Z2 in 102a). The page decides "offline" from `polled_age_seconds`, the database's own count,
+  which migration 143 added to `v_workspace_status`. For a status row that lacks that column it still falls back to
+  comparing the browser's clock with `polled_at` (`web/src/lib/queries.workspace.ts`, `ServiceStatus.tsx`). That
+  bridge let the preview work on both sides of the apply; with 143 on prod since 2026-10-07 the row always carries
+  the column, so the fallback cannot run. Harmless. Removing it is a follow-up.
+* **Workspace: the health check through an answer longer than 90 s has not been shown live** (Phase 21, task 21
+  (d); PM rulings W-R and W-S in 102a). The container counts as healthy while the runner has reached the database
+  within the last 90 s, and the runner keeps doing that while it works on an answer. The PM's walk tried twice to
+  read the container 60 s and 120 s into one answer. The longest answer it got ran 76.75 s (request 400, Opus): at
+  61 s the container was healthy and the last heartbeat 2 s old; at 120 s the answer was already done, so that
+  reading does not count. An answer that runs past the 90 s window has therefore never been watched live. The
+  runner's tests hold it on a fake clock.
+* **Workspace: an answer can come back with Markdown symbols (W-3). Since 2026-10-07 the page strips a closed pair
+  of bold markers, `**like this**`, on Stack's ruling; any other symbol (a `#` heading, a backtick, a lone `*`)
+  still shows as typed** (Phase 21,
+  the PM's walk; ruling W-R in 102a). One answer of the first sitting's nine, the decision lookup that is
+  acceptance step 4's question, had three lines wrapped in `**` (shot `04-decision-haiku.png`). None of the second
+  sitting's three had any. The page shows text as typed by decision (O-5), and the system prompt already asks for
+  plain text (`workspace/prompts/system.md`). Put to Stack: strip the emphasis markers on the page, press the
+  prompt harder, or leave it (section "Phase 21").
+* **Workspace: the "Used:" line names only what that turn called** (Phase 21, the walk's independent checks). In
+  one conversation the assistant still holds what it read in earlier turns. The walk's Opus answers cite Inbox
+  decision notes 538 and 545, and their "Used:" lines name no notes search: the notes reached the model in an
+  earlier turn of the same conversation. A stopped answer began from decks "read in full for your last request"
+  and its row stores no tool call. The line is true to what the turn called, and can be less than what the answer
+  drew on.
+* **The app shell was 1 px taller than its window on every screen** (seen in Phase 21's walk; ruling W-S in 102a).
+  Gone with Phase 22's task 26: the shell is exactly the window's height and the content pane scrolls by itself
+  (the 31 `frame-scrolled` cases of the theme walk assert the document is as tall as the window and no taller),
+  and since task 38 every box that scrolls, the Workspace's message column among them, shows the app's own
+  scrollbar (seen in the desktop look, `walks/walk-22/WALK.md` section 5).
+* **Two notes from Phase 22's walk box, harness not product:** `web/e2e/login.mjs` prints a raw error when the
+  sign-in service stalls (three cases bounced to `/login` in one run of 2026-10-09 for it), and the box reads a
+  container exit of 137 as a signal and writes "interrupted". Neither changed the counted runs of 2026-10-14.
+* **One refused read (401) of `agent_requests` on the first page load after a fresh sign-in** (seen once in each
+  sitting of Phase 21's walk, on the first Playwright run after `login.mjs`; no later run had one). It is not a
+  Workspace read. Why the first load after a sign-in is refused once was not looked into.
+* **Workspace: recorded by the review of the range and not changed** (Phase 21, findings R2-3, R2-4, R2-6 and R2-8
+  to R2-11, all LOW; PM ruling Z2 in 102a). R2-6: the sweep that finishes an answer row its closed request left
+  behind (migration 143, inside `workspace_claim`) runs on every poll with no index that narrows it to unfinished
+  assistant rows. The tables are small; a partial index is migration 144's if history ever makes the sweep cost.
+  R2-3: an allow from the gate is not used up when its own call errors, so a later call of the same tool with no
+  gate answer would pass the count; only a CLI that skips its own hook reaches it. R2-4: a 22023 on
+  `workspace_begin`'s first try is read as "not claimed", but the function raises 22023 for a tier or provider off
+  its list too; it takes the route table and the database to disagree, and the request then waits for the
+  10-minute sweep. Revisit when a second provider is added. R2-8 to R2-11 are cleanup and style, not behaviour.
+* **Workspace: three corners of the runner's fix round Z, recorded and not changed** (Phase 21, PM ruling Z3 in
+  102a). (1) A NUL in the model id, or a lone surrogate (half of a two-part character) in a tool call's text, is
+  refused by the database once and the request is then closed plainly, so that one answer is not stored. One line
+  each would save it. (2) `isStatementError('EPIPE')` reads true, so a database call that fails with that code
+  keeps its broken connection until the watchdog restarts the runner. (3) A Stop or a shutdown that lands in the
+  10 s the CLI gets to exit after its result still stores the answer as `cancelled` or `stale_claim`.
+* **Workspace: the runner does not log the plan's usage figures** (Phase 21, ruling W-R in 102a). The CLI reports
+  the session and weekly usage in a rate-limit line on its output. The runner reads that line to know when the
+  plan's limit is hit, and neither logs nor stores the figures. So the percentages are Stack's own read (`/usage`).
+  Logging the two figures, one line per turn, is a follow-up.
+* **Four corners the third code review recorded, not fixed** (102a, R3-2, R3-4, R3-6, R3-9). (1) If the CLI ever
+  wrote two closing `result` lines, one before the runner's stop and one after, a complete answer would be
+  stored as timed out; no recording shows a CLI doing that. (2) On a cold load of a long chat the text can
+  re-wrap when the web font arrives, and a reader sitting at the end is moved by that small amount up to 30 s
+  later. (3) After a refused finish and its plain close, the runner's own promise still reports the ending it
+  meant, not the one stored; nothing reads it. (4) The health file's age is read on the wall clock, so a clock
+  stepped back could show a hung runner as healthy for that long; health restarts nothing.
+* **Phase 21's walk spec runs only when switched on.** A plain
+  `npx playwright test -c e2e/playwright.config.ts walk21` reports its 19 tests skipped and writes nothing. The
+  walk needs `WALK21=1`; a test that spends a live turn also needs `WALK21_LIVE=1` and `WALK21_ONLY` naming it
+  (`web/e2e/walk21.lib.ts`). The kept `02-empty.png` is the first sitting's.
+* **The harness checkout's installed `node_modules` still holds fastembed 2.1.0** under a lock file that says 2.1.1
+  (`C:/Users/stack/agentic-harness/mcp-server`, since harness PR #40 merged on 2026-10-06). The host's `rag` server
+  keeps working: the model already on disk stays valid either way. `npm ci` in that folder brings it level; it is
+  Stack's to run or to ask for. The Workspace image is not affected: it installs 2.1.1 itself when it is built.
+* **File 2489 (GEO.103 reading, a curly apostrophe in its name) was refused by Storage with `InvalidKey` on every
+  sync of 2026-10-05** and sits in Inbox item 3441 (DECISIONS 2026-10-05; [PR #75](https://github.com/emstacho-su/bb2dash/pull/75)).
+  Migration 095 is live; the container pulls the file once its image is rebuilt (`just up` from `bb2dash-stack`,
+  never while a sync is open), and the gap item should close itself. Until then every sync reports it under
+  `not_pulled`. The web drop zone still uses the raw file name as its Storage key (deferred list).
+* ~~**A file whose name carries a non-ASCII character is never pulled** (found 2026-10-05 on sync 1297 / request 1856: file 2489;
+  `storageKeyFor` replaced only `#`, and Supabase Storage validates the decoded key against an ASCII word-and-punctuation set).~~
+  Fixed by [PR #75](https://github.com/emstacho-su/bb2dash/pull/75) and migration 095; the bullet above carries the rollout.
+* **No daily sync ran on 2026-10-05 until Stack pressed Sync:** the container's login watch asked for the day's sync only on
+  entering alive, and the keep-alive held the login all night (DECISIONS 2026-10-05; fixed by [PR #73](https://github.com/emstacho-su/bb2dash/pull/73),
+  live once the `sync` image is rebuilt with `just up` from `bb2dash-stack`, never while a sync is open). After it, the
+  daily call comes on the first alive check at or after 06:00 New York; a failed first sync of the day is not re-asked
+  automatically (Stack presses Sync; the failure shows in Activity).
+* **A file whose name carries a non-ASCII character is never pulled** (found 2026-10-05 on sync 1297 / request 1856: file 2489,
+  GEO.103's week-7 reading "Musk’s AI Fuels Pollution in Black Memphis Neighborhood - Capital B News.pdf", Storage
+  `400 InvalidKey` for key `GEO.103.lecture/readings/week-07/Musk’s AI ….pdf`). `storageKeyFor` in `ingest/pull_files.mjs`, shared
+  by the skill and the container runner (`sync/src/files.ts` imports it), is the catalogue's `relpath` with only `#` replaced
+  (`safeBasename` cleans the scratch download name, not the key), and Supabase Storage validates the decoded key against an
+  ASCII word-and-punctuation set, so the curly apostrophe (U+2019) is refused on every sync and the report says "1 not pulled"
+  each time. Fix owed: map the key onto Storage's allowed set in `storageKeyFor` (one PR in `ingest/`,
+  exercised by `sync/`'s tests), then the next sync pulls it.
+* **Both desktop update buttons were dead from 2026-09-30 until [PR #71](https://github.com/emstacho-su/bb2dash/pull/71)**
+  (section "Desktop update helper"): the detached PowerShell never ran. Until the fixed build is active, a press still logs
+  "helper started" and quits without swapping; the way to a newer build is a tray Quit followed by the logon-build task
+  (or a logon). Separately, the login-triggered run 2e2300a8 reads `trigger = scheduled` because migration 136's tick
+  labels every fold it performs `scheduled`; the request row's `params.trigger` holds the truth (`login`). An
+  Activity-label follow-up for Phase 14's deferred list, not a defect.
+* **Phase 19 (2026-10-03): a sync whose data folded but whose session died before closing its request stays
+  `claimed`**, so the Sync button keeps reading "syncing…". The 30-minute terminal rule covers only crawls that never
+  completed; a cut-off for this case would close a legitimate long file pull. Left for Phase 14's runner and
+  `sync_close` (DECISIONS 2026-10-02, terminal-rule row). If it happens: close the request by hand after checking its
+  file pull finished.
+* ~~**Request 456 (`inbox_feedback`, `queued` since 2026-10-01 18:02:53Z; the earlier note said it predated 116, which was applied 2026-09-29) is the one open `inbox_feedback` row** and is what the Inbox footer's "✓ queued"
+  shows. Not Phase 19's; left for Stack to cancel or for the phase that owns the Inbox.~~ Cancelled 2026-10-04 01:21Z on Stack's word ("cancel request 456"), superseded by request 458, which applied the same answers on 2026-10-01 (DECISIONS 2026-10-04); no `inbox_feedback` request is open.
+* **The live "Sync interrupted" desktop toast is unproven:** the desktop runs the post-Phase-19 build since 2026-10-03 22:41:59Z (`main.log`: `origin/main is the running build cc80307`), but no sync has been interrupted since; the reducer and
+  poller are unit-tested (708/708). The next interrupted sync shows it.
+* ~~**`web/package-lock.json` is out of sync with `package.json` on `main`** (found 2026-09-29 by Phase 16's
+  W-43): `npm ci` fails on a fresh cut (missing `@emnapi/runtime` / `@emnapi/core` 1.11.3); workers ran `npm install`
+  and restored the lock. Needs its own fix PR; not Phase 16's file.~~ Fixed on `main` by 2026-09-30 (Phase 17 merge): `npm ci` passes.
+* **PowerShell refuses repo `.ps1` scripts on `stack-laptop` by default** (execution policy `Restricted`). Stack set
+  `CurrentUser` to `RemoteSigned` on 2026-09-29; `node scripts/validate-grading.mjs <COURSE>` works without it.
+* ~~**Slide 13 of IST.323's course-intro deck (`bb_file:8`) is missing from the extracted text** (slides 12 and 14
+  exist); found by Phase 16's spot check. ~~An extraction gap for Phase 18.~~ Phase 18 merged without it (2026-10-03 audit); it rides the crawler PR that finishes Phase 18's task 19.~~ Not a gap: migration 119 (Phase 17, 2026-09-29) deleted that unit on purpose, because slide 13 is the course's AI-use policy and nothing else (119's header, item 2), on Stack's call to strip the AI policy from the corpus; the V-1 sitting cited it the same day. Nothing to re-extract (DECISIONS 2026-10-04).
+* **A checkout whose `web/node_modules` predates Phase 17 fails `npm run typecheck` with 124 errors, every one downstream of `Cannot find module '@playwright/test'`** (found 2026-10-03 23:00Z in the main checkout; `npm --prefix web ci` fixed it, 0 errors). Not a code defect: after any merge that changes `web/package.json`, run `npm ci` in every checkout that runs the gates. The same evening's SQL suite from the main checkout read `passed 58, failed 1, units 59`: the FAIL is `phase15_100_db_test_runner_role.sql`, whose expected membership list lacked the `sync_runner` that Phase 14's migration 094 (live 2026-10-03 21:01Z) added ahead of its PR; the branch's one-line change is ported byte-identical to `main` in [PR #65](https://github.com/emstacho-su/bb2dash/pull/65) (DECISIONS 2026-10-03), so the suite reads 59/59 once it merges and Phase 14's merge sees no diff in that file.
+* **Phase 14's container runner is live against prod since 2026-10-03 22:52Z** (its own session; `docker compose up -d sync` from `feat/containers-14`, image `bb2dash-sync:local`): `sync_next()` returns every queued `sync`, so while the container's Blackboard login is dead (Inbox item 3074 `sync-login-required` was open from 23:00:37Z until 23:17:38Z, when the runner's next passing login check archived it with `closed_itself: true`, trigger `sync_login_ok`: R-83's self-close, seen live; Stack signed in again through noVNC afterwards) the runner closes a queued request as `login_required` in about 25 s and a desktop Sync press under the default `terminal` launcher fails. The Windows path works again once Stack signs in through noVNC, or when the `sync` service is stopped between proofs. Its result shape (`{files:{pulled, not_pulled[]}, lines, claim_attempts}`) differs from the skill's `files_pulled` / `files_not_pulled` until the cut-over.
 
 * **Desktop shell at logon (2026-09-29, PR #31).** On `stack-laptop` the shell is built and started by
   `desktop/launch/` (see its README): `Bb2dash-LogonBuild` fetches `origin/main`, launches
@@ -595,7 +2986,7 @@ Remaining advisor items: ~~7 pre-existing mutable `search_path` functions (`set_
   day (`mcp-server/README.md` §Setup: `.env` written by Stack in PowerShell, smoke all checks passed, `claude mcp list`
   → Connected), so Phase 16's sittings can start. The runner password was rotated once that day after an
   `alter role` line was saved in the SQL editor by mistake (walk 95w step 1 re-run; the old password is dead). The Google consent screen stays in Testing by Stack's choice
-  (2026-09-29): the token minted 2026-09-24 17:02:50Z dies about 2026-10-01 17:03Z, and he re-mints with
+  (2026-09-29): the token minted 2026-09-24 17:02:50Z died 2026-10-01 18:45Z (308 failed push runs until his re-mint about 2026-10-02 05:00Z; the next expiry was about 2026-10-09 05:00Z, and the token died 2026-10-09 12:23Z: Known issues, "Calendar token, third death"), and he re-mints with
   `scripts/google-consent.mjs` then (DECISIONS 2026-09-29). Task 0's probes run through Claude in Chrome; the record is
   `docs/planning/sprint-2/verification/82b_NOVNC_SPIKE.md`.
 
@@ -630,7 +3021,8 @@ Remaining advisor items: ~~7 pre-existing mutable `search_path` functions (`set_
   name the real keys; the candidate lists in `bb_crawler.js` are then cut to one name each
   (`66_W17_VERIFICATION.md` §10). (Superseded: `bb_attempts` is populated. Not cut, and should not be:
   both `submitted` candidate names are live, 3 of 26 attempts use the second; attempt feedback arrives as
-  `feedbackToUser`, which the mapper does not read — 2026-09-24.)
+  `feedbackToUser`, which the mapper does not read — 2026-09-24.) Crawler v5 (Phase 18 task 5) reads `feedbackToUser`
+  first; proven on the live v5 crawls (12 attempts carry feedback text on 2026-10-04; column `_3610995_1`'s in six runs). **Cut on 2026-10-04 (Phase 18 task 19, the crawler PR):** feedback reads `feedbackToUser` alone (the `{rawText, displayText}` form seen live; the plain-string form accepted by R-66, not yet seen), there is no file-size list (Ultra sends none; bytes come from the pull), both `submitted` names stay, and `studentComments` keeps its one never-seen name so the envelope's shape holds; `CRAWLER_VERSION` stays 5 (DECISIONS 2026-10-04, R-66 and R-75). **Round 2 (PR #68's code review, merged the same day):** file `id` keeps `['id', 'bbFileUuid']` and `name` keeps `['name', 'file.fileName']` (both names real on every live entry, so a blank display name or a missing `id` no longer loses the file); `strip()` flattens only a string half, never an object, and `studentSubmission` is read string-only like feedback, so `[object Object]` can never reach `raw`; the header keeps the rule and points to DECISIONS for the numbers (861 lines again).
 * Mirrored scores are stored `numeric(9,3)`: ECN.304 Attendance ~~83.33333 renders as 83.333 (one
   value of 45)~~ 88.88888 renders as 88.889 (2026-09-24: the only rounded value among 27 scored of the
   58 latest columns, plus 1 of 47 scored attempts in `bb_attempts.score`; third decimal of a percentage).
@@ -646,15 +3038,27 @@ Remaining advisor items: ~~7 pre-existing mutable `search_path` functions (`set_
   A creation on a DST fall-back hour takes the earlier instant (Temporal `compatible`); Postgres
   would pick the later, which is why SQL never converts a planner wall clock.
 * ~~`calendar_events` grants `TRUNCATE` to `authenticated`~~ — fixed by 076 (it was 79 grants across `public`, to anon and authenticated; all revoked, default privileges too).
-* The kind colours are W-23's pick (DECISIONS 2026-09-16) until Stack confirms them on the walk
-  (2026-09-24: no nod recorded; R-59, sprint 2 question batch item 31, default keep).
+* ~~The kind colours are W-23's pick (DECISIONS 2026-09-16) until Stack confirms them on the walk
+  (2026-09-24: no nod recorded; R-59, sprint 2 question batch item 31, default keep).~~ Kept (B-31; DECISIONS
+  2026-09-27 and 2026-09-29, Phase 17).
 * **Calendar push outage 2026-09-23 19:57Z → 2026-09-24 17:03Z.** Runs 51–683 (633, one every
   2 minutes) failed with "refresh token revoked or expired"; the first token (minted 2026-09-15
   21:35:55Z) died between the last ok run (50, 2026-09-22 19:07Z) and run 51, a window that brackets
   mint + 7 days. Stack re-minted it 2026-09-24 17:02:50Z; run 684 was ok and inserted the 3 missed
   events (push set 73 = mirror 73). Cause unverified: the consent screen's publishing status is not
-  recorded, and a Testing-state token dies again about 2026-10-01 17:03Z. Nothing on any screen showed
-  the failure (R-52; DECISIONS 2026-09-24).
+  recorded, and a Testing-state token dies again about 2026-10-01 17:03Z. ~~Nothing on any screen showed
+  the failure (R-52; DECISIONS 2026-09-24).~~ Fixed by migration 113 (+ 118, Phase 17): after 3 failed pushes Home
+  says "Google Calendar push has failed N times since …" with the error (T-19, shot 08; R-52).
+* **Calendar token, third death: 2026-10-09 12:23Z → 18:10Z, ended by Stack's re-mint on a new OAuth client.**
+  Runs 1358–1531 (174, one every 2 minutes) failed with "refresh token revoked or expired"; the token minted
+  about 2026-10-02 05:00Z died 7 days and about 7 hours after (the second: 7 days and 1 h 42 min; Google's
+  seven-day limit on a Testing-mode app is not applied to the minute, so the hour is a guess each time). Stack made
+  a new Desktop-app OAuth client in the Cloud console and re-minted through a launcher that prompts for the client
+  id and the secret and reads the service key from `SECRETS_DIR`; Vault's four secrets were rewritten
+  18:10:28–30Z, and run 1532 (18:11:00Z) was `ok`, 85 scanned, 85 unchanged, so no event was missed. **The consent
+  screen stays in Testing (his word, 2026-10-09), so the next expiry is about 2026-10-16 18:10Z**; publishing the
+  screen to Production in the Cloud console is what ends the weekly re-mint. R-52's live Home line was not sighted
+  this time either (DECISIONS 2026-10-09).
 
 * IST.466 publishes two sibling content branches with identical `path`s; `bb_content`'s
   `(course_id, path)` key holds one, so Classwork shows one branch. Needs a key change
@@ -683,12 +3087,16 @@ Remaining advisor items: ~~7 pre-existing mutable `search_path` functions (`set_
   still label it. ~~Verified on synthetic fixtures only — 51 units carry `[notes]` today and none
   is multi-part. The ingest cadence work (backlog 1) should re-run that check after every crawl.~~
   2026-09-24: 109 units carry `[notes]` and one is multi-part (text 750); a read-only live check
-  passed there (part 2 snippet prefixed `[notes] `). No per-crawl check exists, and a snippet cut from
-  the notes region of a part that holds the marker still comes back unlabelled.
+  passed there (part 2 snippet prefixed `[notes] `). ~~No per-crawl check exists, and a snippet cut from
+  the notes region of a part that holds the marker still comes back unlabelled.~~ **Fixed by 121 (+ 129, Phase 18):**
+  a snippet never spans the marker and notes text always starts `[notes] `; `phase18_121_search_contract.sql` sweeps
+  every current `[notes]` unit and post-embed (d) re-checks the live leaks after each corpus change.
 * Hybrid keyword snippets recompute `to_tsvector` per covering part at query time: 27 ms at
   limit 12 on the 534-unit corpus (18–22 ms on 784 units, 2026-09-24). ~~See backlog 5 for the
   stored-tsvector fix.~~ The stored per-part `tsvector` stays deferred until the palette feels slow
-  (DECISIONS 2026-09-10); the old STATUS backlog is superseded by Requirements v2.
+  (DECISIONS 2026-09-10); the old STATUS backlog is superseded by Requirements v2. Re-measured 2026-09-29 (Phase 18,
+  R-77): 20.7 / 35.5 ms before 121, 36.9 / 49.5 ms after it, **20.0 / 35.6 ms after 129** ("final exam date" /
+  "attendance policy", limit 12); `part_fts` still not built (both under 50 ms).
 * ~~Function search-path advisor warnings (pre-existing pattern) on the search RPCs.~~ Fixed by migration 101
   (Phase 15); pinning a SQL function also stops Postgres inlining it, and the re-time after the pin put the hybrid
   search at a 36.9 ms median over five runs, against the 60 ms ceiling.

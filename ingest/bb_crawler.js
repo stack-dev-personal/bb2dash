@@ -27,11 +27,12 @@
  *  - Announcements (/learn/api/v1/courses/{C}/announcements): the INTERNAL endpoint uses
  *    `createdDate` / `modifiedDate`; the PUBLIC one uses `created` / `modified`. Do not mix them.
  *    `modifiedDate` is proven against live payloads and feeds announcements.modified_at
- *    (migration 033). The creator DISPLAY NAME key is NOT verified — see the TODO on
- *    mapAnnouncement() below; the mapper tries every candidate and records the winner in
- *    `authorSource`, so one query over bb_raw settles it after the first live crawl.
+ *    (migration 033). The creator key is `creatorUserId`, proven live (R-70, DECISIONS 2026-10-03:
+ *    27 of 27 announcements carry an author after the v5 crawls, 26 from the course's teachers and
+ *    1 through `/users/{id}`); see mapAnnouncement() below; the mapper tries every candidate and
+ *    records the winner in `authorSource`, and v5's probe (below) records what the payload carries.
  *
- * PHASE 10a (crawler version 3) — what changed and what is still unverified
+ * PHASE 10a (crawler version 3) — the first versioned envelope
  *  - Every `kind = 'course'` payload now carries `crawler: { version: 3 }`. It is the first
  *    versioned envelope; the stages read a missing key as version 2 (migration 050).
  *  - `attempts(C, gradebook)` probes the columns that look like they have a submission and posts
@@ -68,31 +69,49 @@
  *  PROSE MOVED. Stack's typed-in submission, his comments and the instructor's feedback are now
  *  nested under `results[].text`, which the stage does not read into a column — so they live in
  *  `bb_attempts.raw` (owner-only, RLS) and nowhere else.
- *  STILL UNVERIFIED AGAINST A LIVE RUN: the key names come from one read of Blackboard's own
- *  requests, not from a crawl of our own. `keys` travels with every column so Stack's next sync
- *  settles them for good. Unknown keys yield null, never a guess.
- *  - Assessment fields (`dueDate`, `points`, `gradebookColumnId`, `attemptsAllowed`): ALSO NOT
- *    VERIFIED. `slim()` runs on the Summary view, whose `contentDetail` only ever holds `file`
- *    and `url` (migration 034's header). walk() already fetches the full item for every
- *    assessment, so `assessmentFields()` now scans that full item for the four names at any depth
- *    and records **where each was found** in `detailSource`. After the first live crawl one query
- *    over bb_raw names Ultra's real path, and the scan can be replaced by reading it directly.
- *    Until then a field Ultra does not expose stays absent rather than being invented; the
- *    gradebook column remains the source of truth for due dates and points (migration 034).
+ *  WHAT THE LIVE CRAWLS PROVED (the counts: DECISIONS 2026-10-04, R-66 and R-75). The key lists
+ *  keep names live v4 and v5 attempts carried. Never seen: `instructorFeedback` (the attempt sends
+ *  `feedbackToUser`), `studentComments` (its one name kept for 085's contract), and any file size
+ *  (bytes come from the pull, `bb_files.bytes`). A plain-string `feedbackToUser` is accepted by
+ *  R-66, not yet seen live. Both `submitted` names stay: a step-2 list row has no receipt, only
+ *  `attemptDate`. The prose is only under `results[].text`, so only in `bb_attempts.raw`. Key
+ *  lists cut 2026-10-04 (Phase 18 task 19); a name no list keeps yields null, never a guess.
+ *  - Assessment fields (`dueDate`, `points`, `gradebookColumnId`, `attemptsAllowed`): CLOSED
+ *    (R-75, option (b)). The gradebook column is the source of due dates and points (migration
+ *    034), the item link is `column.contentId` (084), and attempts allowed come from 055.
+ *    `assessmentFields()` stays a probe that records `detailSource`; nothing reads its values.
  *
- * `runAll({ runId })` — WHY THE SKILL STILL REGISTERS AFTER THE CRAWL (round-2 review, R2-1)
- *  `runAll` accepts a caller-supplied run id, and registering it BEFORE the crawl is the order the
- *  authorisation rule wants. It is not safe yet, and the reason is in the driver, not here:
- *  `transform_tick` (migration 044) folds a REGISTERED run as soon as one of its `bb_raw` rows is
- *  more than three minutes old, with no completeness check — the calendar row is only one of two
- *  triggers, not a requirement. Register first and a slow crawl (v3 adds an attempts probe and a
- *  full-item GET per assessment, so it is slower than v2) can be folded with one course row
- *  landed; `run_transform` is idempotent, so the remaining courses are then dropped for good.
- *  So `skills/bb-sync/SKILL.md` registers the id immediately AFTER `runAll` returns, and
- *  migration 039's grace window covers that gap exactly as it did before. Register-first becomes
- *  correct the moment the tick requires the `calendar` row for a registered run — a Phase 9 driver
- *  change, not this phase's. Until then `runId` is here for that change and for tests, and it is
- *  validated as a uuid so a caller can never crawl under a fabricated id.
+ * PHASE 18 (crawler version 5) — the probe (R-66, R-70, P-97)
+ *  Every `kind = 'course'` payload carries
+ *      crawler: { version: 5, probe: { announcementKeys: { <bb course id>: string[] },
+ *                                       idShaped: [{ key, value }], misses: { <key-list name>: n } } }
+ *  `announcementKeys` is the sorted union of the raw announcement keys, `idShaped` every
+ *  `_NNNN_1` value under a dotted key path (never prose), and `misses` counts each key list that
+ *  found nothing: `AUTHOR_KEYS` per announcement with neither a name nor a user id, and
+ *  `ATTEMPT_FIELD_KEYS.<field>` / `ATTEMPT_FILE_KEYS.<field>` per attempt detail / file. A mapped
+ *  announcement keeps a bare creator id as `authorUserId` beside `author` / `authorSource`; the
+ *  id is never shown. Attempt feedback is read from `feedbackToUser` alone. The stages ignore
+ *  `crawler.probe` and `authorUserId`; one query over bb_raw after the next sync reads them.
+ *  Task 18 resolves `authorUserId` to a name: the course's teacher rows first, then one
+ *  `GET /learn/api/v1/users/{id}` per distinct unresolved id per run (resolveAuthors). A resolved
+ *  name lands in `author` with `authorSource` 'teachers' or 'users'; a failed lookup adds
+ *  `userLookup` and each still-nameless post `authorUnresolved` to `misses`, and never throws.
+ *
+ * `runAll({ runId })` — REGISTER FIRST (Phase 19, migrations 135 and 136)
+ *  `skills/bb-sync/SKILL.md` claims its request and sets `agent_requests.run_id` in one update,
+ *  BEFORE the crawl, and passes that id here. The claim opens the run's `sync_runs` row as
+ *  `running` (135), so Home says "sync running" while this is still walking courses. The order is
+ *  safe because `transform_tick` (136) folds a REGISTERED run only once its `calendar` row is in
+ *  `bb_raw`, and `runAll` posts that row last: a slow crawl is never folded part-way. Before 136
+ *  the tick also folded a registered run after three idle minutes, with no completeness check,
+ *  which is why the skill used to register after `runAll` returned (DECISIONS 2026-09-15,
+ *  superseded by this phase's row).
+ *  If the crawl dies (the tab closes, `runAll` throws) the calendar row never lands and nothing is
+ *  folded. After 30 minutes the tick's terminal rule marks the run interrupted, closes the request
+ *  as failed and raises one Inbox item. Nothing is retried: the next sync is a new run id.
+ *  `runId` is validated as a uuid so a caller can never crawl under a fabricated id. With no
+ *  `runId` the crawler names the run itself (devtools, tests); that crawl is folded only if a
+ *  claimed sync request registers the id before the tick quarantines it.
  *
  * Testability: `strip`, `announcementAuthor`, `mapAnnouncement`, `mapAttempt`, `mapAttemptFile`,
  * `shouldProbeColumn`, `assessmentFields` and `assertRunId` are module-level pure functions,
@@ -101,11 +120,77 @@
  */
 
 // Blackboard hands back HTML in a {displayText, rawText} envelope (or a bare string). Flatten it to
-// readable plain text, or null when nothing is left. Module-level so the mappers below stay pure.
-const strip = (h) => { if (h == null) return null; if (typeof h === 'object') h = h.displayText || h.rawText || ''; h = String(h);
+// readable plain text, or null when nothing is left; only a STRING half is read, so an object never
+// becomes '[object Object]'. Module-level so the mappers below stay pure.
+const strip = (h) => { if (h == null) return null; if (typeof h === 'object') h = [h.displayText, h.rawText].find((t) => typeof t === 'string' && t) || ''; h = String(h);
     return h.replace(/<style[\s\S]*?<\/style>/gi, '').replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|li|h\d|tr)>/gi, '\n').replace(/<[^>]+>/g, '')
       .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
       .replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim() || null; };
+
+// ------------------------------------------------------------------------------------------------
+// Embedded files: `<a data-bbfile="{json}" href="…">` in an Ultra document's rawText.
+//
+// WHICH URL. Prefer a durable bbcswebdav URL (pid-…-dt-…-rid-N_1/xid-N_1); session-scoped
+// /sessions/<id>/… URLs 403 once the session ends. Among durable ones, the ANCHOR'S OWN href wins,
+// then `viewerUrl`, `permanentUrl`, `resourceUrl` (and the JSON's own `href` last). A course copied
+// from an earlier term keeps the old copy's ids inside data-bbfile: IST.466 `_12939673_1` carried
+// a `resourceUrl` of the Spring 2026 copy (rid-156013084_1, which redirects into another course's
+// READ_ONLY area and answers "Not Found or no permission") while `viewerUrl` and the href named the
+// current Fall copy (rid-164409011_1). The href is what Blackboard opens when Stack clicks, so
+// trusting resourceUrl first catalogued a dead file (bb_files 161). No stored URL keeps a query
+// string: viewerUrl/href carry short-lived signed parameters.
+// ------------------------------------------------------------------------------------------------
+const DURABLE_FILE_RE = /bbcswebdav\/pid-.*-rid-\d+_\d+\/xid-\d+_\d+/;
+const withoutQuery = (u) => (typeof u === 'string' && u ? u.split('#')[0].split('?')[0] || null : null);
+const decodeEntities = (s) => String(s).replace(/&quot;/g, '"').replace(/&#0*39;/g, "'").replace(/&#x0*27;/gi, "'")
+  .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+
+/** The URL to catalogue for one data-bbfile object and its anchor's href (null when not an <a>). */
+const durableUrl = (o, anchorHref = null) => {
+  const b = o || {};
+  // Only an absolute http(s) href competes: a `javascript:` or relative Ultra href is not a file.
+  const href = typeof anchorHref === 'string' && /^https?:\/\//i.test(anchorHref) ? anchorHref : null;
+  const cands = [href, b.viewerUrl, b.permanentUrl, b.resourceUrl, b.href].map(withoutQuery).filter(Boolean);
+  return cands.find(u => DURABLE_FILE_RE.test(u)) || cands.find(u => !/\/sessions\//.test(u)) || cands[0] || null;
+};
+
+// One attribute, read at a fixed position: name, then an optional "…", '…' or bare value.
+const ATTR_RE = /([^\s"'<>\/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/y;
+
+/**
+ * Every start tag in `html` carrying data-bbfile: its tag name, the raw attribute value, and the
+ * decoded href when the tag is an anchor. Attributes are parsed one by one, in any order and any
+ * quoting, so a `>` inside a quoted value never ends the tag early.
+ */
+const bbfileTags = (html) => {
+  const s = String(html || ''); const out = []; const tagRe = /<([a-zA-Z][a-zA-Z0-9-]*)/g; let m;
+  while ((m = tagRe.exec(s))) {
+    const tag = m[1].toLowerCase(); const attrs = Object.create(null); let i = tagRe.lastIndex;
+    for (;;) {
+      while (i < s.length && /[\s/]/.test(s[i])) i++;
+      if (i >= s.length || s[i] === '>') break;
+      ATTR_RE.lastIndex = i; const a = ATTR_RE.exec(s);
+      if (!a || ATTR_RE.lastIndex === i) break;
+      const name = a[1].toLowerCase();
+      if (!(name in attrs)) attrs[name] = a[2] ?? a[3] ?? a[4] ?? '';
+      i = ATTR_RE.lastIndex;
+    }
+    tagRe.lastIndex = i;
+    if (attrs['data-bbfile'] != null) out.push({ tag, bbfile: attrs['data-bbfile'], href: tag === 'a' && attrs.href ? decodeEntities(attrs.href) : null });
+  }
+  return out;
+};
+
+/** Append each embed in `html` to `out` (de-duplicated by URL); a malformed data-bbfile is skipped. */
+const parseBbfile = (html, out) => {
+  for (const t of bbfileTags(html)) {
+    let o; try { o = JSON.parse(decodeEntities(t.bbfile)); } catch (_) { continue; }
+    if (!o || typeof o !== 'object') continue;
+    const url = durableUrl(o, t.href);
+    if (url && !out.some(f => f.url === url)) out.push({ name: o.displayName || o.linkName || o.fileName || null, url, mime: o.mimeType || null, sessionScoped: /\/sessions\//.test(url) });
+  }
+  return out;
+};
 
 // A Blackboard user id looks like `_21025199_1`. Never show one of those as an author name.
 const isBbUserId = (v) => typeof v === 'string' && /^_\d+_\d+$/.test(v);
@@ -119,29 +204,83 @@ const personName = (v) => {
   const u = v.user && typeof v.user === 'object' ? v.user : v;
   const parts = [u.givenName, u.familyName].filter((x) => typeof x === 'string' && x.trim());
   if (parts.length) return parts.join(' ').trim();
+  // The public REST user shape: `name: { given, family }`.
+  if (u.name && typeof u.name === 'object') {
+    const pub = [u.name.given, u.name.family].filter((x) => typeof x === 'string' && x.trim());
+    if (pub.length) return pub.join(' ').trim();
+  }
   for (const k of ['displayName', 'name', 'fullName', 'userName']) {
     if (typeof u[k] === 'string' && u[k].trim() && !isBbUserId(u[k])) return u[k].trim();
   }
   return null;
 };
 
-// TODO(verify on a live payload): the exact creator key of the INTERNAL announcements endpoint is
-// unconfirmed. No Blackboard session was available when this was written, and the endpoint is not in
+// Verified on live payloads (R-70, DECISIONS 2026-10-03): the INTERNAL announcements endpoint sends the
+// creator as a bare id, `creatorUserId`, which task 18 resolves to a name (the course's teachers first,
+// then one /users/{id} per unknown id; 27 of 27 live on 2026-10-03). The endpoint is not in
 // Anthology's published REST schema (the PUBLIC schema exposes `creator` as a bare user id, not a
 // name). Candidates, in the order tried below. mapAnnouncement records the winning key in
 // `authorSource`, so after the first live crawl `select payload->'announcements' from bb_raw` names
-// the true key and this list can be cut to it. Until then an unknown shape yields author: null —
+// the true key (it did: `creatorUserId`; the name keys stay for a tenant that sends one). An unknown shape yields author: null —
 // never a guess, and never a raw user id.
-const AUTHOR_KEYS = ['creator', 'createdBy', 'author', 'createdByUser', 'creatorFullName', 'postedBy', 'userName'];
+//
+// v5 (Phase 18, R-70): `creatorUserId` leads the list. Research 92 §9 found it documented on the
+// announcements resource as a bare `_NNNN_1` user id, which personName() rightly refuses to show —
+// so the id is now KEPT as `authorUserId` instead of being dropped, and resolveAuthors() below turns
+// it into a name. The probe sitting (98a §1) confirms the live key.
+const AUTHOR_KEYS = ['creatorUserId', 'creator', 'createdBy', 'author', 'createdByUser', 'creatorFullName', 'postedBy', 'userName'];
 
-/** The creator display name of one announcement, plus which key supplied it. */
+/** A Blackboard user id held by a candidate field: a bare id, or a user object's id / userId. */
+const userIdOf = (v) => {
+  if (isBbUserId(v)) return v;
+  if (v == null || typeof v !== 'object') return null;
+  const u = v.user && typeof v.user === 'object' ? v.user : v;
+  for (const k of ['id', 'userId']) if (isBbUserId(u[k])) return u[k];
+  return null;
+};
+
+/**
+ * The creator display name of one announcement, which key supplied it, and the first user id any
+ * author key carries. The id is never shown; it is what resolveAuthors() looks up.
+ */
 const announcementAuthor = (a) => {
-  if (a == null || typeof a !== 'object') return { author: null, authorSource: null };
+  const none = { author: null, authorSource: null, authorUserId: null };
+  if (a == null || typeof a !== 'object') return none;
+  let authorUserId = null;
+  for (const key of AUTHOR_KEYS) if (authorUserId === null) authorUserId = userIdOf(a[key]);
   for (const key of AUTHOR_KEYS) {
     const name = personName(a[key]);
-    if (name) return { author: name, authorSource: key };
+    if (name) return { author: name, authorSource: key, authorUserId };
   }
-  return { author: null, authorSource: null };
+  return { ...none, authorUserId };
+};
+
+/** Most id-shaped entries one course's probe records. The probe is diagnosis, not a data dump. */
+const PROBE_ID_LIMIT = 50;
+
+/**
+ * v5 probe over one course's RAW announcements (before mapAnnouncement slims them): the union of
+ * their top-level keys, sorted, and every id-shaped string value under a dotted key path, once per
+ * (key, value). The announcement's own `id` is skipped — it is id-shaped on every row and says
+ * nothing about who posted it. Only `_NNNN_1` strings are recorded, never prose, so the probe can
+ * travel in bb_raw without carrying anything a professor wrote.
+ */
+const announcementProbe = (raws) => {
+  const rows = Array.isArray(raws) ? raws.filter((r) => r != null && typeof r === 'object') : [];
+  const keys = new Set(); const idShaped = []; const seen = new Set();
+  const rec = (v, path, depth) => {
+    if (idShaped.length >= PROBE_ID_LIMIT || depth > 3) return;
+    if (isBbUserId(v)) {
+      const tag = `${path}\u0000${v}`;
+      if (path !== 'id' && !seen.has(tag)) { seen.add(tag); idShaped.push({ key: path, value: v }); }
+      return;
+    }
+    if (v == null || typeof v !== 'object') return;
+    if (Array.isArray(v)) { v.forEach((e) => rec(e, `${path}[]`, depth + 1)); return; }
+    for (const k of Object.keys(v)) rec(v[k], path ? `${path}.${k}` : k, depth + 1);
+  };
+  for (const r of rows) { Object.keys(r).forEach((k) => keys.add(k)); rec(r, '', 0); }
+  return { keys: [...keys].sort(), idShaped };
 };
 
 /**
@@ -150,7 +289,7 @@ const announcementAuthor = (a) => {
  * announcements.author; `isRead` keeps mirroring Blackboard's own read state.
  */
 const mapAnnouncement = (a) => {
-  const { author, authorSource } = announcementAuthor(a);
+  const { author, authorSource, authorUserId } = announcementAuthor(a);
   return {
     id: a.id,
     title: a.title,
@@ -160,8 +299,59 @@ const mapAnnouncement = (a) => {
     isRead: a.readStatus?.isRead ?? null,
     author,
     authorSource,
+    authorUserId,
     body: strip(a.body)?.slice(0, 4000),
   };
+};
+
+/**
+ * Task 18 (R-70, P-96): turn each announcement's bare `authorUserId` into a name.
+ *
+ *  1. The course's own teacher rows (`teachers[].userId`, the ids `course_staff.bb_user_id`
+ *     holds) answer with no request at all.
+ *  2. Anything they miss is looked up through `lookupUser(id)` — in the tab, one
+ *     `GET /learn/api/v1/users/{id}` — at most ONCE per distinct id per run: `cache` is the run's
+ *     (runAll owns it and hands the same Map to every course), and it remembers failures too, so a
+ *     403 is never retried within the run.
+ *
+ * Only `_NNNN_1` ids are ever looked up, so nothing else can reach the URL. A lookup that throws,
+ * answers non-2xx or carries no name is not swallowed: it is reported as a `userLookup` miss, and
+ * each announcement still without a name as `authorUnresolved`, for the caller's probe counter.
+ * The author then stays null — never a guess, never the raw id. Returns new objects; the input
+ * array and its announcements are left as they were.
+ */
+const resolveAuthors = async (announcements, teachers, lookupUser, cache = new Map()) => {
+  const list = Array.isArray(announcements) ? announcements : [];
+  const byTeacher = new Map();
+  for (const t of Array.isArray(teachers) ? teachers : []) {
+    const name = t && typeof t.name === 'string' ? t.name.trim() : '';
+    if (t && isBbUserId(t.userId) && name && !byTeacher.has(t.userId)) byTeacher.set(t.userId, name);
+  }
+  const needsName = (a) => a != null && typeof a === 'object' && !a.author && isBbUserId(a.authorUserId);
+  const misses = [];
+  for (const a of list) {
+    const id = needsName(a) ? a.authorUserId : null;
+    if (id === null || byTeacher.has(id) || cache.has(id)) continue;
+    let name = null;
+    try {
+      name = await lookupUser(id);
+    } catch (e) {
+      name = null; // recorded below as a `userLookup` miss, which is how the probe reports it
+    }
+    name = typeof name === 'string' && name.trim() && !isBbUserId(name) ? name.trim() : null;
+    cache.set(id, name);
+    if (name === null) misses.push('userLookup');
+  }
+  const resolved = list.map((a) => {
+    if (!needsName(a)) return a;
+    const fromTeacher = byTeacher.get(a.authorUserId);
+    if (fromTeacher) return { ...a, author: fromTeacher, authorSource: 'teachers' };
+    const fromUsers = cache.get(a.authorUserId);
+    if (fromUsers) return { ...a, author: fromUsers, authorSource: 'users' };
+    misses.push('authorUnresolved');
+    return a;
+  });
+  return { announcements: resolved, misses };
 };
 
 // ================================================================================================
@@ -169,7 +359,7 @@ const mapAnnouncement = (a) => {
 // ================================================================================================
 
 /** Envelope version stamped on every course payload. Stages read a missing key as version 2. */
-const CRAWLER_VERSION = 4;
+const CRAWLER_VERSION = 5;
 
 /** Newest N attempts per column. A column with ten resubmissions is not worth ten round trips. */
 const ATTEMPT_LIMIT = 3;
@@ -193,14 +383,14 @@ const assertRunId = (runId) => {
 };
 
 /**
- * v4 (P-grades-4): the key names Blackboard's own gradebook page uses, read off its requests and
- * written down in docs/planning/sprint-1-hub/evidence/80f_ATTEMPTS_ENDPOINT.md. v3's candidate lists were guesses and
- * are cut to these. Two entries per field at most, and only where BOTH are real: the attempt
- * DETAIL (step 3) carries `attemptReceipt.submissionDate`, the attempt LIST (step 2) carries only
- * `attemptDate`, and a column whose detail request failed falls back to the list row.
- *
- * A dotted candidate is a path, read one level at a time — Ultra nests the score under
- * `displayGrade` and the submission date under `attemptReceipt`.
+ * v4 (P-grades-4): the names Blackboard's own gradebook page uses (80f_ATTEMPTS_ENDPOINT.md), cut
+ * on 2026-10-04 (Phase 18 task 19) to those the live crawls proved. More than one only where every
+ * one is real: `submitted` (the DETAIL's `attemptReceipt.submissionDate`; a LIST row, used when
+ * the detail request failed, has only `attemptDate`) and the `{rawText, displayText}` halves of
+ * `feedback` and `studentSubmission`, both read string-only (STRING_ONLY_KEY_LISTS). `feedback`
+ * ends in the bare `feedbackToUser`, a plain-string form R-66 accepts, not yet seen live.
+ * `studentComments` was never seen; its one name keeps `text.studentComments` (null) in 085's
+ * contract. A dotted candidate is a path, read one level at a time.
  */
 const ATTEMPT_FIELD_KEYS = {
   status:            ['status'],
@@ -208,7 +398,8 @@ const ATTEMPT_FIELD_KEYS = {
   submitted:         ['attemptReceipt.submissionDate', 'attemptDate'],
   modified:          ['modifiedDate'],
   score:             ['displayGrade.score'],
-  feedback:          ['instructorFeedback.rawText', 'instructorFeedback.displayText'],
+  // The bare key is the plain-string form: accepted by R-66, not yet seen live.
+  feedback:          ['feedbackToUser.rawText', 'feedbackToUser.displayText', 'feedbackToUser'],
   studentComments:   ['studentComments'],
   studentSubmission: ['studentSubmission.rawText', 'studentSubmission.displayText'],
   exempt:            ['exempt'],
@@ -216,13 +407,13 @@ const ATTEMPT_FIELD_KEYS = {
 };
 
 /**
- * Key names for one `studentSubmissionFiles[]` entry. `file.permanentUrl` is the whole point of
- * the v4 chain: a durable `bbcswebdav/xid-<n>_1` URL that downloads with the session cookie.
+ * Key names for one `studentSubmissionFiles[]` entry, each on every live entry. `file.permanentUrl`
+ * is the durable `bbcswebdav/xid-<n>_1` URL the v4 chain exists for. No `size` list: Ultra sends
+ * none, so mapAttemptFile() emits `size: null` and the probe does not count a known absence.
  */
 const ATTEMPT_FILE_KEYS = {
   id:   ['id', 'bbFileUuid'],
-  name: ['name', 'file.fileName', 'linkName'],
-  size: ['size'],
+  name: ['name', 'file.fileName'],
   mime: ['file.mimeType'],
   url:  ['file.permanentUrl'],
   uuid: ['bbFileUuid'],
@@ -251,6 +442,35 @@ const pickKey = (o, keys) => {
   return null;
 };
 
+// pickKey for prose: only a non-empty STRING counts as present, so an object (the whole envelope
+// under a bare `feedbackToUser`, or one nested where the text should be) never reaches strip().
+const pickString = (o, keys) => {
+  if (o == null || typeof o !== 'object') return null;
+  for (const k of keys) {
+    const v = k.includes('.') ? atPath(o, k) : o[k];
+    if (typeof v === 'string' && v !== '') return v;
+  }
+  return null;
+};
+
+/** Key lists read with pickString. The probe counts their misses by the same rule. */
+const STRING_ONLY_KEY_LISTS = new Set([ATTEMPT_FIELD_KEYS.feedback, ATTEMPT_FIELD_KEYS.studentSubmission]);
+
+/**
+ * v5 probe: the names of the key lists that found nothing in `o` — `<prefix>.<field>` for each
+ * field of `lists` whose candidates are all absent. A silent null cannot tell "renamed" from
+ * "never sent"; a per-list miss count in `crawler.probe.misses` can.
+ */
+const keyListMisses = (o, lists, prefix) => Object.keys(lists)
+  .filter((f) => (STRING_ONLY_KEY_LISTS.has(lists[f]) ? pickString : pickKey)(o, lists[f]) === null)
+  .map((f) => `${prefix}.${f}`);
+
+/** Add one to each named miss. `misses` is a counter the caller owns for one course payload. */
+const countMisses = (misses, names) => {
+  if (misses == null || typeof misses !== 'object') return;
+  for (const n of names) misses[n] = (misses[n] || 0) + 1;
+};
+
 const asString = (v) => (typeof v === 'string' && v.trim() ? v : typeof v === 'number' ? String(v) : null);
 const asNumber = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 const asBool   = (v) => (typeof v === 'boolean' ? v : null);
@@ -274,11 +494,8 @@ const shouldProbeColumn = (g) => {
  *
  * v4 READS the download URL instead of building one. `file.permanentUrl` is Blackboard's own
  * durable link; v3 built `/gradebook/attempts/<aid>/files/<id>/download`, which is not a route a
- * student session can use, and that is the second reason v3 catalogued nothing. The built form
- * survives only as a fallback so an old payload still produces a row.
- *
- * Returns null for anything with no usable id, so a malformed entry drops out rather than
- * producing a catalog row nothing can download.
+ * student session can use. The built form survives only as a fallback so an old payload still
+ * produces a row. Returns null when neither `id` nor `bbFileUuid` is present.
  */
 const mapAttemptFile = (f, { base = 'https://blackboard.syracuse.edu', courseId = null, attemptId = null } = {}) => {
   if (f == null || typeof f !== 'object') return null;
@@ -288,7 +505,7 @@ const mapAttemptFile = (f, { base = 'https://blackboard.syracuse.edu', courseId 
   return {
     id,
     name: asString(pickKey(f, ATTEMPT_FILE_KEYS.name)),
-    size: asNumber(pickKey(f, ATTEMPT_FILE_KEYS.size)),
+    size: null, // Ultra sends no file size; the bytes come from the pull (bb_files.bytes)
     mime: asString(pickKey(f, ATTEMPT_FILE_KEYS.mime)),
     uuid: asString(pickKey(f, ATTEMPT_FILE_KEYS.uuid)),
     downloadUrl: url
@@ -301,17 +518,11 @@ const mapAttemptFile = (f, { base = 'https://blackboard.syracuse.edu', courseId 
 /**
  * One raw attempt (step 3's detail, or step 2's list row when the detail request failed) -> the
  * shape migration 050/055 reads. Pure: no fetch, no session, no globals.
- *
- * WHERE THE PROSE WENT (v4). `studentSubmission.rawText` is what Stack typed into Blackboard and
- * `instructorFeedback` is what a professor wrote back. The stage lifts the TOP-LEVEL keys of this
- * object into columns; nesting the three prose fields under `text` keeps them out of those columns
- * and leaves them in `bb_attempts.raw` alone, which is owner-only under RLS. They are still capped
- * the way the rest of the crawler caps prose: feedback 1000, student comments 2000, submitted text
- * 4000, all flattened to plain text first.
- *
- * `includeKeys` is set for the FIRST attempt of each column only — the probe that names what this
- * row was actually built from — and repeating it on every attempt would just make the payload
- * bigger.
+ * WHERE THE PROSE WENT (v4). The stage lifts the TOP-LEVEL keys of this object into columns, so
+ * Stack's submitted text, his comments and the professor's feedback nest under `text` and live in
+ * `bb_attempts.raw` alone (owner-only, RLS), flattened to plain text and capped: feedback 1000,
+ * comments 2000, submitted text 4000. `includeKeys` is set for each column's FIRST attempt only:
+ * the probe of what the row was built from, which every attempt repeating would only bloat.
  */
 const mapAttempt = (a, files = [], includeKeys = false) => {
   if (a == null || typeof a !== 'object') return null;
@@ -326,9 +537,9 @@ const mapAttempt = (a, files = [], includeKeys = false) => {
     receipt:   asString(pickKey(a, ATTEMPT_FIELD_KEYS.receipt)),
     files:     Array.isArray(files) ? files.filter(Boolean) : [],
     text: {
-      studentSubmission:  strip(pickKey(a, ATTEMPT_FIELD_KEYS.studentSubmission))?.slice(0, 4000) || null,
+      studentSubmission:  strip(pickString(a, ATTEMPT_FIELD_KEYS.studentSubmission))?.slice(0, 4000) || null,
       studentComments:    strip(pickKey(a, ATTEMPT_FIELD_KEYS.studentComments))?.slice(0, 2000) || null,
-      instructorFeedback: strip(pickKey(a, ATTEMPT_FIELD_KEYS.feedback))?.slice(0, 1000) || null,
+      instructorFeedback: strip(pickString(a, ATTEMPT_FIELD_KEYS.feedback))?.slice(0, 1000) || null,
     },
   };
   if (includeKeys) out.keys = Object.keys(a);
@@ -379,7 +590,7 @@ const mapAttemptDetail = (d) => {
     submissionTotalSize: asNumber(r.submissionTotalSize),
     displayScore:        asNumber(pickKey(d, ['displayGrade.score'])),
     fileCount:           Array.isArray(d.studentSubmissionFiles) ? d.studentSubmissionFiles.length : 0,
-    hasRawText:          !!strip(pickKey(d, ['studentSubmission.rawText'])),
+    hasRawText:          !!strip(pickString(d, ['studentSubmission.rawText'])),
   };
 };
 
@@ -399,18 +610,12 @@ const newestAttempts = (rows, limit = ATTEMPT_LIMIT) => {
 };
 
 /**
- * The assessment fields the planner wants, found wherever Ultra actually keeps them.
- *
- * Every candidate below is a guess about Ultra's shape, so the function records the dotted PATH
- * each value came from alongside the value. After the first live crawl,
- *   select distinct jsonb_object_keys(ci->'detailSource') , ci->'detailSource'
- *     from bb_raw, lateral jsonb_array_elements(payload->'content') ci where ci ? 'detailSource';
- * names the real path and this scan can be replaced by reading it directly. A field Ultra does
- * not expose simply stays absent: the gradebook column is still the source of truth for due dates
- * and points (migration 034), and inventing one here would put a made-up date on the tracker.
- *
- * Shallow matches win (the walk checks a node's own keys before descending), and objects are
- * never taken as values, so `{dueDate: {...}}` is skipped rather than stored as a blob.
+ * The assessment fields, wherever Ultra keeps them: a probe, kept as one (R-75, option (b)). Each
+ * value travels with the dotted PATH it came from, as `detailSource` in bb_raw; live crawls found
+ * `points` and `dueDate` at `contentDetail[…].test.gradingColumn.{possible, dueDate}` and the other
+ * two nowhere. Nothing reads the values: the gradebook column is the source of due dates and
+ * points (migration 034), and a field Ultra does not expose stays absent rather than invented.
+ * Shallow matches win (a node's own keys before its children); an object is never taken as a value.
  */
 const ASSESSMENT_FIELDS = {
   dueDate:           ['dueDate', 'due'],
@@ -456,12 +661,7 @@ function installCrawler({ userId, supabaseUrl, anonKey, base = 'https://blackboa
   const pageAll = async (u) => { let out = [], off = 0; for (;;) { const r = await j(u + (u.includes('?') ? '&' : '?') + `offset=${off}`); if (r.__status) return { error: r.__status, results: out }; out = out.concat(r.results || []); if (!r.paging || !r.paging.nextPage || !(r.results || []).length || off > 5000) break; off += r.results.length; } return { results: out }; };
   const typeOf = (c) => c.contentHandler?.id || Object.keys(c.contentDetail || {})[0] || null;
   const isContainer = (c) => c.hasChildren || /folder|lesson|learningmodule/i.test(typeOf(c) || '');
-  // Prefer durable bbcswebdav URLs (pid-…-dt-…-rid-N_1/xid-N_1). Session-scoped /sessions/<id>/... URLs 403 once the
-  // session ends, so a catalog built from them is useless the next day.
-  const durableUrl = (o) => { const cands = [o.resourceUrl, o.viewerUrl ? o.viewerUrl.split('?')[0] : null, o.permanentUrl, o.href].filter(Boolean);
-    return cands.find(u => /bbcswebdav\/pid-.*-rid-\d+_\d+\/xid-\d+_\d+/.test(u)) || cands.find(u => !/\/sessions\//.test(u)) || cands[0] || null; };
-  const parseBbfile = (html, out) => { const re = /data-bbfile="([^"]+)"/g; let m; while ((m = re.exec(html || ''))) { try { const o = JSON.parse(m[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&#39;/g, "'"));
-      const url = durableUrl(o); if (url && !out.some(f => f.url === url)) out.push({ name: o.displayName || o.linkName || o.fileName || null, url, mime: o.mimeType || null, sessionScoped: /\/sessions\//.test(url) }); } catch (_) {} } return out; };
+  // durableUrl / parseBbfile are module-level (above) so web/test can cover them.
   const embeddedFiles = (html) => parseBbfile(html, []);
   // Deep scan: attachments to assessment items (tests, assignments) live under
   // contentDetail['resource/x-bb-asmt-test-link'].test.assessment.instructions, not body — so walk EVERY string
@@ -488,9 +688,8 @@ function installCrawler({ userId, supabaseUrl, anonKey, base = 'https://blackboa
         // Fetch the full item for documents (type null) AND for anything that could carry attachments in a nested
         // instruction body (assessments/assignments). Cheap: one GET per item.
         if (s.type === null || /asmt|assignment|test|survey/i.test(s.type || '')) { const full = await j(`/learn/api/v1/courses/${C}/contents/${c.id}`); if (!full.__status) { if (s.type === null) s.body = strip(full.body)?.slice(0, 12000) || null; s.embeddedFiles = embedsDeep(full);
-          // The Summary view's contentDetail only ever holds file/url, so the assessment fields
-          // are looked for in the FULL item — with the path each came from, because where Ultra
-          // keeps them is unverified until a live crawl. See assessmentFields() above.
+          // The Summary view's contentDetail only holds file/url, so the assessment-field probe
+          // scans the FULL item (assessmentFields() above); the gradebook column stays the source.
           const af = assessmentFields(full);
           if (af) { s.detail = Object.assign({}, s.detail, af.values); s.detailSource = af.paths; } } }
         items.push(s); if (isContainer(c)) stack.push({ id: c.id, path: p }); } }
@@ -511,7 +710,10 @@ function installCrawler({ userId, supabaseUrl, anonKey, base = 'https://blackboa
   // Nothing here throws: every step records its own status under `steps`, `entry.status` keeps the
   // FIRST non-2xx of the chain (so the stage's error count still means something), and a column
   // that fails at any step is pushed with whatever it got and the crawl carries on.
-  const attempts = async (C, gradebook = [], { limit = ATTEMPT_LIMIT } = {}) => {
+  // v5: `misses` is the course payload's probe counter. Each attempt DETAIL (the shape the key
+  // lists were written for) adds one per ATTEMPT_FIELD_KEYS / ATTEMPT_FILE_KEYS list that found
+  // nothing; a failed detail adds none, because its failure is already in `steps`.
+  const attempts = async (C, gradebook = [], { limit = ATTEMPT_LIMIT, misses = null } = {}) => {
     const ok = (s) => s >= 200 && s <= 299;
     const out = [];
     for (const g of (Array.isArray(gradebook) ? gradebook : [])) {
@@ -561,6 +763,10 @@ function installCrawler({ userId, supabaseUrl, anonKey, base = 'https://blackboa
 
           const rawFiles = (d && Array.isArray(d.studentSubmissionFiles)) ? d.studentSubmissionFiles : [];
           if (rawFiles[0] && entry.keys.file === undefined) entry.keys.file = Object.keys(rawFiles[0]);
+          if (d) {
+            countMisses(misses, keyListMisses(d, ATTEMPT_FIELD_KEYS, 'ATTEMPT_FIELD_KEYS'));
+            for (const f of rawFiles) countMisses(misses, keyListMisses(f, ATTEMPT_FILE_KEYS, 'ATTEMPT_FILE_KEYS'));
+          }
           const files = rawFiles
             .map((f) => mapAttemptFile(f, { base, courseId: C, attemptId: aid }))
             .filter(Boolean);
@@ -578,7 +784,16 @@ function installCrawler({ userId, supabaseUrl, anonKey, base = 'https://blackboa
       out.push(entry);
     }
     return out; };
-  const crawl = async (C) => {
+  // Task 18: one user lookup for resolveAuthors(). Only an id-shaped value reaches the URL, and a
+  // non-2xx answer is a null name (resolveAuthors counts it as a miss); jx never throws.
+  const lookupUser = async (id) => {
+    if (!isBbUserId(id)) return null;
+    const r = await jx(`/learn/api/v1/users/${encodeURIComponent(id)}`);
+    if (!(r.status >= 200 && r.status <= 299)) return null;
+    return personName(r.body);
+  };
+  // `userCache` is the run's author cache (see resolveAuthors); runAll passes one Map to every course.
+  const crawl = async (C, { userCache = new Map() } = {}) => {
     const detail = await j(`/learn/api/v1/courses/${C}?expand=effectiveAvailability`);
     const teach = await j(`/learn/api/v1/courses/${C}/memberships?expand=user,courseRole&limit=50&membershipAvailable=true&roleBucket=TEACHING`);
     const sched = await j(`/learn/api/v1/courses/${C}/schedule?sort=location(desc)`);
@@ -587,26 +802,40 @@ function installCrawler({ userId, supabaseUrl, anonKey, base = 'https://blackboa
     // The gradebook is fetched before the attempts probe because it is what decides which columns
     // are worth probing at all (shouldProbeColumn).
     const gradebook = await grades(C);
-    return { crawler: { version: CRAWLER_VERSION },
+    // v5 probe (Phase 18): what this course's announcements really carry, and every key list that
+    // came up empty. `misses` is this payload's own counter; nothing outside crawl() holds it.
+    const misses = {};
+    const rawAnnouncements = ann.results || [];
+    const teachers = (teach.results || []).map(t => ({ name: `${t.user?.givenName || ''} ${t.user?.familyName || ''}`.trim(), email: t.user?.emailAddress || null, role: t.courseRole?.identifier, userId: t.userId }));
+    const mapped = rawAnnouncements.map(mapAnnouncement);
+    countMisses(misses, mapped.filter((a) => !a.author && !a.authorUserId).map(() => 'AUTHOR_KEYS'));
+    const authors = await resolveAuthors(mapped, teachers, lookupUser, userCache);
+    countMisses(misses, authors.misses);
+    const announcements = authors.announcements;
+    const att = await attempts(C, gradebook, { misses });
+    const content = await walk(C);
+    const annProbe = announcementProbe(rawAnnouncements);
+    return { crawler: { version: CRAWLER_VERSION,
+        probe: { announcementKeys: { [C]: annProbe.keys }, idShaped: annProbe.idShaped, misses } },
       course: { id: C, name: detail.name, courseId: detail.courseId, modified: detail.modifiedDate },
-      teachers: (teach.results || []).map(t => ({ name: `${t.user?.givenName || ''} ${t.user?.familyName || ''}`.trim(), email: t.user?.emailAddress || null, role: t.courseRole?.identifier, userId: t.userId })),
+      teachers,
       schedule: sched.results || [],
-      announcements: (ann.results || []).map(mapAnnouncement),
+      announcements,
       gradeCategories: (cats.results || []).map(c => ({ id: c.id, title: c.title, weight: c.weight ?? null })),
-      gradebook, attempts: await attempts(C, gradebook), content: await walk(C) }; };
+      gradebook, attempts: att, content }; };
   const memberships = async () => { const m = await j(`/learn/api/v1/users/${userId}/memberships?expand=course.effectiveAvailability,course.permissions,courseRole&includeCount=true&limit=10000`); return (m.results || []).map(x => ({ id: x.course.id, name: x.course.name, courseId: x.course.courseId, termId: x.course.termId, termName: x.course.term?.name, uuid: x.course.uuid, role: x.role, membershipId: x.id, lastAccess: x.lastAccessDate })); };
   const calendar = async (since, until) => ({ calendars: (await j('/learn/api/v1/calendars?limit=10000')).results || [], items: (await j(`/learn/api/v1/calendars/calendarItems?since=${since}&until=${until}`)).results || [] });
   const post = async (run_id, kind, bb_course_id, payload) => fetch(`${supabaseUrl}/rest/v1/bb_raw`, { method: 'POST', headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' }, body: JSON.stringify({ run_id, kind, bb_course_id, payload }) });
-  // `runId` lets a caller own the run id instead of learning it afterwards. It is NOT yet safe for
-  // the bb-sync skill to register before crawling — see the header: transform_tick folds a
-  // registered run on a three-minute idle with no completeness check, so a slow crawl would be
-  // folded half-done and the rest dropped. The skill still registers immediately after this
-  // returns, under migration 039's grace window. Validated first, so a bad id fails before any
-  // request goes out rather than after seven courses have been crawled.
+  // `runId` is the id the bb-sync skill registered on its claimed request BEFORE calling this
+  // (register-first, migrations 135 and 136; see the header). The calendar row is posted LAST on
+  // purpose: it is what tells transform_tick the crawl is complete, and a registered run is folded
+  // on nothing else, so a crawl that stops part-way is never folded half-done. Validated first, so
+  // a bad id fails before any request goes out rather than after seven courses have been crawled.
   const runAll = async ({ termName = null, runId = null, since = '2026-08-01T04:00:00.000Z', until = '2027-01-15T04:00:00.000Z' } = {}) => {
     const run_id = assertRunId(runId) || crypto.randomUUID(); const mem = await memberships(); const mine = termName ? mem.filter(m => m.termName === termName) : mem;
     const log = [['memberships', (await post(run_id, 'memberships', null, { results: mem })).status]];
-    for (const m of mine) { const p = await crawl(m.id); log.push([m.name, (await post(run_id, 'course', m.id, p)).status]); }
+    const userCache = new Map(); // one author lookup per distinct id for the whole run (task 18)
+    for (const m of mine) { const p = await crawl(m.id, { userCache }); log.push([m.name, (await post(run_id, 'course', m.id, p)).status]); }
     log.push(['calendar', (await post(run_id, 'calendar', null, await calendar(since, until))).status]);
     return { run_id, log }; };
   // Fire every download from ONE call so the browser's permission prompt (if any) appears once, not per file.
@@ -625,7 +854,8 @@ function installCrawler({ userId, supabaseUrl, anonKey, base = 'https://blackboa
 // Under Node it exposes the pure mappers to the vitest suite in web/test.
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { installCrawler, strip, personName, announcementAuthor, mapAnnouncement, AUTHOR_KEYS,
+    userIdOf, announcementProbe, keyListMisses, resolveAuthors, PROBE_ID_LIMIT,
     mapAttempt, mapAttemptFile, mapGradeRow, mapAttemptDetail, newestAttempts, atPath,
-    shouldProbeColumn, assessmentFields, pickKey, assertRunId,
+    shouldProbeColumn, assessmentFields, pickKey, pickString, assertRunId, durableUrl, parseBbfile, bbfileTags,
     ATTEMPT_FIELD_KEYS, ATTEMPT_FILE_KEYS, ASSESSMENT_FIELDS, CRAWLER_VERSION, ATTEMPT_LIMIT };
 }

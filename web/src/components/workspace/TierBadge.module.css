@@ -1,0 +1,6 @@
+/* The tier badge: the outlined pill, never red. Tokens only. */
+
+.badge {
+  composes: tagOutline from '@/styles/tokens.module.css';
+  align-self: flex-start;
+}

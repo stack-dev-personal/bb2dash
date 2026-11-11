@@ -28,6 +28,7 @@ import Link from 'next/link';
 import tokens from '@/styles/tokens.module.css';
 import { StatusOptions } from '@/components/tracker/StatusSelect';
 import { assignmentPagePath } from '@/lib/assignment-page';
+import { BLACKBOARD_LINK_TITLE, blackboardLink } from '@/lib/blackboard-link';
 import { placePopover, type PopoverPlacementResult, type Rect } from '@/lib/popover-position';
 import { useCourse, type ProgressStatus } from '@/lib/queries';
 import { NO_VALUE, scoreText, useAssignmentGrade } from '@/lib/queries.grades';
@@ -39,7 +40,8 @@ import {
   type AssignmentProgress,
 } from '@/lib/queries.popout';
 import { isQueryUnresolved, queryStateText } from '@/components/shared/QueryState';
-import { formatDue } from '@/components/popout/assignment-detail-format';
+import { effectiveDue, formatDue } from '@/components/popout/assignment-detail-format';
+import { MARK_CHAR, Mark } from '@/components/shell/icons';
 import styles from './PlannerItemPopover.module.css';
 
 /** The board the popover must stay inside — `PlannerBoard` stamps this. */
@@ -114,9 +116,12 @@ export function PlannerItemPopover({
 
   const grade = gradeQ.data ?? null;
   const course = courseQ.data ?? null;
+  const bbLink = blackboardLink(assignment, course);
   const progress = progressQ.data ?? null;
   const status = progress?.status ?? 'not_started';
   const title = assignment?.title ?? LOADING_TITLE;
+  // Stack's own due date (221) wins over Blackboard's when he set one.
+  const due = assignment ? effectiveDue(assignment, progress?.due_override) : null;
 
   const measure = useCallback(() => {
     const panel = panelRef.current;
@@ -239,7 +244,7 @@ export function PlannerItemPopover({
       }}
     >
       <button type="button" className={styles.close} onClick={onClose} aria-label="Close">
-        ✕
+        <Mark name="close" />
       </button>
 
       <div className={styles.head}>
@@ -258,9 +263,12 @@ export function PlannerItemPopover({
       ) : (
         assignment && (
           <>
-            <p className={styles.line}>
-              Due {formatDue(assignment.due_date, assignment.due_at, assignment.due_rule)}
-            </p>
+            {due && (
+              <p className={styles.line}>
+                Due {formatDue(due.due_date, due.due_at, due.due_rule)}
+                {due.overridden && ` · your date (Blackboard: ${due.blackboard})`}
+              </p>
+            )}
 
             {points !== null && (
               <p className={styles.line} title="Blackboard's own figures — nothing is computed here.">
@@ -274,6 +282,7 @@ export function PlannerItemPopover({
                 className={styles.control}
                 value={status}
                 disabled={save.isPending || plannerUnavailable}
+                aria-busy={save.isPending}
                 onChange={(e) =>
                   save.mutate({
                     assignmentId,
@@ -290,18 +299,18 @@ export function PlannerItemPopover({
             <div className={styles.links}>
               {detailsPath && (
                 <Link className={tokens.btnGhost} href={detailsPath}>
-                  See full details →
+                  See full details <Mark name="caretRight" char={MARK_CHAR.arrowRight} />
                 </Link>
               )}
-              {course?.bb_url && (
+              {bbLink && (
                 <a
                   className={tokens.btnSecondary}
-                  href={course.bb_url}
+                  href={bbLink.href}
                   target="_blank"
                   rel="noreferrer"
-                  title="Course-level link — Blackboard has no stable per-item URL here."
+                  title={BLACKBOARD_LINK_TITLE[bbLink.scope]}
                 >
-                  Blackboard ↗
+                  Blackboard <Mark name="arrowUpRight" />
                 </a>
               )}
             </div>

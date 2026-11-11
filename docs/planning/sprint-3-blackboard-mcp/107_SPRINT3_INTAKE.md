@@ -8,7 +8,8 @@ Numbering continues the repo-wide sequence (`../README.md`): this file is 107, t
 is 108, the research reports are `research/109_*`, the synthesis will be 110, briefs 111 and up.
 Migrations: sprint 2's blocks end at 149, so sprint 3 starts at **150** (reserved 150–159; recorded
 in DECISIONS when the first build brief freezes). Nothing in this sprint is built until the
-research phase closes with Stack's go.
+research phase closes with Stack's go. (Correction, 2026-11-11: 150–159 went to Phase 17's overflow on
+2026-09-29 and sprint 2 ended at 223, so the block is set when the first build brief freezes.)
 
 ## 0. Stack's goal (his words, 2026-09-29)
 

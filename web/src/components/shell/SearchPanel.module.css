@@ -1,0 +1,253 @@
+/* Materials search — the popover body under the nav field (NavSearch):
+   mode toggle, course filter, results and key hints. */
+
+/* — controls: mode toggle + course filter —————————————————————————— */
+.controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-6);
+  border-bottom: var(--size-underline) solid var(--color-divider);
+}
+
+.modeGroup {
+  display: inline-flex;
+  padding: var(--size-underline-mark);
+  gap: var(--size-underline-mark);
+  border-radius: var(--radius-md);
+  background: var(--color-neutral-900);
+}
+
+.modeBtn,
+.modeBtnActive {
+  cursor: pointer;
+  border: 0;
+  border-radius: calc(var(--radius-md) - var(--size-underline-mark));
+  padding: var(--size-4) var(--size-10);
+  font-family: var(--font-body);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+  background: transparent;
+  user-select: none;
+  transition: var(--motion-control);
+}
+.modeBtn:hover {
+  color: var(--color-text);
+  background: var(--color-hover);
+}
+.modeBtn:active,
+.modeBtnActive:active {
+  background: var(--color-active);
+}
+.modeBtn:focus-visible,
+.modeBtnActive:focus-visible {
+  outline: var(--size-focus) solid var(--color-accent);
+  outline-offset: var(--size-focus-gap);
+}
+.modeBtnActive {
+  color: var(--color-accent-100);
+  background: var(--color-accent-700);
+}
+
+.courseLabel {
+  margin-left: auto;
+}
+.courseSelect {
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: var(--size-underline) solid var(--color-neutral-600);
+  border-radius: var(--radius-md);
+  padding: var(--size-4) var(--size-8);
+  max-width: var(--size-nav-search-width);
+  cursor: pointer;
+  transition: var(--motion-control);
+}
+.courseSelect:hover {
+  border-color: var(--color-neutral-400);
+}
+.courseSelect:focus-visible {
+  outline: var(--size-focus) solid var(--color-accent);
+  outline-offset: calc(var(--size-underline) * -1);
+  border-color: var(--color-accent);
+}
+/* Switched off, not busy: a flat grey box (a busy select says so with aria-busy). */
+.courseSelect:disabled:not([aria-busy='true']) {
+  background: var(--color-neutral-900);
+  border-color: var(--color-neutral-800);
+  color: var(--color-neutral-600);
+  cursor: not-allowed;
+}
+.courseSelect:disabled[aria-busy='true'] {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+/* — results list ————————————————————————————————————————————————————— */
+.results {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-underline-mark);
+  padding: var(--space-3);
+  overscroll-behavior: contain;
+}
+
+.note {
+  margin: 0;
+  padding: var(--space-4) var(--space-3);
+  font-size: var(--text-base);
+  color: var(--color-muted);
+}
+.noteError {
+  composes: note;
+  color: var(--color-danger);
+}
+
+.row,
+.rowActive {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  padding: var(--space-3);
+  font: inherit;
+  transition: var(--motion-control);
+}
+.row:hover {
+  background: var(--color-hover);
+}
+.row:active {
+  background: var(--color-active);
+}
+.row:focus-visible,
+.rowActive:focus-visible {
+  outline: var(--size-focus) solid var(--color-accent);
+  outline-offset: calc(var(--size-focus-gap) * -1);
+}
+.rowActive {
+  background: var(--color-hover);
+  box-shadow: inset 0 0 0 var(--size-underline) var(--color-divider);
+}
+
+.rowTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.fileName {
+  font-weight: var(--font-weight-medium);
+  font-size: var(--text-base);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.rowMeta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+.bucket {
+  text-transform: capitalize;
+}
+.dot {
+  color: var(--color-neutral-600);
+}
+
+.simBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-4);
+  color: var(--color-accent-2);
+}
+.simDot {
+  width: var(--size-6);
+  height: var(--size-6);
+  border-radius: 50%;
+  background: var(--color-accent);
+}
+
+/* Which embedded part the snippet came from. Muted: provenance, not a claim. */
+.partHint {
+  color: var(--color-neutral-500);
+}
+
+.keywordBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--size-underline) var(--size-7);
+  border-radius: calc(var(--radius-md) * 0.75);
+  border: var(--size-underline) solid var(--color-text-30);
+  color: var(--color-neutral-300);
+  letter-spacing: 0.02em;
+}
+
+.snippet {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--color-text-78);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.notesHidden {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-style: italic;
+  color: var(--color-muted);
+}
+.notesTag {
+  align-self: flex-start;
+  font-size: var(--text-2xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-neutral-500);
+}
+
+/* — footer key hints ————————————————————————————————————————————————— */
+.footer {
+  display: flex;
+  gap: var(--space-6);
+  padding: var(--space-3) var(--space-6);
+  border-top: var(--size-underline) solid var(--color-divider);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+.footer > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-5);
+}
+.kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: var(--size-17);
+  height: var(--size-17);
+  padding: 0 var(--size-4);
+  border-radius: var(--radius-sm);
+  background: var(--color-neutral-900);
+  box-shadow: var(--shadow-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--color-neutral-300);
+}

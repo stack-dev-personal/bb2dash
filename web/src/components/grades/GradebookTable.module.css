@@ -1,9 +1,15 @@
 /* Gradebook table (Phase 10a). Tokens only — see tokens.module.css. */
 
+/* The one horizontal scroll box around both tables (Phase 22, task 14): at phone
+   width the table slides inside it and the page does not move. min-width: 0 lets
+   it shrink inside a grid or flex parent instead of widening it. Nothing goes on
+   th / td: a cell stays a cell (GradesTables.layout.test.tsx). */
 .wrap {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+  min-width: 0;
+  overflow-x: auto;
 }
 
 .table {
@@ -14,12 +20,14 @@
 
 .table thead th {
   text-align: left;
-  font-family: var(--font-heading);
-  font-weight: var(--font-heading-weight);
-  font-size: 10px;
+  font-family: var(--font-body);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--text-2xs);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--color-neutral-500);
+  /* A small-capital label of the chrome: dragging across the head selects nothing. */
+  user-select: none;
   padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--color-divider);
 }
@@ -36,7 +44,7 @@
    cell's own layout lives on the wrapper inside it. */
 .nameCell {
   text-align: left;
-  font-weight: 400;
+  font-weight: var(--font-weight-regular);
 }
 
 .nameStack {
@@ -63,17 +71,14 @@
   cursor: help;
 }
 
-.itemName,
-.itemLink {
+.itemName {
   color: var(--color-text);
 }
 
-.itemLink {
-  color: var(--color-accent);
-  text-decoration: none;
-}
-.itemLink:hover {
-  text-decoration: underline;
+/* The item's name is a link: it shows the global link style (ink words, a thin
+   grey underline) and dims while it is held. */
+.itemLink:active {
+  opacity: 0.7;
 }
 
 .note {
@@ -98,8 +103,12 @@
   color: var(--color-text);
 }
 
+/* The Seen stamp: the small, quiet size `tokens.mono` gave it before task 28 took
+   the code face off it (D-2). The size and colour sit on the cell now. */
 .seenCell {
   white-space: nowrap;
+  font-size: var(--text-xs);
+  color: var(--color-neutral-400);
 }
 
 /* — feedback ————————————————————————————————————————————————————————— */

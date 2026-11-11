@@ -16,7 +16,7 @@
  */
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 // Vitest runs from `desktop/`, which is where `vitest.config.mts` lives.
@@ -71,20 +71,76 @@ describe('no service-role credential anywhere in the desktop package', () => {
   });
 });
 
+/**
+ * What Phase 12 excluded, as [label, pattern, a planted string the pattern must catch].
+ *
+ * The planted string proves each pattern would fire: a pattern that matches nothing
+ * (Phase 12's `blackboard.syr.edu` never matched the real host, `blackboard.syracuse.edu`)
+ * passes the scan while guarding nothing. P-63 added the host, an embedded `<webview>`,
+ * a start-at-login registration and the dropped OneDrive mirror.
+ */
+const EXCLUDED: ReadonlyArray<readonly [string, RegExp, string]> = [
+  ['shell.openPath', /shell\.openPath/, 'shell.openPath(file)'],
+  ['a will-download handler', /will-download/, "session.on('will-download', h)"],
+  ['an auto-updater', /autoUpdater|electron-updater/, "import 'electron-updater'"],
+  ['nodeIntegration turned on', /nodeIntegration\s*:\s*true/, 'nodeIntegration: true'],
+  ['@electron/remote', /@electron\/remote|enableRemoteModule/, "require('@electron/remote')"],
+  [
+    'a Blackboard crawl',
+    /blackboard\.syr(acuse)?\.edu|bb_crawler/i,
+    "fetch('https://blackboard.syracuse.edu/learn/api/public/v1/courses')",
+  ],
+  ['an embedded webview', /<webview|webviewTag\s*:\s*true/, 'webPreferences: { webviewTag: true }'],
+  ['a start-at-login registration', /setLoginItemSettings/, 'app.setLoginItemSettings({ openAtLogin: true })'],
+  ['a OneDrive mirror', /onedrive/i, "join(home, 'OneDrive', 'bb2dash')"],
+];
+
+/**
+ * Tests that legitimately name the Blackboard host: the navigation policy hands it to the
+ * default browser, which is the opposite of crawling it.
+ */
+const HOST_NAMING_TESTS = ['navigation-policy.test.ts'];
+
 describe('the APIs Phase 12 excluded are absent by inspection', () => {
-  it.each([
-    ['shell.openPath', /shell\.openPath/],
-    ['a will-download handler', /will-download/],
-    ['an auto-updater', /autoUpdater|electron-updater/],
-    ['nodeIntegration turned on', /nodeIntegration\s*:\s*true/],
-    ['@electron/remote', /@electron\/remote|enableRemoteModule/],
-    ['a Blackboard crawl', /blackboard\.syr\.edu|bb_crawler/i],
-  ])('finds no %s', (_label, pattern) => {
+  it.each(EXCLUDED)('catches a planted %s', (_label, pattern, planted) => {
+    expect(pattern.test(planted)).toBe(true);
+  });
+
+  it('catches a planted <webview> tag as well as the webPreferences flag', () => {
+    expect(EXCLUDED.some(([, pattern]) => pattern.test('<webview src="https://example.com">'))).toBe(true);
+  });
+
+  it.each(EXCLUDED.map(([label, pattern]) => [label, pattern] as const))('finds no %s', (label, pattern) => {
     const offenders = FILES.filter((file) => {
       // This file names each API in order to forbid it.
       if (file.endsWith('audit.test.ts')) return false;
+      if (label === 'a Blackboard crawl' && HOST_NAMING_TESTS.some((name) => file.endsWith(name))) {
+        return false;
+      }
       return pattern.test(read(file));
     });
     expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * Brief 100 (2026-10-03): the shell hands a URL to the default browser from two places only,
+ * the navigation guards (a link Stack followed) and the login prompt (the container's noVNC
+ * login page, the one target the shell opens on its own). A third caller would be a new way
+ * out of the shell that no policy decides.
+ */
+describe('shell.openExternal has exactly two callers', () => {
+  const OPEN_EXTERNAL = /\bshell\.openExternal\s*\(/;
+
+  it('catches a planted call', () => {
+    expect(OPEN_EXTERNAL.test("void shell.openExternal('https://example.com')")).toBe(true);
+  });
+
+  it('is called only from main/navigation.ts and main/login-prompt.ts', () => {
+    const SRC = join(process.cwd(), 'src');
+    const callers = FILES.filter((file) => file.startsWith(SRC) && OPEN_EXTERNAL.test(read(file)))
+      .map((file) => relative(process.cwd(), file).split(sep).join('/'))
+      .sort();
+    expect(callers).toEqual(['src/main/login-prompt.ts', 'src/main/navigation.ts']);
   });
 });

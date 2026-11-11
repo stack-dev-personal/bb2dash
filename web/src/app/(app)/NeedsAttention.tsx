@@ -12,11 +12,15 @@
  * run, and the `v_data_freshness` rows. Nothing is derived from a guess: when
  * there is no sync run yet the row says so rather than showing a zero that
  * looks like good news.
+ *
+ * Phase 17 (P-12, P-71): under the row, one line per pg_cron job that has
+ * stopped or keeps failing, from `v_scheduler_heartbeat`.
  */
 
 import { useState } from 'react';
 import Link from 'next/link';
 import tokens from '@/styles/tokens.module.css';
+import { MARK_CHAR, Mark } from '@/components/shell/icons';
 import styles from './NeedsAttention.module.css';
 import {
   ATTENTION_KIND_LABEL,
@@ -29,10 +33,12 @@ import {
   type AttentionItem,
   type SyncStatus,
 } from '@/lib/queries.sync';
+import { heartbeatLines, useSchedulerHeartbeat, type HeartbeatRow } from '@/lib/queries.heartbeat';
 
 export function NeedsAttentionRow() {
   const statusQuery = useSyncStatus();
   const itemsQuery = useAttentionItems('open');
+  const heartbeatQuery = useSchedulerHeartbeat();
 
   return (
     <NeedsAttentionView
@@ -40,6 +46,8 @@ export function NeedsAttentionRow() {
       items={itemsQuery.data ?? []}
       loading={statusQuery.isPending}
       error={statusQuery.error ?? null}
+      heartbeat={heartbeatQuery.data ?? null}
+      heartbeatError={heartbeatQuery.error ?? null}
     />
   );
 }
@@ -49,6 +57,12 @@ export interface NeedsAttentionViewProps {
   items: readonly AttentionItem[];
   loading?: boolean;
   error?: Error | null;
+  /** `v_scheduler_heartbeat` rows (P-71); null until the read answers. */
+  heartbeat?: readonly HeartbeatRow[] | null;
+  /** The heartbeat read failed: said once, never read as "all is well". */
+  heartbeatError?: Error | null;
+  /** The clock the heartbeat's relative times read against. */
+  now?: Date;
 }
 
 export function NeedsAttentionView({
@@ -56,8 +70,12 @@ export function NeedsAttentionView({
   items,
   loading = false,
   error = null,
+  heartbeat = null,
+  heartbeatError = null,
+  now,
 }: NeedsAttentionViewProps) {
   const [expanded, setExpanded] = useState(false);
+  const pulse = heartbeat ? heartbeatLines(heartbeat, now) : [];
 
   const open = totalOpen(status);
   const counts = HOME_COUNT_KINDS.map((kind) => ({
@@ -76,7 +94,7 @@ export function NeedsAttentionView({
         onClick={() => setExpanded((v) => !v)}
       >
         <span className={styles.caret} aria-hidden="true">
-          {expanded ? '▾' : '▸'}
+          {expanded ? <Mark name="caretDown" /> : <Mark name="caretRight" />}
         </span>
         <span className={styles.title}>Needs attention</span>
 
@@ -96,6 +114,23 @@ export function NeedsAttentionView({
           {error ? `sync status unavailable: ${error.message}` : freshnessLine(status)}
         </span>
       </button>
+
+      {/* P-12 / P-71: one line per job that has stopped or keeps failing;
+          nothing at ok or late (B-20). Outside the toggle, so it is never folded away. */}
+      {pulse.length > 0 && (
+        <ul className={styles.heartbeat} aria-label="Scheduler health">
+          {pulse.map((line) => (
+            <li key={line} className={styles.heartbeatLine}>
+              {line}
+            </li>
+          ))}
+        </ul>
+      )}
+      {heartbeatError && (
+        <p className={`${styles.heartbeat} ${styles.heartbeatUnknown}`} title={heartbeatError.message}>
+          Scheduler health could not be read.
+        </p>
+      )}
 
       {expanded && (
         <div className={styles.panel}>
@@ -121,8 +156,8 @@ export function NeedsAttentionView({
                 {open - top.length} more not shown
               </span>
             )}
-            <Link href="/inbox" className={tokens.btnGhost} style={{ fontSize: 'var(--text-sm)' }}>
-              Open inbox →
+            <Link href="/inbox" className={tokens.btnGhost}>
+              Open inbox <Mark name="caretRight" char={MARK_CHAR.arrowRight} />
             </Link>
           </div>
         </div>

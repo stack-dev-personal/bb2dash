@@ -55,10 +55,11 @@ inferred. `inferred` = existence inferred (placeholders like "quiz series").
 | `readings` | assigned reading | seed → Blackboard |
 | `reading_progress` | your reading state | **you** |
 | `announcements` | Blackboard announcement | Blackboard |
-| `bb_content` | Blackboard content tree node (as you see it) | Blackboard |
+| `bb_content` | Blackboard content tree node (as you see it); one row per Blackboard item, unique on `(course_id, bb_item_id)` (131); two items may share a path | Blackboard |
+| `bb_material_history` | per-crawl history: one row per content item or file that appeared, changed or vanished in a registered crawl (132) | transform (`material_history_record`) |
 | `sync_runs` | provenance log per capture | sync jobs |
 | `bb_raw` | raw crawl payload per (run, course) | crawler |
-| `bb_files` | harvested file: bucket, links, hash, storage + local paths | bb-course-pull |
+| `bb_files` | harvested file: bucket, links, hash, storage + local paths; `outside_url` (164) is where a Blackboard file's link redirects when that is another site: http(s), at most 2048 characters, set only by the sync runner's `sync_file_outside_link`, never requested. A row with one (like a row whose `source_url` is off Blackboard, 161) is an **outside link**: no bytes to pull, no `storage_path` gap, "Outside link" in Materials, which opens it. Null otherwise | bb-course-pull; sync runner (`outside_url`) |
 | `bb_file_text` | extracted text unit (slide/page/doc/sheet) per file | bb-course-pull |
 | `course_maps` | versioned per-course pull plan (jsonb) | bb-course-map |
 | `bb_text_embeddings` | vector embedding per (text unit, model, part) | embed job (pending) |
@@ -69,36 +70,78 @@ Views: `v_upcoming` (not-yet-due, not finished), `v_overdue` (past due, still op
 `v_course_corpus` (files/stored/with-text per course+bucket), `v_course_map_latest`,
 `v_file_layout` (canonical storage/local paths + needs_move), `v_embedding_status`.
 
-## Search layer (migrations 010–013, 021)
+`v_gradebook_latest.counts_toward_grade` (047; follows the picker since 107) is false when a
+`grade_column_links` row marks the column "Not graded" (`excluded`), true when a non-excluded link
+places it on a component, and otherwise true when any linked assignment has a `component_id`.
+Because the view is `security_invoker`, 107 also gave `inbox_apply_runner` (which reads it, 181) a
+select-only read of `grade_column_links` (policy `grade_column_links_inbox_apply_read`); it still writes nothing there.
+
+## Search layer (migrations 010–013, 021, 024–025, 121)
 
 Two retrieval tiers over the corpus, both scoped by course when wanted:
 
 * **Full-text** — generated `tsvector` + GIN on `bb_file_text.text`, `bb_content` (title+body),
   `announcements` (title+body). Query with `search_file_text(q, course, limit,
-  include_superseded)` → ranked hits with bucket/file context and a highlighted snippet.
+  include_superseded)` → one row per matching text unit: `rank` (`ts_rank`) and a plain-text
+  `snippet` (`ts_headline` with no markup) over the whole unit, on one side of its `[notes]`
+  marker only (121, below). It returns no `part_no`.
 * **Vector** — `bb_text_embeddings` holds `vector(384)` (gte-small, migration 011) per
-  `(text_id, model, part_no)` with an HNSW cosine index. Fully populated: 534 units →
-  1,195 rows. Corpus chunks are embedded with a `"{course} {bucket} — {file_name}: "` context
+  `(text_id, model, part_no)` with an HNSW cosine index. `embed-corpus` fills it; whether every
+  current unit has its parts is checked by `db/tests/phase18_post_embed_checks.sql` (Phase 18),
+  not quoted here as a count. Corpus chunks are embedded with a `"{course} {bucket} — {file_name}: "` context
   header; queries are embedded raw. Query with `match_file_text(query_embedding, model,
   course, limit, include_superseded)` or, preferred, `hybrid_search_file_text(q,
   query_embedding, ...)` (RRF over FTS + vector, deduped to one row per text unit).
 * **`part_range`** is a 0-based half-open range of CHARACTERS (code points, matching Postgres
   `char_length`/`substring` — not JS UTF-16 units) into `bb_file_text.text`, excluding the
   context header. It is the slice that was embedded, and the slice a snippet is cut from.
-* **Snippets (021)** — `hybrid_search_file_text` returns the MATCHED PASSAGE, plain text with
-  no markup, plus `part_no` (which part matched; null when unembedded) and `snippet_source`:
-  `fts_headline` (ts_headline over the best part's slice), `vector_part` (that slice's head),
-  `unit_head` (defensive fallback).
-* **Superseded files (018 + 021 + 022)** — `bb_files.superseded_by` points at the newer version;
-  all three functions take `p_include_superseded boolean default false` and drop those rows
-  before ranking. 4 of 64 files are superseded (IST.466 schedules 58 → 16 → 66, 40 → 66;
-  roster 35 → 37); `v_bb_files_current` is the 60 chain heads.
+* **Snippets per mode (021, 024–025, 121)** — plain text, no markup, in every mode.
+  * `match_file_text` (vector): `part_no` of the nearest part, `similarity`, and the text.
+  * `hybrid_search_file_text`: `score` (RRF), `similarity`, the MATCHED PASSAGE as `snippet`,
+    `part_no` = the part the snippet was cut from (null for the whole-unit fallback), and
+    `snippet_source`: `fts_headline` (`ts_headline` over the highest-ranking part whose slice
+    covers the tsquery; null part → the whole unit), `vector_part` (the nearest part's head),
+    `unit_head` (defensive fallback).
+  * **Speaker notes (121).** A snippet either holds no text from at or after the unit's first
+    `[notes]` marker, or starts with `[notes] ` and holds only text after it. A slice (or unit)
+    that spans the marker is headlined on the side that covers the tsquery, the pre-marker side
+    on a tie; a vector hit shows the pre-marker side; an empty side never wins.
+* **Superseded files (018 + 021 + 022, 120, 122)** — `bb_files.superseded_by` points at the newer
+  version; all three functions take `p_include_superseded boolean default false` and drop those
+  rows before ranking. `v_bb_files_current` is the chain heads. Since Phase 18 the fold writes it
+  itself: `supersede_replaced_files(run_id, sync_run_id)` (122, called by `stage_files` before
+  its missing pass, 124) supersedes a file whose Blackboard item now carries exactly one other
+  file, and asks one `stack_must_confirm` question (ref `supersede/<file id>`) when the item
+  carries several, or when only the file name matches under another item. Only the newest
+  registered crawl writes. 120 closed the two hand chains 2 → 151 (IST.323 syllabus) and
+  74 → 149 (IST.466 schedule).
+* **File weeks and sessions (123, 124)** — `file_week_no(course_id, path, file_name)` holds the
+  per-course week rules (GEO.103.lecture `Week N`, IST.323 `Lecture #N - Week N`, IST.352
+  `WKnn`; null elsewhere). `link_file_sessions(sync_run_id)` fills only null `week_no` /
+  `session_id` on current, non-`stack`, non-`my_submissions` files: through the linked reading's
+  date (`link_confidence` 1.0), else the week's only session (0.8); a week with several sessions
+  asks one question (ref `session_link/<file id>`), unless Stack already answered it or the file
+  names a lecture number (`file_lecture_no(path, file_name)`, 162): then it takes the week's only
+  session that is not an exam, or, when the week has as many lecture numbers as such sessions, the
+  session at its rank (0.8; a linked sibling that disagrees, or a lone lecture in a week of two
+  sessions, still asks; an open question the rule clears is archived with
+  `decision.closed_itself`). Stack's answer counts in state `resolved`, `dismissed` or `archived`
+  (163; an archived row that closed itself is not an answer). `link_confidence` is written only where it is
+  null. `stage_files`' `counts` carry `superseded_auto` and `session_links` (each the function's
+  jsonb). Storage keys are never rewritten.
+* **Per-item Blackboard links (126)** — `assignment_bb_url(course_id, item_id)` composes a test
+  item's Ultra page (`…/ultra/courses/<bb_id>/outline/assessment/test/<item>?courseId=<bb_id>&gradeitemView=details`)
+  when `bb_content` has that item as `resource/x-bb-asmt-test-link`, else null.
+  `stage_assignments` writes it into `assignments.bb_url` only where that is null.
 * **Edge functions** (`supabase/functions/`): `embed-corpus` (batch embedder, part-level
   resume, `max_parts`/`skip_parts` fan-out controls) and `search` v4 (the hub's retrieval API:
   `{q, course?, mode: fts|vector|hybrid, limit?, min_similarity?, include_superseded?}`).
   **Hub default mode = hybrid** per `EVAL_EMBEDDING_POC.md` (hybrid/vector hit@1 9/10 vs FTS
   1/10 on conversational queries). Evidence for the 021–023 round:
   `docs/planning/sprint-0-foundation/51_W10_VERIFICATION.md`.
+* **The store behind uploads and memory** (migrations 190–198: a second vector table with its HNSW
+  index, one search over three kinds, the model rule): see "The pgvector store, scoped to bb2dash"
+  under Workspace.
 
 ## Enums
 
@@ -156,6 +199,516 @@ a jsonb array of 1–52 objects carrying the `planner_events` insert columns, sh
 strict jsonpath; `starts_at` / `ends_at` must carry an explicit offset. Updates are **by id**, so
 the Google mirror sees patches, never delete + insert.
 
+## Course views, gap self-close and the scheduler heartbeat (migrations 110–116)
+
+* **`v_course_stream`** (027; filters and keys 110; material posts from history 133) — the course
+  Stream, one row per post, 8 columns `course_id, post_kind, posted_at, ref_kind, ref_id, title,
+  body, meta`. Announcement `meta` = `{is_read, is_unread}`; `is_unread` is the bell's predicate
+  (`read_at is null and is_read is distinct from true`, 063). File `meta` = `{bucket, file_name,
+  mime_type, storage_path, source_url, change, run_id}`. Since 133 a material post is one
+  `bb_material_history` row that appeared or changed (`meta.change` = `appeared | changed`,
+  `meta.run_id` = the crawl, `posted_at` = its `seen_at`); see "Content identity and history"
+  below. Left out: `my_submissions` files, files whose `notes` carry `missing_since_run=`,
+  superseded files, and `bb_content` nodes with `detail.missing_since`.
+* **`v_content_tree`** (027; two columns appended by 111) — Classwork, 19 columns. `missing_since
+  uuid` is `bb_content.detail->>'missing_since'` cast: the sync run that first found the node gone
+  from Blackboard (the P-98 vanish convention), a projection, not a stored column. `notes` is the
+  joined current file's `bb_files.notes`. A node with `missing_since` set is a **ghost** when a
+  live node in the same course shares its `bb_item_id`, otherwise **stale**. Since 130 and 131
+  there are no ghosts: 130 merged them into their live twins and 131's key
+  `(course_id, bb_item_id)` keeps a rename on the item's own row.
+* **Gap self-close** (114) — `stage_gaps` questions (`suggested.source = 'stage_gaps'`) close
+  themselves when the fact arrives: grading scheme recorded, assignment dated (`due_at`,
+  `due_date` or `event_start`), reading dated, file stored or superseded.
+  `close_cleared_gaps(p_sync_run_id, p_trigger)` (service_role only) archives each with
+  `archived_by = 'stage_gaps'` and `decision = {closed_itself: true, rule, sync_run_id, trigger}`;
+  `trigger` is `fold` (from `stage_gaps`, which reports `counts.gaps_closed`) or
+  `bb_files_update` (the `bb_files_close_cleared_gaps_trg` statement trigger). A key that
+  already closed itself in the last 24 h stays open with `suggested.reopened_within_24h = true`
+  and is never machine-closed after that. `attention_answered()` ignores machine-closed rows, so
+  a hole that reopens is asked again; a row Stack answered still counts.
+* **`v_inbox_feedback`** was dropped by 116 (R-57). `agent_requests.kind = 'inbox_feedback'`
+  stays: it is /inbox-apply's kind. /inbox-apply reads `v_inbox_queue` (090).
+* **`v_scheduler_heartbeat`** (113) — two rows, `transform` (cron job `bb2dash-transform-tick`)
+  and `calendar_push` (`bb2dash-calendar-push`), only for `app_owner()`'s JWT; empty for anyone
+  else. Columns: `job, cron_jobname, tick_seconds` (120 for both), `last_tick_at` (newest
+  `cron.job_run_details.start_time`), `last_ok_at` (transform: newest `succeeded` cron row;
+  calendar_push: newest `calendar_push_runs` row with status `ok`, because the cron row says
+  `succeeded` even when the push failed), `consecutive_failures` and `last_error` (failures since
+  that last success, and the newest one's message; null when there are none), and `stage`:
+
+  | stage | when (first match wins) |
+  |---|---|
+  | `off` | cron job inactive or missing; for calendar_push also `app_settings.gcal_enabled` false |
+  | `failing` | `consecutive_failures >= 3` |
+  | `missing` | never ticked, or the newest tick is more than 600 s old |
+  | `late` | the newest tick is more than 240 s old (Home says nothing) |
+  | `ok` | otherwise |
+
+  The view is `security_invoker` over `private.scheduler_heartbeat()`, a SECURITY DEFINER function
+  in schema `private` (not exposed by PostgREST; usage to `authenticated` and `service_role`
+  only) because it reads `cron.*`. The rule itself is `private.heartbeat_stage(last_tick_at,
+  now, consecutive_failures, active)`.
+
+## Content identity and history (migrations 130–134)
+
+* **Key** (131) — `bb_content` is unique on `(course_id, bb_item_id)`
+  (`bb_content_course_item_key`); the old `(course_id, path)` key is dropped and a plain index
+  `bb_content_course_path_idx (course_id, path)` serves path lookups. `parent_id` comes from the
+  payload's `parentId`. A rename updates the row and appends the old path to
+  `detail.previous_paths` (jsonb array of strings, oldest first; 130 wrote the merged ghosts'
+  paths there); `detail.previous_ids` is carried.
+* **`stage_content(p_run_id)`** (131) — only the newest registered crawl writes (043/056
+  predicate); returns `inserted, updated, unchanged, missing, missing_cleared, title_fallbacks,
+  duplicate_paths, unresolved_courses, unresolved_items, items, courses, older_run, run_id`.
+  `updated` counts rows where a stored field changed; an unchanged row keeps its `run_id`.
+* **`bb_material_history`** (132) — append-per-run, kept in full through the term. Columns `id,
+  run_id, course_id, entity ('content' | 'file'), bb_item_id, file_name ('' for content),
+  bb_file_id, change ('appeared' | 'changed' | 'vanished'), changed_fields, title, path, seen_at,
+  recorded_at`; unique `(run_id, entity, course_id, bb_item_id, file_name)`. Content is keyed
+  `(course_id, bb_item_id)` and changes on title, path, url or modified; files are keyed
+  `(course_id, bb_item_id, file_name)` from `embeddedFiles` and `detail.file` and change on url.
+  Each crawl is diffed against the newest registered crawl folded `ok`/`partial` with an older
+  row for the course; a course's first crawl is a baseline with no rows. RLS: the owner reads;
+  only `material_history_record(p_run_id)` (service_role) writes.
+* **One vanish convention** (P-98) — a vanish is always the run that first missed the item:
+  `bb_content.detail->>'missing_since'`, `bb_files.notes` `missing_since_run=<uuid>`, and
+  `bb_material_history.run_id` on a `vanished` row. 132 restamped the two older stamps that
+  disagreed.
+* **Activity** (134) — `sync_change_lines` reads the `history` stage: "N new material(s): A, B,
+  C (+k more)", "N material(s) changed: …", "N material(s) no longer in Blackboard: …".
+* **Round 2** (138, 139) — `material_history_record` still writes every history row, but its
+  counts and `sample` cover materials only (file rows, and document or link nodes no file row of
+  the run covers); `path` is a changed field only when the item's own parent or title changed;
+  a `/sessions/` url compares as null; `older_run` is true once a newer registered crawl has
+  been folded. `stage_content` re-keys a re-created item: one new item and one stored row the
+  run does not carry, on the same path with the same `item_kind`, share the row (old id to
+  `detail.previous_ids`, link and children kept), counted as `rekeyed`.
+
+## Workspace (migrations 140-143, 190-199, 202)
+
+The Workspace is a chat: a question is a row the browser writes, an answer is a row the container
+runner writes, and a queue row joins them. Read-only v1: nothing here can write planner state or a
+fact table. Conversations are archived, never deleted (no delete policy on any of the four tables).
+
+**Tables** (140). Every `created_at` / `updated_at` is `timestamptz not null default now()`.
+
+* **`workspace_conversations`** — `id uuid` pk, `created_at`, `updated_at` (trigger
+  `set_updated_at()`; since 143 it fires only when `title` or `claude_session_id` changes, so
+  archiving or restoring a chat, archiving one that is already archived, or a title set to itself
+  leaves `updated_at` alone and does not move the chat in the list; an answer moves it because
+  `workspace_finish` writes `updated_at` itself), `title text` 1–120 characters (the first line of
+  the first question, cut at 120; the owner may edit it), `claude_session_id text` (null, or
+  lower-case uuid-shaped by check: the CLI session the next turn resumes), `archived boolean`
+  default false.
+* **`workspace_messages`** — `id uuid` pk, `conversation_id` → conversations (cascade),
+  `parent_message_id` → messages (set null; an answer's parent is its question), `role`
+  (`user` | `assistant`), `request_id` → requests (set null; set on an answer), `tier`
+  (`low` | `mid` | `high`), `provider` (`claude-cli` | `ollama` | `frontier-api`), `model` (the
+  full model id the CLI reported for the turn when the stream names one, else the alias),
+  `content text` default `''`, at most 100000 characters, and at most 8000 on a `user` row,
+  `tool_calls jsonb` default `[]`, `finished boolean` default false, `error_code`, `cost_usd
+  numeric(10,4)`, `duration_ms integer`, `created_at`. A question is stored trimmed, with
+  `finished = true`; `tier`, `provider`, `model` and `request_id` are null on it.
+* **`workspace_requests`** — the queue. `id bigint` identity pk, `created_at`, `conversation_id` →
+  conversations (cascade), `user_message_id` → messages (cascade), `state` default `queued`,
+  `claimed_at`, `claimed_by`, `finished_at`, `attempts integer` default 0, `error_code`. Unique
+  partial index `workspace_requests_one_open (conversation_id) where state in ('queued',
+  'claimed')`: one open request per conversation.
+* **`workspace_runner_heartbeat`** — one row, `id smallint` = 1 by check, `polled_at`, `runner`.
+  Empty until the service first runs. Since 202 it holds the newest beat of any runner.
+* **`workspace_runner_beats`** (202) — one row per runner name: `runner text` (the key, 1 to 200
+  characters), `polled_at`. Written only by `workspace_heartbeat()`; a row not beaten for 7 days is
+  deleted by the next beat. The owner reads it; `service_role` reads it.
+
+**`tool_calls`** is a json array of at most 20 elements in call order, each `{ "tool": text,
+"query": text | null, "scope": text | null, "ok": boolean }`. `tool` is the name after the last
+`__` (`search_materials`, `get_material_text`, `list_courses`, `search_context`); `query` is the
+call's `q` or `query`, cut at 200 characters; `scope` is the rag `collection`, the materials
+`course`, or `text_id` as text; `ok` is false for a denied, failed or unanswered call. The database
+checks the array and its length, not the elements.
+
+**`cost_usd`** is the CLI's `total_cost_usd` as reported: Claude Code's own list-price estimate,
+not a charge. On a resumed turn it is the session's running total, restarting after an abnormal
+exit. Never summed, never shown, not comparable across turns.
+
+**Request states.** `queued` → `claimed` → `done` | `failed`, and `queued` | `claimed` →
+`cancelled` (Stop). A `queued` request does not expire. `error_code`, on the request row and on the
+answer, is null or one of eight: `budget_exceeded`, `timeout`, `stale_claim`,
+`provider_not_configured`, `cli_error`, `cancelled`, `usage_limit`, `sign_in_expired`. The page
+chooses its sentence from the request row's code.
+
+**`v_workspace_status`** (140 and 143, `security_invoker`) — always exactly one row: `polled_at`,
+`runner` (the heartbeat, both null before the first one), `open_requests integer` and
+`oldest_open_at` (the queued and claimed requests), and last `polled_age_seconds integer` (143):
+the whole seconds from `polled_at` to the server's `now()`, rounded down, never negative, null
+before the first heartbeat. Offline = no heartbeat, or one older than 120 s, measured as
+`polled_age_seconds` plus the time since the page read it; the browser's wall clock is never
+compared with `polled_at`. Since 202, two more last columns: `runners_alive integer` (the runners
+whose last beat is under 90 s old, the runner healthcheck's window; a beat exactly 90 s old is not
+alive) and `alive_runners text[]` (their names, sorted; `{}` when none). `polled_at` and `runner`
+are the newest beat of any runner.
+
+**The browser's functions** (140; `security invoker`, `search_path = public, pg_temp`):
+
+* **`workspace_prompt_max()`** → `integer`, 8000 (`authenticated`, `service_role`). The web holds
+  the same number as `WORKSPACE_PROMPT_MAX`.
+* **`workspace_ask(p_conversation_id uuid, p_text text)`** → `jsonb` `{conversation_id,
+  message_id, request_id}` (`authenticated`). Creates the conversation when the id is null, then
+  the user message and a `queued` request. Raises **22023** for text that is empty or over 8000
+  characters after trimming, and for nothing else; a second open request in the conversation raises
+  **23505** from `workspace_requests_one_open`.
+* **`workspace_cancel(p_request_id bigint)`** → `boolean` (`authenticated`). `queued` or `claimed`
+  → `cancelled`, with `error_code = 'cancelled'` and `finished_at` on the request row; true when a
+  row changed.
+
+**The runner's functions** (142; `security definer`, executable by `workspace_runner` only). A
+refusal one raises itself is **22023**, in a message that starts with the function's name.
+
+* **`workspace_claim(p_runner text)`** → at most one row `(request_id bigint, conversation_id
+  uuid, user_message_id uuid, prompt text, claude_session_id text, prior_tier text, history
+  jsonb)`. First sweeps claims older than 10 minutes to `failed` / `stale_claim` (request row and
+  answer). Then (143) finishes an answer still unfinished although its request closed
+  (`cancelled`, `failed` or `done`) more than 10 minutes ago: `finished = true` and the request's
+  own `error_code`, nothing else written and nothing broadcast. The 10 minutes are strict
+  (`finished_at < now() - interval '10 minutes'`): a request closed exactly 10 minutes ago waits
+  for a later poll. The runner kills a turn at 480 s and makes its last finish try at most 110 s
+  later, so no finish of a live turn is still on its way; one that came later would still store
+  its text on a cancelled request. A closed request with no `finished_at` is left alone. Then
+  claims the oldest `queued` request (`for update skip locked`, `attempts + 1`).
+  `history` is the last 20 messages before the request's own user message, oldest first, as
+  `[{role, content}]` (`[]` for a first question; the question itself is `prompt`). `prior_tier`
+  is the tier of the conversation's latest answer, null when there is none. It does not stamp the
+  heartbeat.
+* **`workspace_begin(p_request_id bigint, p_tier text, p_provider text, p_model text)`** → `uuid`,
+  the new answer's id (`finished = false`, parent = the question, `model` = the alias). Refuses a
+  request that is not `claimed`, and a second call for one request.
+* **`workspace_stream(p_request_id bigint, p_seq integer, p_delta text)`** → `boolean`. False,
+  sending nothing, unless the request is still `claimed`. An empty delta sends nothing and consumes
+  no `seq`. Refuses a delta over 16000 characters and a `seq` below 1.
+* **`workspace_finish(p_request_id bigint, p_state text, p_content text, p_tool_calls jsonb,
+  p_error_code text, p_cost_usd numeric, p_duration_ms integer, p_claude_session_id text, p_model
+  text)`** → `void`. `p_state` is `done` or `failed`. Since 143 it refuses (22023) a request that
+  is not `claimed` or `cancelled`, so a request already `done` or `failed` cannot be finished
+  again and its stored answer cannot be written over. A cancelled request stays cancelled and its
+  answer gets `cancelled`; a claimed request takes `p_state`, `finished_at` and `p_error_code`.
+  Content is cut at 100000 characters and `p_tool_calls` to its first 20 elements, neither refused
+  for length. A non-null `p_model` replaces the alias. The conversation's `claude_session_id` is
+  stamped, null when `p_claude_session_id` is not uuid-shaped, and its `updated_at` is set to
+  `now()` by the function itself (the trigger is silent when the session id stays the same).
+* **`workspace_heartbeat(p_runner text)`** → `void`. Upserts the one heartbeat row; called every
+  30 s.
+
+**Realtime** (141). Private Broadcast topic `workspace:<conversation uuid>`, two events:
+`delta` `{request_id, seq, delta}` (`seq` starts at 1 and rises by 1 per flush) and `done`
+`{request_id, message_id, state}`; `realtime.send` adds an `id` key to each. Policy
+`workspace_owner_receive` on `realtime.messages` lets the owner SELECT broadcast rows while
+`realtime.topic()` is `workspace:%` (which also covers `workspace:lobby`). There is no insert
+policy: clients only receive. A missed broadcast costs live text, never the answer; the stored row
+is the record.
+
+**Access.** RLS: the owner (`(select auth.uid()) = (select public.app_owner())`) reads all four
+tables; `anon` holds nothing. `authenticated`'s writes are **column-level** (the first such grants
+here): insert `title` and update `title`, `archived` on conversations; insert `conversation_id`,
+`role`, `content`, `finished` on messages (policy: `role = 'user' and finished`); insert
+`conversation_id`, `user_message_id` and update `state`, `error_code`, `finished_at` on requests
+(policies: insert `queued` only, and only naming a `user` message of the same conversation; update
+only `queued` | `claimed` → `cancelled` with `error_code = 'cancelled'`). It can never
+write `claude_session_id`, `tier`, `provider`, `model`, `tool_calls`, `cost_usd`, `claimed_by` or
+`attempts`. **`workspace_runner`** (142) is a login role, noinherit, nobypassrls, `statement_timeout
+= 15s`, with no table, view or sequence privilege in `public`: it reaches the queue only through
+its five functions. Its password is set out of band and is in no file. `db_test_runner` holds
+`insert, update, delete` on the four tables and the role `workspace_runner` with inherit false, for
+the `phase21_*` units.
+
+**Phase 24a objects (migrations 190–198).** Everything below is additive; 198 drops one policy. A new
+table in `public` starts with every command open to `anon` and `authenticated`, so each is revoked
+first and then granted what the owner needs. Every policy names `app_owner()` in the initplan form.
+
+* **`workspace_documents`** (190) — one row for each upload and each remembered item: `id bigint`,
+  `kind` (`upload` | `memory`), `title` (1–200), `course_id` → `courses` (set null),
+  `conversation_id` → conversations (cascade), `storage_key`, `mime` (the six types), `byte_size`
+  (1–20971520), `sha256`, `state` (`stored`, `reading`, `text_ready`, `indexed`, `failed`,
+  `deleting`), `error_code` (`too_large`, `bad_type`, `bad_bytes`, `no_text`, `extract_timeout`,
+  `extract_failed`, `too_many_units`, `link_expired`, `download_failed`, `embed_failed`), `attempts`
+  (0–3), `signed_url` and `signed_url_expires_at` (written and cleared together), `claimed_at`,
+  `claimed_by` (the ingest lease), `created_at`, `updated_at`. Three CHECKs: `storage_key` holds
+  lower-case letters, digits and `/ . _ -` only; `signed_url` is null or this project's host, the
+  bucket's signed path, this row's own `storage_key`, then a query string; an upload's `sha256` is 64
+  lower-case hex characters and its `storage_key` is `u/` + the hash. A unique index on `sha256`
+  where `kind = 'upload'`, and one on `conversation_id` where `kind = 'memory'`. The owner selects
+  and updates `title` and `course_id` (column grant); nothing else is written directly.
+* **`workspace_document_text`** (190) — the text units: `id`, `document_id` (cascade), `unit_kind`,
+  `unit_no`, `text`, `fts` (generated, GIN `workspace_document_text_fts_idx`), `embedded_at` (null
+  until the unit's vector is stored). Unique on `(document_id, unit_kind, unit_no)`. The owner selects.
+* **`workspace_text_embeddings`** (190) — one vector for each part of such a unit: `text_id`
+  (cascade), `part_no`, `part_range`, `model` (not null), `embedding extensions.vector(384)` (not
+  null), `embedded_at`. Unique on `(text_id, model, part_no)`; HNSW cosine index
+  `workspace_text_embeddings_hnsw`. The browser holds no privilege on it.
+* **`v_workspace_memory`** (190, security invoker) — `document_id`, `conversation_id`, `state`,
+  `created_at`, `updated_at`, `summary` for each remembered item.
+* **The owner's functions** (SECURITY DEFINER, `search_path = public, pg_temp`, `authenticated` only,
+  each refusing anyone but the owner first with 42501): `workspace_upload_register(p_sha256,
+  p_title, p_mime, p_byte_size, p_signed_url, p_signed_url_expires_at, p_course_id)` → `{id, state,
+  existing}` (an upsert on the hash: a second call returns the first row with `existing` true),
+  `workspace_upload_retry(p_document_id, p_signed_url, p_signed_url_expires_at)` (a `failed` upload
+  goes back to `stored`), `workspace_document_delete(p_document_id, p_object_removed)` (a memory item
+  goes whole and sets `memory_opt_out`; an upload goes in two steps: `false` removes its units and
+  vectors and leaves the row in `deleting` with its key, `true` drops a row in `deleting`), and
+  `workspace_ask_with(p_conversation_id, p_text, p_options)` (194; calls `workspace_ask` and stores
+  the options and attachments).
+* **`workspace-uploads`** (191) — a private bucket, 20 MiB a file, six types, four owner policies on
+  `storage.objects`; an object is put under `u/` + the SHA-256 of its bytes.
+* **Search** (192, SECURITY INVOKER, `service_role` only): `workspace_search(p_q, p_query_embedding,
+  p_kinds, p_courses, p_limit, p_min_similarity, p_model)`, its twin `hybrid_search_workspace_text`
+  (ranks as `hybrid_search_file_text` does, uses no index) and `workspace_attachment_read(p_kind,
+  p_id, p_max_chars)`.
+* **The ingest worker** (193): login role `workspace_ingest_runner` (no table grant, password set out
+  of band, in no file) and its four functions `workspace_ingest_claim`, `workspace_ingest_put_text`,
+  `workspace_ingest_finish`, `workspace_ingest_heartbeat`; the table `workspace_ingest_heartbeat`
+  (one row, `id = 1`). A claim hands over one document at a time, with a 10-minute lease and
+  `for update skip locked`; a step is tried 3 times.
+* **Options and routines** (194): `workspace_routines` (six rows: `quiz`, `study-guide`,
+  `explain-file`, `summarise-reading`, `plan-week`, `draft-help`; `needs` is `nothing`, `file` or
+  `course_or_file`), `workspace_request_options` (`course_display_id`, `course_ids`, `depth` `auto` |
+  `quick` | `standard` | `deep`, `routine_id`, `format` `plain` | `rich`) and
+  `workspace_request_attachments` (up to five, files first, then uploads).
+* **Turn state** (195): `workspace_profile` (one row; `about_me` up to 2,000 characters, the owner's
+  only direct write there; `memory_since`, stamped once by the first memory job claim),
+  `workspace_conversation_state` (rolling summary and its through-point, the job lease and failures,
+  `memory_opt_out`, `memory_written_at`), `workspace_turns` (one row for each answered request: ids,
+  counts and timings, no text) and `workspace_sources` (at most 40 rows for each request: kind
+  `material` | `upload` | `memory` | `feed`, origin `auto` | `attached` | `tool`, ids and a title,
+  never a passage).
+* **The runner's six new functions** (196, SECURITY DEFINER, `workspace_runner` only, which now
+  executes eleven and still holds no table, view or sequence grant): `workspace_claim_v2`,
+  `workspace_turn_context` (a jsonb of eleven keys), `workspace_turn_put`, `workspace_planner_feed`
+  (a jsonb of eight keys; the window is clamped to 180 days either side of today in New York and the
+  courses are the request's own stored scope), `workspace_job_claim` and `workspace_job_finish` (a
+  rolling summary, or a remembered item written as an upsert on its conversation).
+* **The second runner (202)** — `workspace_claim_v3(p_runner text, p_max_open integer default 2)`:
+  `workspace_claim_v2` with one rule changed: it claims while fewer than `p_max_open` requests are
+  claimed across runners (v2: while none is); a cap outside 1 to 4 is refused (22023). Same lock, sweeps
+  and four columns. `workspace_runner` executes thirteen (207's `workspace_search_timing` and this one
+  added to the eleven) and still holds no table, view or sequence grant. The runner calls it with 2 under
+  its fixed name `workspace@<WORKSPACE_RUNNER_NAME>`, which compose sets to `<project>-<service>`
+  (`workspace@bb2dash-workspace`, `workspace@bb2dash-workspace-2` live; a test project's runner carries its own
+  project name, so it never closes a live runner's turn as its own).
+
+* **The review round (199)** — `create or replace` only. `workspace_job_claim`: a message is old for a
+  rolling job when the messages newer than it already pass 14,000 bytes, and the newest finished
+  message of a conversation is never old (`through` never reaches it), so the next question always sees
+  one verbatim turn; the lease holder records its kind (`rolling:<runner>` or `memory:<runner>`).
+  `workspace_job_finish` refuses (22023) unless the runner holds the lease for that kind and it is under
+  5 minutes old. `workspace_ingest_claim`: after a failed try a document is not handed out until 60
+  seconds times its `attempts` have passed since that try (`claimed_at`, which `retry` now keeps as the
+  time of the try); it still counts as waiting. `workspace_ingest_finish` gains the outcome `release`
+  (a document in `text_ready`: lease freed, attempts unchanged). `workspace_turn_put` stores each
+  attachment as exactly `{kind, id, state}` (kind `file` | `upload`; state `read`, `cut`, `not_ready`,
+  `failed`, `missing`, `no_text`; five at most) and takes a source's title from the database (the feed's
+  is `Planner and grades`), at most 200 characters.
+
+### The pgvector store, scoped to bb2dash
+
+One retrieval store inside the bb2dash project, schema `public`, vector type from the `vector`
+extension in schema `extensions`. It holds three kinds of content, all embedded with `gte-small` at 384
+dimensions so cosine similarity orders hits across kinds: `material` (course files), `upload` and
+`memory`. No second project and no schema of its own; nothing in it reads or copies the vault's
+`harness-memory` store.
+
+**Its objects.** `vector` (extension); `bb_file_text` and `bb_text_embeddings` with the HNSW cosine
+index `bb_text_embeddings_hnsw` (course files); `search_file_text`, `match_file_text` and
+`hybrid_search_file_text` (their searches); `v_embedding_status`; the edge functions `embed-corpus`
+and `search`; and, new in 24a, `workspace_documents`, `workspace_document_text`,
+`workspace_text_embeddings` with the index `workspace_text_embeddings_hnsw`, `v_workspace_memory`,
+`workspace_upload_register`, `workspace_upload_retry`, `workspace_document_delete` (190),
+`workspace_search`, `hybrid_search_workspace_text`, `workspace_attachment_read` (192),
+`workspace_ingest_claim`, `workspace_ingest_put_text`, `workspace_ingest_finish`,
+`workspace_ingest_heartbeat` and the table `workspace_ingest_heartbeat` (193), `workspace_job_finish`
+(196), `v_workspace_index_status` (197), `v_workspace_store_proof` (199: one row of plain columns with the catalog answers of proofs 1, 2, 3 and 7, for the acceptance run) and the edge functions `workspace-embed` and
+`workspace-search`. The five **content tables** are `bb_file_text`, `bb_text_embeddings`,
+`workspace_documents`, `workspace_document_text` and `workspace_text_embeddings`.
+`workspace_ingest_heartbeat` is the sixth table and holds no content.
+
+**One search, the kind on every hit.** `workspace_search` returns rows of kind `material`, `upload` or
+`memory`, never null, each with its unit id (`bb_file_text.id` with `file_id`, or
+`workspace_document_text.id` with `document_id`), course, title, unit, part, `similarity`, `score`, a
+passage of at most 2,000 characters, `has_notes` and `written_at` (the remembered item's `updated_at` for `memory`, null for the other two kinds). It calls `hybrid_search_file_text` once for each
+course of the scope and `hybrid_search_workspace_text`, and keeps at most `p_limit` rows of each kind.
+With a scope, course materials and course-tagged uploads are filtered; untagged uploads and every
+remembered item are always searched. A document in `deleting` or `failed` is never returned.
+
+**The model rule, and its limit.** Every vector row names its `model` (not null) and the model is part
+of the key `(text_id, model, part_no)`, so vectors of two models can stand side by side. The search
+ranks one model at a time (`p_model`, default `gte-small`, handed to both arms). So a re-embed is
+rows, not schema: write the corpus again under the new name, switch `p_model`, delete the old rows.
+That holds for a model of **384 dimensions**; a model of another size needs a new column and a new
+index (011 did that while the table was empty). `gte-small` stays; no model is changed in 24a.
+
+**What the index does today.** Both vector columns have an HNSW cosine index. The hybrid searches
+(`hybrid_search_file_text`, `hybrid_search_workspace_text`) measure every part in scope and keep the
+best part of each unit: an exact comparison, never an index scan, and the ranking Phase 18 timed and
+pinned. The index serves a nearest-first query with a limit, the shape of `match_file_text`
+(mode `vector` of the `search` function). Moving the hybrid search onto the index is a change to two
+function bodies in a new migration; the moment for it is when the hybrid search's timed median passes
+the 60 ms ceiling of Phase 15.
+
+**Every write is an upsert on a key, so a second write of the same thing changes no count.**
+
+| what is written twice | the key | what the second write does |
+|---|---|---|
+| a part of a course unit | `(text_id, model, part_no)` | nothing: `embed-corpus` takes a duplicate as stored |
+| the same file from his device | the SHA-256 of its bytes (unique among uploads) | nothing: `workspace_upload_register` returns the row that holds the hash |
+| the units of one document | `(document_id, unit_kind, unit_no)` | `workspace_ingest_put_text` replaces the set in one transaction |
+| a part of an upload's or a remembered item's unit | `(text_id, model, part_no)` | nothing: `workspace-embed` takes a duplicate as stored |
+| a conversation's remembered item | one memory row for each conversation | the same summary writes nothing; a new one replaces the unit, removes its vectors and puts the document back in `text_ready` with attempts 0 |
+
+**The queue and the status.** An upload moves `stored` → `reading` → `text_ready` → `indexed`, or ends
+`failed`; a remembered item starts at `text_ready`. `v_workspace_index_status` (197, security invoker)
+is one row with these columns: `course_units_indexed`, `course_units_waiting`, `course_last_embedded`,
+`course_files_text_pending`, `uploads_indexed`, `uploads_waiting`, `uploads_failed`,
+`upload_links_expired`, `uploads_deleting`, `memory_indexed`, `memory_waiting`, `memory_failed` and
+`ingest_polled_age_seconds`. It reads no table of the `storage` schema. A course unit has no failed
+state: one that could not be embedded still waits and is tried at the next sync.
+
+**Direct touches.** Two older ones stand, two are closed (198 in 24a, 201 in 25a), and 24a adds two
+(both the page's). (1) *Closed by 201 (Phase 25a):* the sync inserted a course file's units into
+`bb_file_text` over REST with the publishable key, under the insert-only policy
+`bb_file_text_anon_insert` (007); since 200 the sync and the Windows fallback store them through
+`sync_file_text_put` as `sync_runner`, and 201 drops the policy. (2) `get_material_text` reads one
+course unit from `bb_file_text` over REST with the service key. (3) The owner's session holds the owner
+policy on both course tables, for every command (020). (4) *Closed by 198:* the policy
+`bb_text_embeddings_anon_insert` (010) let a holder of the publishable key insert a vector row; 198
+drops it, and `embed-corpus` writes with the service role, which bypasses row security. (5) The page
+reads remembered summaries through `v_workspace_memory`, a view over a table the owner's session may
+read; that grant also lets the owner's session read the units of his own uploads, which no page code
+does. (6) The page selects the catalog rows of `workspace_documents` and updates two columns of it,
+`title` and `course_id`. No service built in 24a reads or writes a unit or a vector except through a
+named function.
+
+**The two exceptions that come through the public keys.** "Reached only with bb2dash's own
+credentials" is not true without them: the publishable key may insert into `bb_file_text` (touch 1),
+and any valid JWT, the public anon JWT included, reads course passages through `search` and may start
+the two embedders, which write only vectors of text that is already stored. Uploads and memory never
+pass through `search`.
+
+**It reads no other project.** No foreign server and no foreign table exist; `dblink`,
+`postgres_fdw` and `wrappers` are not installed; no function that names a store table calls out. The
+proofs are `db/tests/phase24_store_proof.sql`.
+
+**What would have to change to lift it into a project of its own.** The largest piece is on the course
+side: `hybrid_search_file_text`, `match_file_text`, `search_file_text` and `v_embedding_status` join
+`bb_files` for a unit's course, bucket, file name and whether the file was replaced, and
+`bb_file_text.file_id` is a foreign key to it. A store in its own project would need those four values
+on its own side, kept current by the sync. The upload and memory half has no such join. Five objects
+span both sides, and a move splits each one or leaves it calling across:
+
+| object | its store side | its app side |
+|---|---|---|
+| `workspace_document_delete` | removes a remembered item, its unit and its vectors | sets `memory_opt_out` in `workspace_conversation_state`, in the same transaction |
+| `workspace_job_finish` | writes a remembered item and its unit | writes the job's columns in `workspace_conversation_state` |
+| `workspace_turn_context` | reads an attached upload's title and state from `workspace_documents` | the runner's read of a request: options, messages, course list |
+| `workspace_ask_with` | checks that an attached upload exists in `workspace_documents` | stores the request's options and attachments |
+| `v_workspace_index_status` | counts the store's rows and reads `workspace_ingest_heartbeat` | reads `bb_files.text_status` for `course_files_text_pending` |
+
+`workspace_documents` also carries two ids of app rows, `conversation_id` and `course_id`, which in a
+move are plain ids, as are the foreign keys from an app row to a store row (an attachment's and a
+source's `document_id`). A service holds function names and an address, not table names; the page holds
+one table and two views besides (`workspace_documents`, `v_workspace_memory`,
+`v_workspace_index_status`).
+
+## Inbox apply: holds, two-step filing, acceptance objects (migrations 187-188)
+
+Phase 23's follow-ups (brief 110). 180-186 (the `apply` container's role and functions) are not
+described here; this section covers what 187 and 188 add or change.
+
+**The hold** (187). An answer the apply worker could not apply is *held*: a sync does not try it
+again, and a new answer or a press of Apply answers does.
+
+* **`inbox_apply_holds`** — `item_id bigint` pk → `attention_items` (cascade), `request_id bigint`
+  (the request whose run could not apply it; informational, no foreign key), `resolved_at timestamptz`
+  (the answer's `resolved_at` **as that run was handed it** by `inbox_apply_prepare`; null if the row
+  had none), `held_at timestamptz default now()`. Row level security on, **no policy, and every
+  privilege revoked** from `public`, `anon`, `authenticated`, `service_role` and both runner roles;
+  the test login holds `select` alone. Only `inbox_apply_close` writes it, with its owner's rights.
+* **`inbox_apply_held_items()`** → `setof bigint`: the `v_inbox_queue` rows that have a hold whose
+  `resolved_at` equals the row's own (`is not distinct from`; no clock is compared), unless the row has
+  `applied_at` set and no note (the worker records that without a run, so it is never held).
+  SECURITY DEFINER; the service role and the test login only.
+* **`inbox_apply_close(bigint, text, jsonb)`**: `result.skip_seen`, a list of `{id, resolved_at}` (the
+  time exactly as `prepare` gave it, or null), writes a hold for each id of `skip` that is still in the
+  queue with that same time, **on a failed close only** (a new hold always comes with the notice a failed
+  close raises). A malformed `skip_seen` is refused (22023); a close with none writes no hold. Either
+  close removes the holds whose item left the queue or was answered again. The `not_applied` notice says
+  a sync does not try the answers again and that a new answer or the button does **only when,
+  after the close has written its holds, a hold stands for an id of its `skip`** (the held-items test); an
+  old worker's failed run, an empty skip, or an answer given again during the run keeps 186's sentence
+  ("press Apply answers to run the rest"), which is the true one while the next sync still retries. The failure notice
+  (`inbox-apply-failed`) stays open while an id of this close's `skip` waits, **or** a waiting answer is
+  held, **or** 186's own arm holds (a failed request of the worker listed the id in its `result.skip` and
+  finished at or after the answer's `resolved_at`: this covers the old worker, which sends no
+  `skip_seen`). Only the notice reads that third arm; no hold or sync decision reads `agent_requests`.
+* **A retry request** is a press of Apply answers and its chain: a request whose params carry no
+  `trigger`, or `retry_held: true` (the JSON boolean; nothing else counts). The follow-up that its close
+  files carries `{trigger: followup, after, skip, retry_held: true}`, and is filed while any queue row
+  outside the close's `skip` waits, held or not. The failed close of a retry follow-up writes **no hold
+  for an id in that request's own `params.skip`** (it was handed those ids as `held` and never tried
+  them; the id stays in the close's `skip`, so the notice stays open, and a hold that already stands is
+  left as it is). Every other request's follow-up (no `retry_held`) is
+  filed only for a row that is neither in the close's `skip` nor held.
+* **`inbox_apply_prepare(bigint)`** returns one more key, `held`: a JSON array of item ids the worker must
+  not hand to Claude. `[]` for a request with no `trigger` (the Inbox button's: a press tries held
+  answers again); the request's own `params.skip` (numbers only) for a follow-up with `retry_held: true`,
+  so inside a press's chain only what that chain already failed on is left alone; `inbox_apply_held_items()`
+  for every other request (a sync's, a follow-up's of a sync, the fallback skill's).
+  **`sync_request_inbox_apply(bigint)`** files a request only when a row outside the held set waits (an
+  id, or null as before).
+
+**Filing a decision in two steps** (187). `attention_items.decision_filed` is `{note_path, log_path?,
+ingested?, logged_at?}` or `{skipped: true, why}`.
+
+* `inbox_decision_filed(id, {note_path, log_path?})`: `note_path` required; `log_path` absent or null
+  means the day-file entry is not written yet. `inbox_decisions_unlogged(limit)` lists archived
+  `inbox-decision/1` rows filed with a note path and no log path (same columns as
+  `inbox_decisions_unfiled`); `inbox_decision_logged(id, log_path)` adds `log_path` and `logged_at`,
+  once. `inbox_decision_skipped(id, why)` marks a row filed with nothing to file, once: neither list
+  shows it. It returns false and marks nothing when `inbox_apply_writes` holds a row for the item (a
+  logged write is never skipped, so the exporter files that row like any other). All invoker rights, the
+  service role's (and the test login's) alone. Item 3782 (the test item of the cut-over run, which has a
+  logged write) is marked skipped by the migration's own guarded statement, with the same
+  `{skipped: true, why}` shape.
+
+**Acceptance objects** (187).
+
+* **`v_inbox_apply_runs`** (security invoker; `anon` revoked; select for `authenticated`,
+  `service_role`, `db_test_runner`): one row per `inbox_feedback` request, typed columns in this order —
+  `id bigint`, `state text`, `filed_by text` (`params.trigger`: `sync`, `followup`, `skill`, whatever
+  it holds; `button` when there is none), `after_request bigint` (`params.after`), `claimed_by text`,
+  `created_at`, `claimed_at`, `finished_at timestamptz`, `claude_started boolean`
+  (`result.claude.started`; false unless it is true), `error_code text` (`result.error`),
+  `archived_count integer` (`result.archived`), `skip_ids bigint[]` (what the request's own close
+  listed in `result.skip`; empty when none). It does not read `inbox_apply_holds`.
+* **`inbox_accept_question(p_run text, p_label text)`** → the new item's id. SECURITY DEFINER,
+  `authenticated` only; it refuses (42501) unless `auth.uid()` is `app_owner()`, before anything else.
+  `p_run` matches `^[a-z0-9]{6,24}$`, `p_label` `^[a-z][a-z0-9-]{0,15}$` (22023). The row: entity
+  `agent_request`, no course, no field, ref `accept/<run>/<label>`, a fixed sentence with the label in
+  it; kind `data_gap` for the labels `dismiss` and `offline` (a card with Dismiss), else
+  `stack_must_confirm`. It archives, as `closed_itself`, every unarchived row of that shape (ref
+  `accept/…`, entity `agent_request`, no course) with another run tag, refuses a ref used before and a
+  ninth open row. A test row carries no `inbox-decision/1` record, so the exporter never lists it.
+
+**`applied_at` on a session answer** (188). `attention_items.applied_at` on a `session_link/<file id>`
+answer now means **his pick is the session the file carries**. `link_file_sessions` ends every fold with
+one statement that stamps every such answer (resolved, dismissed, or archived and not self-closed, with no
+stamp yet) whose pick is the `session_id` its current file (not superseded) carries, however the file came
+by it: the answer itself, the reading's date, the week's only session, the lecture number, an inherited
+link. An answer of "none", or a pick the file does not carry, is never stamped. So a queue row for a
+session answer reads `was_applied = true` once the fold has run. Answers the fold applied **before 188**
+were stamped by the migration's one-time backfill (the same predicate, for resolved and archived rows):
+their stamp time is **the migration's**, not the fold's. `supersede_replaced_files` also reads an archived answer (not self-closed) when it decides whether a
+`supersede/<file id>` question is already settled, so /inbox-apply archiving the answer no longer
+brings the question back.
+
 ## Seed state (2026-09-02)
 
 7 courses, 12 staff, 11 meeting patterns, 127 sessions, 25 grade components, 57 assignments,
@@ -193,6 +746,9 @@ Blackboard Ultra publishes an **iCal feed** of the calendar (Calendar → settin
 That is the low-cost recurring source for `assignments.due_at`; the browser session is for
 grades, content, announcements and anything the feed does not carry. Capture the feed URL during
 phase 2 and store it in `sync_runs.notes` or a `.env`, never in the repo.
+The daily `bb2dash-ical-poll` cron job was retired in migration 127 (Phase 18, R-72): it wrote an
+"ok" `sync_runs` row every day with no data. `ical_poll()`, `ical_collect()` and
+`app_settings.ical_*` are still defined.
 
 ## Access
 

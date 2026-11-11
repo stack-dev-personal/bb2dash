@@ -1,0 +1,24 @@
+flowchart TB
+  Person[Person using the hub] --> Web[Next.js web app]
+  Desktop[Electron desktop shell] --> Web
+  Web <-->|session, data queries and database functions| Data[(Supabase Postgres and Auth)]
+  BB[Blackboard Ultra] -->|logged-in browser| Sync[Sync worker]
+  Sync -->|raw records, transforms and file text| Data
+  Sync -->|course files| Storage[(Supabase Storage)]
+  Data -->|queued questions| Workspace[Workspace runners]
+  Workspace -->|answers and proposals| Data
+  Data -->|answered Inbox and announcement queues| Apply[Apply worker]
+  Apply -->|bounded, logged changes| Data
+  Web -->|uploads| Storage
+  Upload[Upload ingest worker] <-->|claims, text and index state| Data
+  Storage -->|signed download| Upload
+  Upload <-->|temporary file exchange| Parser[Offline file parser]
+  Materials[Materials MCP server] -->|search requests| Search[Search edge functions]
+  Search <--> Data
+  Materials -->|material text reads| Data
+  Workspace -->|gated material reads| Materials
+  Apply -->|material reads| Materials
+  Workspace -->|allowed model traffic via egress| Model[Claude provider]
+  Apply -->|allowed model traffic via egress| Model
+  Data -->|scheduled calendar push| Calendar[Calendar edge function]
+  Calendar -->|one-way event updates| Google[Google Calendar]

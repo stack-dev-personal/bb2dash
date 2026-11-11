@@ -129,6 +129,91 @@ describe('rule 1 — sync landed', () => {
   });
 });
 
+/**
+ * Phase 19 (brief 99, task 24). Migration 136's terminal rule closes a crawl that never
+ * finished as `failed` with `interrupted_at` set, and 137 surfaces that as
+ * `v_sync_status.interrupted`. It was never folded, so its summary is null.
+ */
+describe('rule 1 — an interrupted sync', () => {
+  const reaped = () => syncRow({ status: 'failed', interrupted: true, summary: null });
+
+  /** Round 2, R2-7: the body says what happened, and the click opens the Inbox item 136 raised. */
+  const INTERRUPTED_BODY =
+    'The crawl did not finish. Nothing from it was folded in; your Inbox has the details.';
+
+  it('titles a reaped run "Sync interrupted", says the crawl did not finish, and opens the Inbox', () => {
+    const { toasts } = reduce(input({ sync: reaped() }));
+    expect(toasts).toHaveLength(1);
+    expect(toasts[0]).toEqual({
+      key: 'sync:41',
+      title: 'Sync interrupted',
+      body: INTERRUPTED_BODY,
+      route: '/inbox',
+    });
+  });
+
+  it('opens the Inbox even though the reaped run raised nothing in its own summary', () => {
+    const withSummary = syncRow({
+      status: 'failed',
+      interrupted: true,
+      summary: { changes: [], attention_raised: 0, errors: ['crawl: tab closed'] },
+    });
+    const toast = reduce(input({ sync: withSummary })).toasts[0];
+    expect(toast?.route).toBe('/inbox');
+    expect(toast?.body).toBe(INTERRUPTED_BODY);
+  });
+
+  it('keeps "Sync failed", its first error and Home for a failed run that was not reaped', () => {
+    const failed = { changes: [], attention_raised: 0, errors: ['files: timeout'] };
+    const notReaped = syncRow({ status: 'failed', interrupted: false, summary: failed });
+    expect(reduce(input({ sync: notReaped })).toasts[0]).toEqual({
+      key: 'sync:41',
+      title: 'Sync failed',
+      body: 'files: timeout',
+      route: '/',
+    });
+  });
+
+  it('keeps "Sync failed" for a row that carries no interrupted column (before 137)', () => {
+    const before137 = syncRow({ status: 'failed', summary: null });
+    expect('interrupted' in before137).toBe(false);
+    expect(reduce(input({ sync: before137 })).toasts[0]?.title).toBe('Sync failed');
+  });
+
+  it('still never toasts a running run, whatever the flag says', () => {
+    const claimed = syncRow({ status: 'running', finished_at: null, summary: null });
+    expect(reduce(input({ sync: claimed })).toasts).toEqual([]);
+    // Not a shape prod writes: a running row with a finish time and the flag set.
+    const odd = syncRow({ status: 'running', interrupted: true, summary: null });
+    expect(reduce(input({ sync: odd })).toasts).toEqual([]);
+  });
+
+  it('ignores the flag on a run that landed', () => {
+    const landed = syncRow({ status: 'ok', interrupted: true });
+    expect(reduce(input({ sync: landed })).toasts[0]?.title).toBe(`Sync landed${DOT}4 change(s)`);
+  });
+
+  it('fires once: the running row toasts nothing, the reaped row toasts once', () => {
+    const whileRunning = reduce(
+      input({ sync: syncRow({ status: 'running', finished_at: null, summary: null }) }),
+    );
+    expect(whileRunning.toasts).toEqual([]);
+
+    const later = new Date('2026-09-16T23:02:00.000Z');
+    const reapedAt = syncRow({
+      status: 'failed',
+      interrupted: true,
+      summary: null,
+      finished_at: '2026-09-16T23:01:00.000Z',
+    });
+    const first = reduce(input({ sync: reapedAt, now: later, watermark: whileRunning.watermark }));
+    expect(first.toasts.map((toast) => toast.title)).toEqual(['Sync interrupted']);
+
+    const second = reduce(input({ sync: reapedAt, now: later, watermark: first.watermark }));
+    expect(second.toasts).toEqual([]);
+  });
+});
+
 describe('rule 2 — grade posted', () => {
   const rows = [
     gradeRow({ column_id: 'c1', name: 'Lab 3', score: 18, possible: 20 }),
@@ -185,9 +270,35 @@ describe('rule 2 — grade posted', () => {
       body: 'Lab 1\nLab 2\nLab 3',
       route: '/course/IST.323/grades',
     });
-    expect(toasts[1]?.title).toBe(`GEO 103${DOT}1 grades posted`);
+    // B-58 (C-7 rule 2 amended): a per-course group of one is the detail toast, never
+    // "1 grades posted".
+    expect(toasts[1]).toEqual({
+      key: 'grade:GEO.103.lecture:c4:run-b',
+      title: `GEO 103${DOT}Map quiz`,
+      body: '18 / 20',
+      route: '/course/GEO.103.lecture/grades',
+    });
     // Every member row key is recorded, so a coalesced tick still dedupes row by row.
     for (const row of four) expect(next.firedKeys).toContain(gradeKey(row));
+  });
+
+  it('never says "1 grades posted" for any group of one (B-58)', () => {
+    const singles = ['IST.323', 'GEO.103.lecture', 'IST.352', 'IST.466'].map((course, i) =>
+      gradeRow({ shell_course_id: course, column_id: `c${i}`, name: `Item ${i}` }),
+    );
+    const { toasts } = reduce(input({ grades: singles }));
+    expect(toasts).toHaveLength(4);
+    for (const toast of toasts) expect(toast.title).not.toMatch(/grades posted/);
+    expect(toasts.map((t) => t.key)).toEqual(singles.map((row) => gradeKey(row)));
+  });
+
+  it('shows the score alone when the column is worth zero points (B-58)', () => {
+    const zero = gradeRow({ name: 'Attendance 9/29', score: 1, possible: 0 });
+    expect(reduce(input({ grades: [zero] })).toasts[0]?.body).toBe('1');
+    const changed = gradeRow({ name: 'Attendance 9/29', score: 1, possible: 0, previous_score: 0 });
+    const body = reduce(input({ grades: [changed] })).toasts[0]?.body;
+    expect(body).toBe(`1${DOT}was 0`);
+    expect(body).not.toMatch(/\/ 0/);
   });
 
   it('caps a coalesced body at three names', () => {
