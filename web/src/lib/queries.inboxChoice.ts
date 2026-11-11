@@ -105,19 +105,28 @@ export function candidateIds(items: readonly AttentionItem[]): number[] {
   return [...ids].sort((a, b) => a - b);
 }
 
+/** Session id and its label: what the query caches. */
+export type SessionLabelPair = readonly [id: number, label: string];
+
+/**
+ * The cache holds plain pairs and `select` builds the Map. `QueryProvider` saves the
+ * cache to localStorage as JSON, where a Map turns into `{}`; `select` also runs on
+ * restored data, so the Inbox always gets a real Map.
+ */
 export function sessionLabelsOptions(ids: readonly number[]) {
   return queryOptions({
     queryKey: ['inbox-session-labels', ...ids] as const,
     enabled: ids.length > 0,
-    queryFn: async (): Promise<Map<number, string>> => {
+    queryFn: async (): Promise<SessionLabelPair[]> => {
       const supabase = getSupabaseBrowserClient();
       const { data, error } = await supabase
         .from('sessions')
         .select('id, session_date, topic, kind')
         .in('id', [...ids]);
       if (error) throw error;
-      return new Map((data ?? []).map((row) => [row.id, sessionLabel(row)]));
+      return (data ?? []).map((row): SessionLabelPair => [row.id, sessionLabel(row)]);
     },
+    select: (pairs: readonly SessionLabelPair[]): ReadonlyMap<number, string> => new Map(pairs),
     staleTime: 15 * 60 * 1000,
   });
 }

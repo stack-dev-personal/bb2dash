@@ -44,6 +44,19 @@ Live in prod (Supabase `bb2dash`, ref `goultdzqcavefcgnifdy`):
 | Due-date override (221, 2026-10-26) | `assignment_progress.due_override` (timestamptz, app-owned, no sync writes it) wins over Blackboard's date in `v_work_items` (new columns `bb_due_at`, `due_overridden`) and `v_calendar_push_items`; a statement trigger marks the Google calendar dirty when it changes. Set from the assignment details ("Your plan" → Due date + optional Due time; clearing the date resets it; Planned start/finish removed from the form on his review); the detail page and the planner popover read "your date (Blackboard: …)". One row set by hand at Stack's request: ECN.304/quiz-5 = 2026-10-22 15:30 New York |
 | Auth | one user (`emstacho@syr.edu`, uid `fd0b7c9d…`) created; **RLS owner-scoped** (migration 020, W-9 done) — every authenticated policy is `auth.uid() = public.app_owner()`, owner resolved by email; signups disabled 2026-09-10 per Stack (a dashboard setting SQL cannot read; 1 auth user on 2026-09-24) |
 
+## Inbox crash on reload, 2026-11-11: fixed on `fix/inbox-session-labels-cache`, not pushed, waits for Stack's word
+
+* **Symptom:** the Inbox fell to Next's "This page couldn't load" (`TypeError: c?.get is not a function`) on any fresh load
+  while a session question was open (item 9206, open since 2026-11-02), most visibly in the desktop window.
+* **Cause:** `sessionLabelsOptions` cached a `Map`. `QueryProvider` persists the query cache to localStorage as JSON, where a
+  Map becomes `{}`; restored on the next load, `InboxCard`'s `sessionLabels?.get(...)` threw, and with no error boundary the
+  whole page went. Inside one page session the Map was still in memory, so it only broke after a reload.
+* **Fix:** the query caches `[id, label]` pairs and builds the Map in `select` (which also runs on restored data);
+  `PERSIST_BUSTER` `v1` → `v2` drops the broken blobs already saved. Test: `web/test/inbox-session-labels-persist.test.tsx`
+  (JSON round trip, restored-cache `select`, the Inbox drawn from a restored cache). No other query caches a Map or Set.
+* **Next:** reaches the desktop only once deployed (merge → Vercel production). Not done: an `(app)` error boundary, so one
+  card's error stops taking down the screen.
+
 ## Due-date override, 2026-10-26: built, migrations 221 and 222 on prod, MERGED as #137 (`c7b1d40`)
 
 - **What prompted it.** ECN 304 Quiz 5 was taken in class Thu 10/22 but sat on Tue 10/27 beside Quiz 6. The professor made its gradebook column on 10/26 and Blackboard gave it its default due date, "created + 1 day" (10/27 16:53Z); the row was `tentative`, so `stage_assignments` copied it in. A hand edit to `assignments` would not have held.

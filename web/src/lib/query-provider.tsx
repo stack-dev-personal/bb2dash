@@ -20,7 +20,9 @@ import { useState, type ReactNode } from 'react';
  */
 
 export const PERSIST_KEY = 'bb2dash.query-cache';
-export const PERSIST_BUSTER = 'v1';
+// v2 (2026-11-11): the Inbox's session labels are cached as pairs, not a Map. A v1 blob
+// holds them as `{}`, which crashed the Inbox, so it is dropped.
+export const PERSIST_BUSTER = 'v2';
 
 function makeQueryClient() {
   return new QueryClient({
