@@ -4,6 +4,7 @@ import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persist
 import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { useState, type ReactNode } from 'react';
+import { shouldPersistQuery } from './persistable';
 
 /**
  * TanStack Query v5 + persistQueryClient (localStorage).
@@ -66,6 +67,8 @@ export function QueryProvider({ children }: { children: ReactNode }) {
         persister,
         maxAge: 24 * 60 * 60 * 1000,
         buster: PERSIST_BUSTER,
+        // Only data JSON keeps unchanged is saved (lib/persistable.ts); the rest is refetched.
+        dehydrateOptions: { shouldDehydrateQuery: shouldPersistQuery },
       }}
     >
       {children}
