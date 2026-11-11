@@ -91,7 +91,7 @@ type ClusterMap = readonly (readonly [prefix: string, cluster: Cluster])[];
  * Who owns which file, as path prefixes from the repository root (brief 103,
  * "Files"). The longest prefix that matches a path wins, so `ThemeMenu.*` is
  * foundation's although it sits in the shell folder. A prefix that ends in a
- * file name is an exact-file entry: the eight top-level files of `(app)/`
+ * file name is an exact-file entry: the nine top-level files of `(app)/`
  * belong to two clusters, so the folder itself is no prefix.
  */
 const CLUSTER_MAP: ClusterMap = [
@@ -99,6 +99,7 @@ const CLUSTER_MAP: ClusterMap = [
   ['web/src/app/globals.css', 'foundation'],
   ['web/src/app/layout.tsx', 'foundation'],
   ['web/src/app/not-found.tsx', 'foundation'],
+  ['web/src/app/global-error.tsx', 'foundation'],
   ['web/src/app/NotFound.module.css', 'foundation'],
   ['web/src/app/login/', 'foundation'],
   ['web/src/app/privacy/', 'foundation'],
@@ -113,6 +114,7 @@ const CLUSTER_MAP: ClusterMap = [
   ['web/src/components/shared/QueryState.tsx', 'shell'],
   ['web/src/app/(app)/Shell.module.css', 'shell'],
   ['web/src/app/(app)/layout.tsx', 'shell'],
+  ['web/src/app/(app)/error.tsx', 'shell'],
   // screens-a (W-69): Home, planner, tracker, Inbox, Announcements.
   ['web/src/app/(app)/page.tsx', 'screens-a'],
   ['web/src/app/(app)/Today.tsx', 'screens-a'],
@@ -415,11 +417,12 @@ describe('the cluster map', () => {
     expect(clusterOf('web/src/components/shell/TopNav.tsx')).toBe('shell');
   });
 
-  it('holds the eight top-level files of (app)/ as exact entries, two for shell and six for screens-a', () => {
+  it('holds the nine top-level files of (app)/ as exact entries, three for shell and six for screens-a', () => {
     const topLevel = [...SOURCES.keys()].filter((path) => /^web\/src\/app\/\(app\)\/[^/]+$/.test(path));
-    expect(topLevel).toHaveLength(8);
-    expect(topLevel.filter((path) => clusterOf(path) === 'shell')).toEqual([
+    expect(topLevel).toHaveLength(9);
+    expect(topLevel.filter((path) => clusterOf(path) === 'shell').sort()).toEqual([
       'web/src/app/(app)/Shell.module.css',
+      'web/src/app/(app)/error.tsx',
       'web/src/app/(app)/layout.tsx',
     ]);
     expect(topLevel.filter((path) => clusterOf(path) === 'screens-a')).toHaveLength(6);
