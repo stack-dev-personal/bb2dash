@@ -44,7 +44,19 @@ Live in prod (Supabase `bb2dash`, ref `goultdzqcavefcgnifdy`):
 | Due-date override (221, 2026-10-26) | `assignment_progress.due_override` (timestamptz, app-owned, no sync writes it) wins over Blackboard's date in `v_work_items` (new columns `bb_due_at`, `due_overridden`) and `v_calendar_push_items`; a statement trigger marks the Google calendar dirty when it changes. Set from the assignment details ("Your plan" → Due date + optional Due time; clearing the date resets it; Planned start/finish removed from the form on his review); the detail page and the planner popover read "your date (Blackboard: …)". One row set by hand at Stack's request: ECN.304/quiz-5 = 2026-10-22 15:30 New York |
 | Auth | one user (`emstacho@syr.edu`, uid `fd0b7c9d…`) created; **RLS owner-scoped** (migration 020, W-9 done) — every authenticated policy is `auth.uid() = public.app_owner()`, owner resolved by email; signups disabled 2026-09-10 per Stack (a dashboard setting SQL cannot read; 1 auth user on 2026-09-24) |
 
-## Inbox crash on reload, 2026-11-11: fixed on `fix/inbox-session-labels-cache`, not pushed, waits for Stack's word
+## Inbox crash follow-ups, 2026-11-11: error screens and the cache guard on `feat/app-error-screen`, waits for Stack's look
+
+* **Error screens.** `app/(app)/error.tsx` shows `ErrorScreen` inside the shell (top bar and rail stay) with Try again,
+  Clear saved data and reload, Go to Today, and the error's message; `app/global-error.tsx` is the last resort with
+  its own document. In the Inbox each item sits in its own boundary (`InboxItemBoundary`, `catchError`): an item that
+  cannot be drawn is one short card with its id, and the rest stay answerable.
+* **Root cause, closed for every query.** The cache had been saved to localStorage since 2026-09-09 and the labels
+  query returned a Map since 2026-09-29 (`0cd2ff86`); every earlier session question was answered within hours, in the
+  same window session, so no reload hit one until item 9206 stayed open from 2026-11-02. Nothing checked that cached
+  data survives JSON. `lib/persistable.ts` now does: a query whose data JSON would change (Map, Set, Date, class,
+  NaN) is not saved, only refetched, with one console warning naming it.
+
+## Inbox crash on reload, 2026-11-11: fixed and MERGED as #141 (`c84bf7f`)
 
 * **Symptom:** the Inbox fell to Next's "This page couldn't load" (`TypeError: c?.get is not a function`) on any fresh load
   while a session question was open (item 9206, open since 2026-11-02), most visibly in the desktop window.

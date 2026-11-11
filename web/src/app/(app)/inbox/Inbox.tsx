@@ -26,11 +26,12 @@
  * tabs and the per-kind resolve payloads can be tested without a client.
  */
 
-import { Fragment, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { InboxApplyButton } from '@/components/inbox/InboxApplyButton';
 import { MARK_CHAR, MarkedLabel } from '@/components/shell/icons';
 import { InboxCard } from '@/components/inbox/InboxCard';
+import { InboxItemBoundary } from '@/components/inbox/InboxItemBoundary';
 import {
   EMPTY_TAB_TEXT,
   INBOX_TABS,
@@ -288,23 +289,25 @@ export function InboxView({
         className={styles.list}
       >
         {!loading && rows.length === 0 && <p className={styles.empty}>{EMPTY_TAB_TEXT[tab]}</p>}
-        {rows.map((item) =>
-          item.kind === 'assistant_proposal' ? (
-            <Fragment key={item.id}>{renderProposal(item)}</Fragment>
-          ) : (
-            <InboxCard
-              key={item.id}
-              item={item}
-              pending={pendingId === item.id}
-              failure={resolveErrorId === item.id ? resolveError : null}
-              onResolve={onResolve}
-              onChoose={onChoose}
-              onReopen={onReopen}
-              undoBlocked={undoBlocked}
-              sessionLabels={sessionLabels}
-            />
-          ),
-        )}
+        {rows.map((item) => (
+          // Each item in its own boundary: one that cannot be drawn leaves the rest answerable.
+          <InboxItemBoundary key={item.id} itemId={item.id}>
+            {item.kind === 'assistant_proposal' ? (
+              renderProposal(item)
+            ) : (
+              <InboxCard
+                item={item}
+                pending={pendingId === item.id}
+                failure={resolveErrorId === item.id ? resolveError : null}
+                onResolve={onResolve}
+                onChoose={onChoose}
+                onReopen={onReopen}
+                undoBlocked={undoBlocked}
+                sessionLabels={sessionLabels}
+              />
+            )}
+          </InboxItemBoundary>
+        ))}
       </div>
 
       <section className={styles.footer} aria-label="Inbox actions">

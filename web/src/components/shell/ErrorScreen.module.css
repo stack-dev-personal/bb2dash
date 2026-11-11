@@ -1,0 +1,55 @@
+/* The error screen (2026-11-11): one left-aligned block, the shape of a screen header.
+   Tokens only (the token audit). */
+
+.pane {
+  padding: var(--space-8) var(--space-6);
+}
+
+.fullPage {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-8) var(--space-4);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 62ch;
+}
+
+.kicker {
+  font-size: var(--text-2xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-danger);
+}
+
+.title {
+  margin: 0;
+}
+
+.lede {
+  margin: 0;
+  font-size: var(--text-base);
+  color: var(--color-muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.detail {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  overflow-wrap: anywhere;
+}
