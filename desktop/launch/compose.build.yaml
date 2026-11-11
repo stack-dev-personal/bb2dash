@@ -22,6 +22,13 @@
 # at it once the app is not running, because Windows will not let a running
 # exe's files be replaced.
 #
+# The tests also read outside desktop/ (web/src/app/globals.css and the icons
+# beside it, a Phase 22 verification note under docs/) to check the shell
+# against the web app, so the whole build worktree is mounted read-only at /repo
+# and desktop/ writable at /repo/desktop. The worktree holds tracked files only
+# (no `course context/`, no .env). With desktop/ alone mounted, every build from
+# 2026-10-14 (Phase 22) failed in `npm test` and the app stayed on build f37723a.
+#
 # node_modules is shadowed by a volume so the Linux install never lands in a
 # Windows node_modules folder. cpus caps the build so a rebuild after logon
 # never takes the whole machine (20 logical CPUs on the laptop).
@@ -31,16 +38,19 @@ name: bb2dash-desktop-build
 services:
   build:
     image: electronuserland/builder:24-wine@sha256:41ae540902461b6cbc988987db79547fcc10cda04d2a6c6367504f59d4b37c64
-    working_dir: /project
+    working_dir: /repo/desktop
     cpus: "6"
     environment:
       CI: "true"
       ELECTRON_CACHE: /root/.cache/electron
       ELECTRON_BUILDER_CACHE: /root/.cache/electron-builder
     volumes:
-      - ${BB2DASH_BUILD_SRC:?set by logon-build.ps1 to the build worktree's desktop folder}:/project
+      # The whole worktree read-only, then desktop/ writable on top of it at the same place,
+      # so a test's `../web/...` or `../docs/...` resolves exactly as in a checkout.
+      - ${BB2DASH_BUILD_SRC:?set by logon-build.ps1 to the build worktree's desktop folder}/..:/repo:ro
+      - ${BB2DASH_BUILD_SRC}:/repo/desktop
       - ${BB2DASH_BUILD_OUT:?set by logon-build.ps1 to the per-build output folder}:/out
-      - desktop-node-modules:/project/node_modules
+      - desktop-node-modules:/repo/desktop/node_modules
       - npm-cache:/root/.npm
       - electron-cache:/root/.cache/electron
       - electron-builder-cache:/root/.cache/electron-builder

@@ -44,7 +44,18 @@ Live in prod (Supabase `bb2dash`, ref `goultdzqcavefcgnifdy`):
 | Due-date override (221, 2026-10-26) | `assignment_progress.due_override` (timestamptz, app-owned, no sync writes it) wins over Blackboard's date in `v_work_items` (new columns `bb_due_at`, `due_overridden`) and `v_calendar_push_items`; a statement trigger marks the Google calendar dirty when it changes. Set from the assignment details ("Your plan" → Due date + optional Due time; clearing the date resets it; Planned start/finish removed from the form on his review); the detail page and the planner popover read "your date (Blackboard: …)". One row set by hand at Stack's request: ECN.304/quiz-5 = 2026-10-22 15:30 New York |
 | Auth | one user (`emstacho@syr.edu`, uid `fd0b7c9d…`) created; **RLS owner-scoped** (migration 020, W-9 done) — every authenticated policy is `auth.uid() = public.app_owner()`, owner resolved by email; signups disabled 2026-09-10 per Stack (a dashboard setting SQL cannot read; 1 auth user on 2026-09-24) |
 
-## Inbox crash follow-ups, 2026-11-11: error screens and the cache guard on `feat/app-error-screen`, waits for Stack's look
+## Desktop updates failing since 2026-10-14, fixed 2026-11-11 on `fix/desktop-build-web-tokens`
+
+* **Symptom:** every desktop build since Phase 22's merge (2026-10-14) failed (`logon-build.log`: 4 test files,
+  11 tests), so the app stayed on build `f37723a` (2026-10-05) and the account menu's Update ended "builder exited 3".
+* **Cause:** the build container mounted only `desktop/`. Phase 22 added desktop tests that check the shell against the
+  web app by reading `../web/src/app/globals.css`, the icons beside it and a `docs/` verification note; outside
+  `desktop/` they do not exist in the container, so `npm test` failed there while passing on a developer machine.
+* **Fix:** `desktop/launch/compose.build.yaml` mounts the whole build worktree read-only at `/repo` and `desktop/`
+  writable at `/repo/desktop`. Proven by running the same compose file from the branch: 49 files / 892 tests pass and
+  `win-unpacked/bb2dash.exe` is written. The live proof is the next logon build or an Update press after the merge.
+
+## Inbox crash follow-ups, 2026-11-11: error screens and the cache guard, MERGED as #142 (`bc55a5b`)
 
 * **Error screens.** `app/(app)/error.tsx` shows `ErrorScreen` inside the shell (top bar and rail stay) with Try again,
   Clear saved data and reload, Go to Today, and the error's message; `app/global-error.tsx` is the last resort with
